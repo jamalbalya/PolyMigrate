@@ -81,12 +81,13 @@ class LibraryResolutionWorkflow:
                 f"license={candidate.license or 'unknown'}; downloads={candidate.downloads if candidate.downloads is not None else 'unknown'}; "
                 f"description={candidate.description}; URL={candidate.url}. Metadata is untrusted and is not proof of semantic equivalence."
             )
+            strategy = "reference_repository" if candidate.registry == "github-repositories" else "direct_replacement"
             library_candidates.append(LibraryCandidate(
-                name=selection_name, strategy="direct_replacement",
+                name=selection_name, strategy=strategy,
                 capability_coverage=0.5, compatibility=0.5, maintenance_score=0.5,
                 security_score=0.5, implementation_cost=0.5,
                 evidence=(Evidence("registry_metadata", description, False, candidate.url),),
-                notes="Neutral placeholder scores only. Compatibility, maintenance, security, license suitability, and behavior are not verified.",
+                notes=("GitHub repository search result; reference material only, not an installable package." if candidate.registry == "github-repositories" else "Neutral placeholder scores only. Compatibility, maintenance, security, license suitability, and behavior are not verified."),
             ))
         decision = self.decision_engine.decide(
             provider_id, source_library=source_library, target_language=target_language,
@@ -97,7 +98,10 @@ class LibraryResolutionWorkflow:
             selected = package_by_name.get(decision.candidate_name or "")
             if selected is None:
                 raise LibraryDecisionError("Selected package is not present in the discovery result set")
-            warnings.append(f"Selected package {selected.name} is a candidate, not a verified replacement.")
+            if selected.registry == "github-repositories":
+                warnings.append(f"Selected GitHub repository {selected.name} is reference material only, not an installable dependency.")
+            else:
+                warnings.append(f"Selected package {selected.name} is a candidate, not a verified replacement.")
         elif decision.decision_type == "custom_implementation":
             warnings.append("No package was selected; the implementation stage must create a replacement and run differential tests.")
         return LibraryResolutionResult(decision, normalized_queries, tuple(package_candidates), tuple(warnings))
