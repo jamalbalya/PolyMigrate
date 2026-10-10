@@ -1,5 +1,6 @@
 """Docker-isolated validation runner for generated code; it never pulls images or uses a shell."""
 from __future__ import annotations
+import re
 import shutil
 import subprocess
 import time
@@ -17,6 +18,7 @@ class ValidationCommand:
     argv: tuple[str, ...]
     timeout_seconds: float = 120.0
     mandatory: bool = True
+    environment: tuple[tuple[str, str], ...] = ()
 
 @dataclass(frozen=True)
 class SandboxExecution:
@@ -97,6 +99,7 @@ class DockerSandboxRunner:
             docker, "run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL",
             "--security-opt=no-new-privileges", f"--pids-limit={self.pids_limit}",
             f"--memory={self.memory_limit}", f"--cpus={self.cpus}",
+            *[item for key, value in command.environment for item in ("--env", f"{key}={value}")],
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=256m",
             "--mount", f"type=bind,src={resolved_workspace},dst=/workspace,rw",
             "--workdir", "/workspace", image, *command.argv,
