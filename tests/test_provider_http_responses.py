@@ -40,7 +40,13 @@ class ProviderResponseTests(unittest.TestCase):
         self.assertEqual(request.get_header("X-api-key"), "fake-key")
         self.assertEqual(request.get_header("Anthropic-version"), "2023-06-01")
         self.assertEqual(request_payload["max_tokens"], 8192)
-        self.assertEqual(request_payload["messages"], [{"role": "user", "content": "Task: translate\\nContext JSON:\n{}\\n\\nInstructions:\nprompt"}])
+        expected_prompt = """Task: translate
+Context JSON:
+{}
+
+Instructions:
+prompt"""
+        self.assertEqual(request_payload["messages"], [{"role": "user", "content": expected_prompt}])
         self.assertEqual(result.content,"translated")
 
     def test_gemini_text_response(self):
@@ -52,7 +58,13 @@ class ProviderResponseTests(unittest.TestCase):
         self.assertEqual(request.full_url, "https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent")
         self.assertEqual(request.get_header("X-goog-api-key"), "fake-key")
         self.assertEqual(request_payload["generationConfig"]["maxOutputTokens"], 8192)
-        self.assertEqual(request_payload["contents"], [{"role": "user", "parts": [{"text": "Task: translate\\nContext JSON:\n{}\\n\\nInstructions:\nprompt"}]}])
+        expected_prompt = """Task: translate
+Context JSON:
+{}
+
+Instructions:
+prompt"""
+        self.assertEqual(request_payload["contents"], [{"role": "user", "parts": [{"text": expected_prompt}]}])
         self.assertEqual(result.content,"translated")
 
     def test_gemini_structured_output_uses_json_response_mime_type(self):
