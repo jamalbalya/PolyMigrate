@@ -43,6 +43,15 @@ class InventoryLimitTests(unittest.TestCase):
             self.assertIn("Run", unit.symbols)
             self.assertIn("fmt", unit.dependencies)
 
+    def test_traversal_limit_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a.py").write_text("print(1)", encoding="utf-8")
+            (root / "b.py").write_text("print(2)", encoding="utf-8")
+            adapter = InventorySourceAdapter("python", (".py",), max_scan_entries=1)
+            with self.assertRaisesRegex(ValueError, "traversal exceeds configured limit"):
+                adapter.analyze(root)
+
     def test_total_size_limit_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
