@@ -27,6 +27,21 @@ def fingerprint_payload(payload: Any) -> str:
 
 class MigrationKnowledgeStore:
     """SQLite store; cross-project reuse is opt-in and verified records only."""
+    REQUIRED_VERIFICATION_GATES = frozenset({
+        "target_build", "unit_tests", "integration_tests", "e2e_tests",
+        "behavior_comparison", "security_review",
+    })
+
+    @classmethod
+    def _has_verified_evidence(cls, evidence: tuple[dict[str, Any], ...]) -> bool:
+        statuses: dict[str, str] = {}
+        for item in evidence:
+            if not isinstance(item, dict):
+                return False
+            gate, status = item.get("gate"), item.get("status")
+            if isinstance(gate, str) and isinstance(status, str):
+                statuses[gate] = status.upper()
+        return all(statuses.get(gate) == "PASSED" for gate in cls.REQUIRED_VERIFICATION_GATES)
     def __init__(self, database_path: Path) -> None:
         self.database_path = database_path
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -57,6 +72,10 @@ class MigrationKnowledgeStore:
             raise ValueError("record_id and project_scope are required")
         if not record.problem_fingerprint or not record.toolchain_fingerprint:
             raise ValueError("problem and toolchain fingerprints are required")
+        if record.shareable and not record.verified:
+            raise ValueError("unverified knowledge cannot be shared across projects")
+        if record.verified and not self._has_verified_evidence(record.validation_evidence):
+            raise ValueError("verified knowledge requires PASSED evidence for all required validation gates")
         with self._connect() as connection:
             connection.execute("""
                 INSERT INTO migration_knowledge (
@@ -81,13 +100,15 @@ class MigrationKnowledgeStore:
                   AND toolchain_fingerprint = ? AND verified = 1 AND (project_scope = ? OR shareable = 1)
                 ORDER BY shareable DESC, record_id ASC
             """, (problem_fingerprint, source_language, target_language, toolchain_fingerprint, project_scope)).fetchall()
-        return [KnowledgeRecord(
+        records = [KnowledgeRecord(
             record_id=row["record_id"], problem_fingerprint=row["problem_fingerprint"],
             source_language=row["source_language"], target_language=row["target_language"],
             toolchain_fingerprint=row["toolchain_fingerprint"], project_scope=row["project_scope"],
             solution=json.loads(row["solution_json"]), validation_evidence=tuple(json.loads(row["evidence_json"])),
             verified=bool(row["verified"]), shareable=bool(row["shareable"]),
         ) for row in rows]
+        # Re-check stored evidence at read time so legacy or manually edited rows cannot bypass the gate.
+        return [record for record in records if self._has_verified_evidence(record.validation_evidence)]
 
 
     def find_cached_draft(self, *, problem_fingerprint: str, source_language: str,
@@ -115,6 +136,23 @@ class MigrationKnowledgeStore:
             verified=bool(row["verified"]),
             shareable=bool(row["shareable"]),
         ) for row in rows]
+
+    def promote_verified(self, record_id: str, validation_evidence: tuple[dict[str, Any], ...],
+                         *, shareable: bool = False) -> KnowledgeRecord:
+        """Promote a draft only when every required gate has explicit PASSED evidence."""
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM migration_knowledge WHERE record_id = ?", (record_id,)).fetchone()
+        if row is None:
+            raise ValueError("knowledge record was not found")
+        record = KnowledgeRecord(
+            record_id=row["record_id"], problem_fingerprint=row["problem_fingerprint"],
+            source_language=row["source_language"], target_language=row["target_language"],
+            toolchain_fingerprint=row["toolchain_fingerprint"], project_scope=row["project_scope"],
+            solution=json.loads(row["solution_json"]), validation_evidence=tuple(validation_evidence),
+            verified=True, shareable=shareable,
+        )
+        self.save(record)
+        return record
 
     def count(self) -> int:
         with self._connect() as connection:
