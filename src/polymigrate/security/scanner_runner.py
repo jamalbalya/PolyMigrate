@@ -8,7 +8,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
+from dataclasses import replace
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -35,6 +37,7 @@ _PROFILES: dict[str, tuple[str, ...]] = {
 _MAX_BINARY_BYTES = 300_000_000
 _VERSION_TIMEOUT_SECONDS = 10
 _SCAN_TIMEOUT_SECONDS = 120
+_SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 def _binary_sha256(path: Path) -> str:
@@ -144,12 +147,26 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
     root = root.resolve()
     required = _PROFILES.get(language, ("semgrep",))
     evidence: list[dict[str, Any]] = []
+    trusted_scanners: set[str] = set()
+    provenance_warnings: list[str] = []
     for scanner_id in required:
         executable = shutil.which(scanner_id)
         if not executable:
             continue
         try:
             binary_digest = _binary_sha256(Path(executable))
+            pin_variable = "POLYMIGRATE_TRUSTED_SCANNER_SHA256_" + scanner_id.upper()
+            expected_digest = os.environ.get(pin_variable, "").strip()
+            if not expected_digest or not _SHA256.fullmatch(expected_digest):
+                provenance_warnings.append(
+                    f"Scanner '{scanner_id}' was executed but its binary SHA-256 is not pinned in {pin_variable}."
+                )
+            elif expected_digest.lower() != binary_digest:
+                provenance_warnings.append(
+                    f"Scanner '{scanner_id}' binary SHA-256 does not match {pin_variable}; provenance is unverified."
+                )
+            else:
+                trusted_scanners.add(scanner_id)
             version_result = subprocess.run(
                 _version_args(scanner_id, executable), cwd=root, capture_output=True,
                 text=True, timeout=_VERSION_TIMEOUT_SECONDS, check=False, shell=False,
@@ -186,4 +203,18 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
             })
         except (OSError, ValueError, subprocess.TimeoutExpired):
             continue
-    return evaluate_security_evidence(evidence, required_scanners=required, execution_provenance_recorded=True)
+    result = evaluate_security_evidence(
+        evidence, required_scanners=required, execution_provenance_recorded=True
+    )
+    provenance_verified = (
+        result.scanner_execution_recorded and trusted_scanners == set(required)
+    )
+    if not provenance_verified and not provenance_warnings:
+        provenance_warnings.append(
+            "Scanner execution evidence is incomplete; binary provenance cannot be verified."
+        )
+    return replace(
+        result,
+        scanner_provenance_verified=provenance_verified,
+        provenance_warnings=tuple(provenance_warnings),
+    )
