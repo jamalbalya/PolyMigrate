@@ -153,6 +153,10 @@ class PythonToJavaScriptTargetAdapter:
                 continue
             else:
                 raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}")
+        if "console" in assigned and any(statement.startswith("console.log(") for statement in statements):
+            raise UnsupportedPythonSyntax(
+                "Variable name 'console' conflicts with the console.log() output used by print()"
+            )
         unused_names = sorted(assigned - referenced_names)
         if unused_names:
             raise UnsupportedPythonSyntax("Assigned variable(s) are never used: " + ", ".join(unused_names))
