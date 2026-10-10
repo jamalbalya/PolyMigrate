@@ -6,7 +6,7 @@ from pathlib import Path
 
 from polymigrate.ai.protocols import ModelRequest, ModelResponse, ProviderCapabilities
 from polymigrate.ai.registry import ProviderRegistry
-from polymigrate.knowledge import MigrationKnowledgeStore
+from polymigrate.knowledge import KnowledgeRecord, MigrationKnowledgeStore
 from polymigrate.migration.adapters import InventorySourceAdapter
 from polymigrate.migration.llm_target import LLMTargetAdapter
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
@@ -65,6 +65,36 @@ class KnowledgeCacheTests(unittest.TestCase):
             engine.execute(root, "python", "go", Path(tmp) / "out-2", {"graphify_context": "updated graph"})
             self.assertEqual(len(provider.requests), 2)
 
+
+    def test_verified_shareable_knowledge_cannot_be_downgraded_by_draft(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
+            gates = ("target_build", "unit_tests", "integration_tests", "e2e_tests",
+                     "behavior_comparison", "security_review")
+            verified = KnowledgeRecord(
+                record_id="library-shared-record", problem_fingerprint="problem",
+                source_language="python", target_language="go", toolchain_fingerprint="toolchain",
+                project_scope="project-a", solution={"kind": "library_resolution", "summary": {"choice": "safe"}},
+                validation_evidence=tuple({"gate": gate, "status": "PASSED"} for gate in gates),
+                verified=True, shareable=True,
+            )
+            store.save(verified)
+            draft = KnowledgeRecord(
+                record_id="library-shared-record", problem_fingerprint="problem",
+                source_language="python", target_language="go", toolchain_fingerprint="toolchain",
+                project_scope="project-b", solution={"kind": "library_resolution", "summary": {"choice": "unknown"}},
+                validation_evidence=(), verified=False, shareable=False,
+            )
+            with self.assertRaisesRegex(ValueError, "cannot overwrite verified"):
+                store.save(draft)
+            reusable = store.find_reusable(
+                problem_fingerprint="problem", source_language="python", target_language="go",
+                toolchain_fingerprint="toolchain", project_scope="project-c",
+            )
+            self.assertEqual(len(reusable), 1)
+            self.assertTrue(reusable[0].verified)
+            self.assertTrue(reusable[0].shareable)
+            self.assertEqual(reusable[0].solution["summary"]["choice"], "safe")
 
 if __name__ == "__main__":
     unittest.main()
