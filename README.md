@@ -16,6 +16,7 @@ Implemented in this foundation:
 - Optional Graphify JSON artifact reader and safe CLI query adapter with degraded-mode reporting.
 - SQLite migration knowledge store with fingerprints, validation status, and opt-in cross-project reuse.
 - Evidence-derived final review status.
+- Deterministic Python-to-Go translation for a constrained syntax subset, with local Go validation and explicit validation-gate reporting.
 - Spec-kit documents, initial skills, and GitHub Actions CI.
 
 The provider adapters have not yet been verified against live credentials in this repository environment. They intentionally do not advertise native tool calling. Graphify reads an existing graph and can query it through the graphify CLI; it does not build or update the graph. Live compatibility with the exact installed Graphify version and incremental graph invalidation remain to be verified.
@@ -104,6 +105,32 @@ This sends source code to the configured model. Use a disposable, non-confidenti
 
 The source-upload flag is required to transmit source text to an external model. Recognizable secrets are redacted on a best-effort basis, but redaction is not guaranteed to find every secret and may alter source semantics. Do not send confidential code to an external provider unless your data-handling policy permits it. Review the generated migration-review.json. By default validation gates are NOT_RUN. If a target-language Docker image is already available locally and configured, selected build and unit-test commands run in a restricted container with no network, a read-only root filesystem, dropped capabilities, resource limits, and only the generated workspace mounted. The image is never pulled automatically. A bounded heuristic static security scan runs on generated output and records findings in `migration-review.json`; high- and medium-risk findings block the migration report for review. This scan is not a comprehensive audit, so the separate `security_review` verification gate remains NOT_RUN. A static dependency-wiring check compares observed Python, Go, and JavaScript/TypeScript imports with target manifests; missing declarations block the report, but this check does not prove package availability, API compatibility, or successful builds. Behavior comparison runs only when a project-specific `--behavior-spec` is supplied.
 
+### Deterministic Python-to-Go translation
+
+The experimental deterministic strategy translates a deliberately limited subset of Python into one standalone Go source file. It does not initialize an AI provider and does not transmit source code to an external model.
+
+Run it without `--provider` or `--allow-source-upload`:
+
+    polymigrate migrate --source ./sample-python-project --from python --to go --output ./migration-output --strategy deterministic
+
+Currently supported syntax:
+- Integer and string literals.
+- Simple assignments to one variable.
+- `print(expr)` with exactly one positional argument and no keyword arguments.
+- Integer arithmetic with `+`, `-`, and `*`.
+- String concatenation with `+`.
+- Unary `+` and `-` on integers.
+
+The adapter rejects unsupported statements and expressions rather than attempting speculative translation. It accepts exactly one inventoried Python source file. It does not translate general control flow, functions, classes, imports, project dependencies, frameworks, or multi-file applications.
+
+Integer values and integer arithmetic are conservatively restricted to the signed 32-bit range (-2147483648 through 2147483647). Integer literals and statically evaluated arithmetic that exceed this range are rejected rather than translated with potentially different Go integer behavior. Expressions whose integer safety cannot be proven are also rejected.
+
+When `go` and `gofmt` are available, the strategy formats and builds the generated Go source, then runs `go vet` if the build succeeds. If `POLYMIGRATE_DOCKER_IMAGE_GO` names an already-available target validation image, the strategy also runs the language-aware build/test discovery suite in the restricted Docker sandbox and records its executions and gate statuses. Unit, integration, or E2E gates remain `NOT_RUN` when the generated project has no corresponding tests or no validation image is configured; images are never pulled automatically. It also performs the existing static security and dependency-wiring reviews. These checks do not prove semantic equivalence or provide a comprehensive security audit.
+
+Without `--behavior-spec`, behavior comparison remains `NOT_RUN`. With a behavior spec, comparison requires Docker and the configured, already-pulled Python and Go images (`POLYMIGRATE_DOCKER_IMAGE_PYTHON` and `POLYMIGRATE_DOCKER_IMAGE_GO`). The strategy never pulls images automatically. Missing validation prerequisites must be reported as blocked or unverified, not as successful validation.
+
+The generated `migration-review.json` records the validation gates and overall status. Treat this feature as an experimental, subset-specific translator, not a general-purpose or production-ready project migrator.
+
 ### Optional local knowledge cache
 
 Set POLYMIGRATE_KNOWLEDGE_DB to a local SQLite file to enable evidence-gated migration knowledge lookup. To also cache unverified translation drafts within the same project scope, set POLYMIGRATE_CACHE_DRAFTS=1. Draft caching is disabled by default because the local database may contain generated source code. Drafts are never treated as verified and are not shared across projects. Source-content and Graphify-context fingerprints invalidate stale draft matches. Only explicitly shareable, verified knowledge records can be reused across projects.
@@ -126,6 +153,7 @@ The CI workflow runs compilation and unit/integration/E2E contract tests across 
 - src/polymigrate/skills/: validated skill metadata.
 - src/polymigrate/graph/: optional Graphify artifact adapter.
 - src/polymigrate/migration/: bounded source-manifest inventory, library strategy ranking, evidence-constrained AI decisions, and a safe adapter execution pipeline.
+- src/polymigrate/migration/python_go_target.py: experimental deterministic translator for a constrained Python-to-Go subset.
 - src/polymigrate/knowledge.py: persistent evidence-gated knowledge store.
 - src/polymigrate/security/: best-effort secret redaction at model boundaries.
 - src/polymigrate/ai/config.py: environment-based provider setup; use the providers command to inspect configuration without network calls.

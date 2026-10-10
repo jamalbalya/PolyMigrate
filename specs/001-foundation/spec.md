@@ -65,6 +65,7 @@ Cross-language migration requires more than syntax translation. The platform mus
 - FR-009: Final status is evidence-derived: SUCCESS, PARTIAL, or BLOCKED.
 - FR-010: Secrets must not enter prompts, logs, or reusable knowledge.
 - FR-011: Knowledge is fingerprinted; only verified records are reusable and cross-project reuse is opt-in.
+- FR-012: The experimental deterministic strategy supports only its explicitly documented Python-to-Go syntax subset, does not initialize AI providers or upload source code, rejects unsupported syntax, and reports validation gates from observed evidence. Unrun behavior comparison must remain NOT_RUN; missing required validation tools or images must not be reported as passed.
 
 ## Quality requirements
 - Core planning works offline without AI credentials.

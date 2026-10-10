@@ -15,6 +15,25 @@ except Exception:  # Optional parser extra must never break the standard-library
     _TREE_SITTER_REGISTRY = None
     _get_tree_sitter_parser = None
 
+# Minimal direct grammar fallback for environments that install individual
+# Tree-sitter grammars without the optional language-pack dependency.
+try:
+    import tree_sitter as _tree_sitter
+    import tree_sitter_go as _tree_sitter_go
+except Exception:
+    _tree_sitter = None
+    _tree_sitter_go = None
+
+
+def _direct_tree_sitter_parser(language_id: str):
+    if language_id != "go" or _tree_sitter is None or _tree_sitter_go is None:
+        return None
+    try:
+        language = _tree_sitter.Language(_tree_sitter_go.language())
+        return _tree_sitter.Parser(language)
+    except Exception:
+        return None
+
 _IGNORED_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".mypy_cache", ".pytest_cache", "dist", "build", "target", "vendor", ".next"}
 
 _SYMBOL_PATTERNS = {
@@ -66,12 +85,18 @@ _TREE_SITTER_NAME_TYPES = {"identifier", "type_identifier", "field_identifier", 
 
 def _tree_sitter_structure(language_id: str, source_text: str) -> tuple[set[str], str | None] | None:
     """Parse with an already-available grammar only; never trigger grammar downloads."""
-    if _TREE_SITTER_REGISTRY is None or _get_tree_sitter_parser is None:
-        return None
     try:
-        if not _TREE_SITTER_REGISTRY.has_parser(language_id):
+        parser = None
+        if _TREE_SITTER_REGISTRY is not None and _get_tree_sitter_parser is not None:
+            try:
+                if _TREE_SITTER_REGISTRY.has_parser(language_id):
+                    parser = _get_tree_sitter_parser(language_id)
+            except Exception:
+                parser = None
+        if parser is None:
+            parser = _direct_tree_sitter_parser(language_id)
+        if parser is None:
             return None
-        parser = _get_tree_sitter_parser(language_id)
         if hasattr(parser, "set_max_source_bytes"):
             parser.set_max_source_bytes(1_000_000)
         if hasattr(parser, "set_parse_timeout_ms"):
