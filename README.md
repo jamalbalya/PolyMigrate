@@ -59,6 +59,22 @@ Configure a provider key and explicit model ID, then opt in to sending source co
     export OPENAI_MODEL=...
     polymigrate migrate --source ./my-project --from python --to go --output ./migration-output --provider openai --allow-source-upload
 
+A project-specific behavior contract can compare expected source and target output inside pre-pulled, network-disabled Docker images:
+
+    polymigrate migrate --source ./my-project --from python --to go --output ./migration-output --provider openai --allow-source-upload --behavior-spec ./behavior.json
+
+Example `behavior.json`:
+
+<escape>{
+  "source_command": ["python", "main.py"],
+  "target_command": ["go", "run", "main.go"],
+  "cases": [
+    {"name": "basic", "expected_stdout": "42\\n"}
+  ]
+}</escape>
+
+Set both `POLYMIGRATE_DOCKER_IMAGE_PYTHON` and `POLYMIGRATE_DOCKER_IMAGE_GO` to images already present locally. The harness rejects shell/inline-code commands, copies source and target into isolated temporary workspaces, and compares exact stdout for each declared case. It does not pull images or install dependencies.
+
 Optional isolated validation images use environment variables named POLYMIGRATE_DOCKER_IMAGE_PYTHON, POLYMIGRATE_DOCKER_IMAGE_GO, POLYMIGRATE_DOCKER_IMAGE_JAVASCRIPT, POLYMIGRATE_DOCKER_IMAGE_TYPESCRIPT, POLYMIGRATE_DOCKER_IMAGE_JAVA, POLYMIGRATE_DOCKER_IMAGE_RUST, POLYMIGRATE_DOCKER_IMAGE_CSHARP, and similarly for supported language IDs. Images must already exist locally; no image pull is performed.
 
 Provider configuration variables:
@@ -67,7 +83,7 @@ Provider configuration variables:
 - Anthropic: ANTHROPIC_API_KEY, ANTHROPIC_MODEL, optional ANTHROPIC_BASE_URL.
 - Gemini: GEMINI_API_KEY, GEMINI_MODEL, optional GEMINI_BASE_URL.
 
-The source-upload flag is required to transmit source text to an external model. Recognizable secrets are redacted on a best-effort basis, but redaction is not guaranteed to find every secret and may alter source semantics. Do not send confidential code to an external provider unless your data-handling policy permits it. Review the generated migration-review.json. By default all validation gates are NOT_RUN. If a target-language Docker image is already available locally and configured, selected build and unit-test commands run in a restricted container with no network, a read-only root filesystem, dropped capabilities, resource limits, and only the generated workspace mounted. The image is never pulled automatically. Security review and behavior-equivalence checks remain NOT_RUN in this experimental mode.
+The source-upload flag is required to transmit source text to an external model. Recognizable secrets are redacted on a best-effort basis, but redaction is not guaranteed to find every secret and may alter source semantics. Do not send confidential code to an external provider unless your data-handling policy permits it. Review the generated migration-review.json. By default validation gates are NOT_RUN. If a target-language Docker image is already available locally and configured, selected build and unit-test commands run in a restricted container with no network, a read-only root filesystem, dropped capabilities, resource limits, and only the generated workspace mounted. The image is never pulled automatically. Security review remains NOT_RUN by default. Behavior comparison runs only when a project-specific `--behavior-spec` is supplied.
 
 ### Optional local knowledge cache
 
@@ -108,7 +124,7 @@ Migration work must use an isolated workspace, preserve source input, validate g
 2. Add production-ready source/target parser and generator adapters; current pipeline exposes tested adapter contracts but ships no universal production translator.
 3. Implement the autonomous transformation and dependency-reconstruction engine.
 4. Add sandboxed build/test execution and bounded automated repair.
-5. Add differential behavior testing and multi-language E2E fixtures.
+5. Expand project-specific behavior specs and multi-language E2E fixtures.
 6. Expand skills and reusable migration patterns based on verified evidence.
 
 ## License
@@ -121,4 +137,4 @@ The package discovery module queries fixed public endpoints for npm, crates.io, 
 
 ### Autonomous repair and validation evidence
 
-When a local validation image is configured with `POLYMIGRATE_DOCKER_IMAGE_<LANG>`, the CLI runs a bounded repair loop (up to three attempts by default) after build/test failures. Repairs are revalidated and may only modify existing production source files; test files, manifests, and files outside the generated output are not eligible. If Docker is unavailable or the image is not preloaded, the run is reported as blocked/unverified rather than pulling an image or claiming success. Test commands that report zero tests become NOT_RUN; successful commands whose test count cannot be confirmed become UNVERIFIED. Integration/E2E tests are run only when the project layout or configured scripts make them discoverable. Behavior comparison and security review remain NOT_RUN until a project-specific harness is implemented.
+When a local validation image is configured with `POLYMIGRATE_DOCKER_IMAGE_<LANG>`, the CLI runs a bounded repair loop (up to three attempts by default) after build/test failures. Repairs are revalidated and may only modify existing production source files; test files, manifests, and files outside the generated output are not eligible. If Docker is unavailable or the image is not preloaded, the run is reported as blocked/unverified rather than pulling an image or claiming success. Test commands that report zero tests become NOT_RUN; successful commands whose test count cannot be confirmed become UNVERIFIED. Integration/E2E tests are run only when the project layout or configured scripts make them discoverable. Behavior comparison remains NOT_RUN unless `--behavior-spec` is supplied; it validates only the explicit cases and is not proof of general semantic equivalence. Security review remains NOT_RUN until a comprehensive security gate is implemented.
