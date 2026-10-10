@@ -1,4 +1,4 @@
-"""Trusted scanner execution uses only allowlisted binaries and records provenance."""
+"""Local scanner execution uses allowlisted commands and records evidence, not trust."""
 import json
 import subprocess
 import tempfile
@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from polymigrate.security.scanner_runner import run_trusted_security_scanners
+from polymigrate.security.scanner_runner import run_local_security_scanners
 
 
-class TrustedScannerRunnerTests(unittest.TestCase):
+class LocalScannerRunnerTests(unittest.TestCase):
     def _fake_tools(self, root: Path, bandit_findings=None):
         semgrep = root / "semgrep"
         bandit = root / "bandit"
@@ -34,7 +34,7 @@ class TrustedScannerRunnerTests(unittest.TestCase):
             root = Path(tmp) / "output"
             root.mkdir()
             with patch("polymigrate.security.scanner_runner.shutil.which", return_value=None):
-                result = run_trusted_security_scanners(root, "python")
+                result = run_local_security_scanners(root, "python")
         self.assertEqual(result.status, "INCOMPLETE")
         self.assertEqual(result.missing_scanners, ("bandit", "semgrep"))
         self.assertFalse(result.scanner_provenance_verified)
@@ -51,7 +51,8 @@ class TrustedScannerRunnerTests(unittest.TestCase):
                 result = run_trusted_security_scanners(root, "python")
         self.assertEqual(result.status, "PASSED")
         self.assertEqual(result.accepted_scanners, ("bandit", "semgrep"))
-        self.assertTrue(result.scanner_provenance_verified)
+        self.assertFalse(result.scanner_provenance_verified)
+        self.assertTrue(result.scanner_execution_recorded)
 
     def test_high_bandit_finding_fails_the_security_gate(self):
         with tempfile.TemporaryDirectory() as tmp:
