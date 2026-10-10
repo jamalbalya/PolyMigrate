@@ -23,6 +23,7 @@ from polymigrate.planner import PlanningError, create_plan
 from polymigrate.skills.registry import SkillRegistry
 from polymigrate.validation.repair import AutonomousRepairLoop
 from polymigrate.validation.suite import validate_generated_project
+from polymigrate.validation.behavior import compare_behavior
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -301,6 +302,15 @@ def main(argv: list[str] | None = None) -> int:
                 providers, args.provider, target_language.id, target_language.extensions,
             ).run(result.output_root, validation_image, context, initial_validation=initial_validation)
             validation = repair_result.validation
+            behavior_result = None
+            if args.behavior_spec is not None:
+                source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
+                source_image = os.environ.get(source_image_variable, "").strip() or None
+                behavior_result = compare_behavior(
+                    args.behavior_spec, args.source, result.output_root,
+                    source_image, validation_image,
+                )
+                validation.gates["behavior_comparison"] = behavior_result.status
             gates = validation.gates
             if knowledge_store and library_resolutions:
                 required_gates = MigrationKnowledgeStore.REQUIRED_VERIFICATION_GATES
@@ -319,6 +329,8 @@ def main(argv: list[str] | None = None) -> int:
                 elif any(isinstance(item.get("knowledge_record_id"), str) for item in library_resolutions):
                     resolution_warnings.append("Library decisions remain unverified and project-scoped because not all required validation gates passed.")
             all_warnings = list(result.warnings) + list(validation.warnings) + list(repair_result.warnings) + list(resolution_warnings)
+            if behavior_result is not None:
+                all_warnings.extend(behavior_result.warnings)
             failed_gates = {"FAILED", "BLOCKED", "TIMEOUT"}
             if any(value in failed_gates for value in gates.values()):
                 overall_status = "BLOCKED"
@@ -338,6 +350,10 @@ def main(argv: list[str] | None = None) -> int:
                 "dependency_inventory": dependency_inventory, "library_resolution": library_resolutions,
                 "warnings": all_warnings, "validation_image": validation_image,
                 "repair": repair_result.to_dict(),
+                "behavior_comparison": behavior_result.to_dict() if behavior_result is not None else {
+                    "status": "NOT_RUN", "cases_checked": 0,
+                    "warnings": ["No behavior spec was supplied; behavior equivalence was not tested."],
+                },
                 "validation_gates": gates, "validation_results": validation.to_dict(),
                 "note": "Experimental per-file translation with optional constrained target-manifest reconstruction; dependencies are not installed automatically and full-project behavior is not guaranteed.",
             }
