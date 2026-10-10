@@ -1,5 +1,4 @@
 """Dependency candidate proof must observe production imports, not test-only imports."""
-import json
 import tempfile
 import unittest
 from pathlib import Path
