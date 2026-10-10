@@ -70,7 +70,7 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
 
 
 class InventorySourceAdapter:
-    """Read supported UTF-8 source files into a hash-checked project inventory."""
+    """Bounded source inventory with Python AST hints and heuristic structure extraction for other languages."""
     def __init__(self, language_id: str, extensions: Iterable[str], *, max_file_bytes: int = 1_000_000,
                  max_files: int = 1_000, max_total_bytes: int = 20_000_000,
                  max_scan_entries: int = 100_000) -> None:
@@ -86,6 +86,7 @@ class InventorySourceAdapter:
         self.max_file_bytes = max_file_bytes
         self.max_files = max_files
         self.max_total_bytes = max_total_bytes
+        self.max_scan_entries = max_scan_entries
 
     def analyze(self, source_root: Path) -> SourceProject:
         root = source_root.resolve(strict=True)
