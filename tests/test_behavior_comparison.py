@@ -9,7 +9,7 @@ from polymigrate.validation.runner import SandboxExecution
 
 
 class FakeBehaviorRunner:
-    def __init__(self, target_stdout="42\\n", source_stdout="42\\n", status="PASSED"):
+    def __init__(self, target_stdout="42\n", source_stdout="42\n", status="PASSED"):
         self.target_stdout = target_stdout
         self.source_stdout = source_stdout
         self.status = status
@@ -32,13 +32,13 @@ class BehaviorComparisonTests(unittest.TestCase):
         target = root / "target"
         source.mkdir()
         target.mkdir()
-        (source / "main.py").write_text("print(42)\\n", encoding="utf-8")
-        (target / "main.go").write_text('package main\\nfunc main() {}\\n', encoding="utf-8")
+        (source / "main.py").write_text("print(42)\n", encoding="utf-8")
+        (target / "main.go").write_text('package main\nfunc main() {}\n', encoding="utf-8")
         spec = root / "behavior.json"
         spec.write_text(json.dumps({
             "source_command": ["python", "main.py"],
             "target_command": ["go", "run", "main.go"],
-            "cases": [{"name": "answer", "expected_stdout": "42\\n"}],
+            "cases": [{"name": "answer", "expected_stdout": "42\n"}],
         }), encoding="utf-8")
         return source, target, spec
 
@@ -59,7 +59,7 @@ class BehaviorComparisonTests(unittest.TestCase):
             source, target, spec = self._fixture(Path(tmp))
             result = compare_behavior(
                 spec, source, target, "python:3.12-slim", "golang:1.23",
-                FakeBehaviorRunner(target_stdout="41\\n"),
+                FakeBehaviorRunner(target_stdout="41\n"),
             )
             self.assertEqual(result.status, "FAILED")
             self.assertTrue(any("target behavior" in warning for warning in result.warnings))
