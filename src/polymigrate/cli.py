@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -108,6 +109,54 @@ def _library_resolution_summary(result) -> dict[str, object]:
     }
 
 
+
+
+
+def _candidate_dependency_integration_status(
+    library_resolutions: list[dict[str, object]],
+    dependency_review,
+    gates: dict[str, str],
+    target_language: str,
+) -> tuple[str, list[str]]:
+    """Require a candidate package to be declared, imported, built, and integration-tested."""
+    candidates = [item for item in library_resolutions if item.get("decision_type") == "candidate"]
+    if not candidates:
+        return "PASSED", [
+            "No candidate library dependencies were selected; candidate-specific dependency integration proof is not applicable."
+        ]
+    if dependency_review.status != "PASSED":
+        return "NOT_RUN", ["Candidate dependency integration proof requires a PASSED dependency wiring review."]
+    for gate in ("target_build", "integration_tests", "behavior_comparison"):
+        if gates.get(gate) != "PASSED":
+            return "NOT_RUN", [f"Candidate dependency integration proof requires {gate}=PASSED."]
+    declared = dependency_review.declared_dependencies
+    observed_imports = dependency_review.observed_imports
+
+    def normalize(value: str) -> str:
+        if target_language == "python":
+            return re.sub(r"[-_.]+", "-", value).casefold()
+        if target_language == "ruby":
+            return re.sub(r"[^a-z0-9]", "", value.casefold())
+        return value.casefold()
+
+    for candidate in candidates:
+        package = candidate.get("selected_package")
+        if not isinstance(package, dict):
+            return "NOT_RUN", ["Candidate has no resolved package identity; dependency integration cannot be proven."]
+        package_name = package.get("name")
+        registry = package.get("registry")
+        if not isinstance(package_name, str) or not package_name.strip() or registry == "github-repositories":
+            return "NOT_RUN", ["A repository reference without a package identity is not dependency integration proof."]
+        if not any(normalize(item) == normalize(package_name) for item in declared):
+            return "NOT_RUN", [f"Candidate package '{package_name}' is not proven present in target dependency declarations."]
+        if not any(
+            normalize(item) == normalize(package_name)
+            or item.startswith(package_name + ".")
+            or item.startswith(package_name + "/")
+            for item in observed_imports
+        ):
+            return "NOT_RUN", [f"Candidate package '{package_name}' is not observed in target source imports."]
+    return "PASSED", ["Each candidate package is declared and imported, and target build, integration tests, and behavior comparison passed."]
 
 
 def _derive_final_status(
@@ -640,10 +689,6 @@ def main(argv: list[str] | None = None) -> int:
             security_evidence_result = _load_security_evidence(args.security_evidence)
             dependency_wiring_result = review_dependency_wiring(result.output_root, target_language.id)
             validation.gates["dependency_wiring"] = dependency_wiring_result.status
-            # Generic integration tests do not prove that a particular candidate
-            # library works; keep this gate closed until candidate-specific evidence exists.
-            has_candidate_dependencies = any(item.get("decision_type") == "candidate" for item in library_resolutions)
-            validation.gates["dependency_integration"] = "NOT_RUN" if has_candidate_dependencies else "PASSED"
             behavior_result = None
             if args.behavior_spec is not None:
                 source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
@@ -653,6 +698,11 @@ def main(argv: list[str] | None = None) -> int:
                     source_image, validation_image,
                 )
                 validation.gates["behavior_comparison"] = behavior_result.status
+            dependency_integration_status, dependency_integration_warnings = _candidate_dependency_integration_status(
+                library_resolutions, dependency_wiring_result, validation.gates, target_language.id
+            )
+            validation.gates["dependency_integration"] = dependency_integration_status
+            all_warnings.extend(dependency_integration_warnings)
             gates = validation.gates
             if knowledge_store and library_resolutions:
                 required_gates = MigrationKnowledgeStore.REQUIRED_VERIFICATION_GATES
