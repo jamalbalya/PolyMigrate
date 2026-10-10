@@ -1,6 +1,7 @@
 """Command-line interface."""
 from __future__ import annotations
 import argparse
+import ast
 import json
 import os
 import re
@@ -113,11 +114,92 @@ def _library_resolution_summary(result) -> dict[str, object]:
 
 
 
+def _candidate_test_imports(root: Path, target_language: str) -> set[str]:
+    """Collect imports from bounded, conventionally named test files only."""
+    test_dirs = {"test", "tests", "__tests__", "integration", "e2e", "spec"}
+    ignored_dirs = {".git", ".venv", "venv", "node_modules", "vendor", "dist", "build", "target"}
+    suffixes = {
+        "python": {".py"},
+        "go": {".go"},
+        "javascript": {".js", ".jsx", ".mjs", ".cjs"},
+        "typescript": {".ts", ".tsx"},
+        "ruby": {".rb"},
+    }.get(target_language, set())
+    imports: set[str] = set()
+    try:
+        resolved = root.resolve(strict=True)
+    except OSError:
+        return imports
+    if not resolved.is_dir() or root.is_symlink():
+        return imports
+    for current, directories, filenames in os.walk(resolved, topdown=True, followlinks=False):
+        current_path = Path(current)
+        directories[:] = sorted(
+            name for name in directories
+            if name not in ignored_dirs and not (current_path / name).is_symlink()
+        )
+        for filename in sorted(filenames):
+            path = current_path / filename
+            if path.is_symlink() or path.suffix.lower() not in suffixes:
+                continue
+            relative = path.relative_to(resolved)
+            lower_name = filename.lower()
+            in_test_dir = any(part.lower() in test_dirs for part in relative.parts[:-1])
+            test_name = (
+                lower_name.startswith("test_")
+                or lower_name.endswith("_test.py")
+                or lower_name.endswith("_test.go")
+                or lower_name.endswith("_test.rb")
+                or ".test." in lower_name
+                or ".spec." in lower_name
+            )
+            if not in_test_dir and not test_name:
+                continue
+            try:
+                if path.stat().st_size > 1_000_000:
+                    continue
+                source = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                continue
+            if target_language == "python":
+                try:
+                    tree = ast.parse(source)
+                except (SyntaxError, RecursionError):
+                    continue
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        imports.update(alias.name.split(".", 1)[0] for alias in node.names)
+                    elif isinstance(node, ast.ImportFrom) and node.module:
+                        imports.add(node.module.split(".", 1)[0])
+            elif target_language in {"javascript", "typescript"}:
+                for item in re.findall(
+                    r"""(?m)(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]""",
+                    source,
+                ):
+                    if item.startswith((".", "/", "node:")):
+                        continue
+                    parts = item.split("/")
+                    imports.add("/".join(parts[:2]) if item.startswith("@") and len(parts) > 1 else parts[0])
+            elif target_language == "go":
+                source = re.sub(r"/\*.*?\*/|//[^\n]*", "", source, flags=re.DOTALL)
+                for item in re.findall(
+                    r'''(?m)^\s*import\s+(?:[A-Za-z_][A-Za-z0-9_]*\s+)?["']([^"']+)["']''',
+                    source,
+                ):
+                    imports.add(item)
+                for block in re.findall(r"(?s)\bimport\s*\((.*?)\)", source):
+                    imports.update(re.findall(r'''(?m)^\s*(?:[A-Za-z_][A-Za-z0-9_]*\s+)?["']([^"']+)["']''', block))
+            elif target_language == "ruby":
+                imports.update(re.findall(r"""(?m)^\s*require(?:_relative)?\s*\(?\s*['"]([^'"]+)['"]""", source))
+    return imports
+
+
 def _candidate_dependency_integration_status(
     library_resolutions: list[dict[str, object]],
     dependency_review,
     gates: dict[str, str],
     target_language: str,
+    project_root: Path | None = None,
 ) -> tuple[str, list[str]]:
     """Require a candidate package to be declared, imported, built, and integration-tested."""
     candidates = [item for item in library_resolutions if item.get("decision_type") == "candidate"]
@@ -134,6 +216,9 @@ def _candidate_dependency_integration_status(
             return "NOT_RUN", [f"Candidate dependency integration proof requires {gate}=PASSED."]
     declared = dependency_review.declared_dependencies
     observed_imports = dependency_review.observed_imports
+    if project_root is None:
+        return "NOT_RUN", ["Candidate-specific integration evidence requires the generated project root."]
+    candidate_test_imports = _candidate_test_imports(project_root, target_language)
 
     def normalize(value: str) -> str:
         if target_language == "python":
@@ -173,7 +258,23 @@ def _candidate_dependency_integration_status(
             )
         if not import_match:
             return "NOT_RUN", [f"Candidate package '{package_name}' is not observed in target source imports."]
-    return "PASSED", ["Each candidate package is declared and imported, and target build, integration tests, and behavior comparison passed."]
+        if target_language == "python":
+            test_match = any(normalize(item) == normalize(package_name) for item in candidate_test_imports)
+        elif target_language in {"javascript", "typescript"}:
+            test_match = any(
+                normalize(item) == normalize(package_name) or item.startswith(package_name + "/")
+                for item in candidate_test_imports
+            )
+        elif target_language == "ruby":
+            test_match = any(normalize(item.split("/", 1)[0]) == normalize(package_name) for item in candidate_test_imports)
+        else:
+            test_match = any(
+                normalize(item) == normalize(package_name) or item.startswith(package_name + "/")
+                for item in candidate_test_imports
+            )
+        if not test_match:
+            return "NOT_RUN", [f"No recognized integration/test file imports candidate package '{package_name}'; generic test success is insufficient."]
+    return "PASSED", ["Each candidate package is declared, imported by production code and a recognized test file, and the required target build/integration/behavior gates passed."]
 
 
 def _security_review_gate_status(result) -> str:
@@ -729,7 +830,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 validation.gates["behavior_comparison"] = behavior_result.status
             dependency_integration_status, dependency_integration_warnings = _candidate_dependency_integration_status(
-                library_resolutions, dependency_wiring_result, validation.gates, target_language.id
+                library_resolutions, dependency_wiring_result, validation.gates, target_language.id, result.output_root
             )
             validation.gates["dependency_integration"] = dependency_integration_status
             gates = validation.gates
