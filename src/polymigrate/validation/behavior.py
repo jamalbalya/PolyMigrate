@@ -162,7 +162,7 @@ def _command_environment(workspace: Path, argv: tuple[str, ...]) -> tuple[tuple[
             ("CARGO_NET_OFFLINE", "true"),
         )
     if executable in {"npm", "npx"}:
-        return base + (("npm_config_offline", "true"), ("npm_config_cache", "/workspace/.polymigrate-npm-cache"), ("NPM_CONFIG_UPDATE_NOTIFIER", "false"))
+        return base + (("NPM_CONFIG_OFFLINE", "true"), ("NPM_CONFIG_CACHE", "/workspace/.polymigrate-npm-cache"), ("NPM_CONFIG_UPDATE_NOTIFIER", "false"))
     return base
 
 
