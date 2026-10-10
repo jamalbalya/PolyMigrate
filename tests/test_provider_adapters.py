@@ -41,6 +41,16 @@ class ProviderAdapterTests(unittest.TestCase):
         with patch("urllib.request.urlopen", return_value=response):
             self.assertEqual(provider.list_models(), ("chatgpt-model",))
 
+    def test_model_discovery_http_error_is_sanitized(self):
+        error = urllib.error.HTTPError("http://localhost:20128/v1/models", 401, "unauthorized", {}, None)
+        with patch("urllib.request.urlopen", side_effect=error):
+            provider = OpenAICompatibleProvider("9router", "super-secret-token", "",
+                                                base_url="http://localhost:20128/v1")
+            with self.assertRaises(ProviderRequestError) as captured:
+                provider.list_models()
+        self.assertIn("HTTP 401", str(captured.exception))
+        self.assertNotIn("super-secret-token", str(captured.exception))
+
     def test_generation_is_rejected_when_model_is_unset(self):
         provider = OpenAICompatibleProvider("9router", "not-a-real-secret", "",
                                             base_url="http://localhost:20128/v1")
