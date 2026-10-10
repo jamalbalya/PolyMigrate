@@ -177,11 +177,17 @@ class MigrationKnowledgeStore:
             row = connection.execute("SELECT * FROM migration_knowledge WHERE record_id = ?", (record_id,)).fetchone()
         if row is None:
             raise ValueError("knowledge record was not found")
+        solution = json.loads(row["solution_json"])
+        if isinstance(solution, dict):
+            summary = solution.get("summary")
+            if isinstance(summary, dict) and summary.get("decision_type") == "candidate":
+                summary["implementation_status"] = "VERIFIED_INTEGRATION"
+                summary["cache_status"] = "VERIFIED_SHARED" if shareable else "VERIFIED_PROJECT_SCOPED"
         record = KnowledgeRecord(
             record_id=row["record_id"], problem_fingerprint=row["problem_fingerprint"],
             source_language=row["source_language"], target_language=row["target_language"],
             toolchain_fingerprint=row["toolchain_fingerprint"], project_scope=row["project_scope"],
-            solution=json.loads(row["solution_json"]), validation_evidence=tuple(validation_evidence),
+            solution=solution, validation_evidence=tuple(validation_evidence),
             verified=True, shareable=shareable,
         )
         self.save(record)
