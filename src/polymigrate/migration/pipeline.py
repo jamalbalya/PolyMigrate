@@ -85,7 +85,8 @@ class MigrationEngine:
         self.max_artifact_bytes = max_artifact_bytes
 
     def execute(self, source_root: Path, source_language: str, target_language: str,
-                output_root: Path, context: dict[str, Any] | None = None) -> MigrationExecutionResult:
+                output_root: Path, context: dict[str, Any] | None = None, *,
+                source_project: SourceProject | None = None) -> MigrationExecutionResult:
         source = source_root.expanduser().resolve(strict=True)
         if not source.is_dir():
             raise ValueError("Source root must be a directory")
@@ -96,9 +97,14 @@ class MigrationEngine:
             raise ValueError("Output directory must be outside the source tree")
         if output.exists() and (not output.is_dir() or any(output.iterdir())):
             raise ValueError("Output directory must be absent or empty")
-        source_adapter = self.adapters.source(source_language)
         target_adapter = self.adapters.target(target_language)
-        project = source_adapter.analyze(source)
+        if source_project is None:
+            source_adapter = self.adapters.source(source_language)
+            project = source_adapter.analyze(source)
+        else:
+            project = source_project
+            if project.source_root.expanduser().resolve(strict=True) != source:
+                raise ValueError("Pre-analyzed project root does not match source_root")
         if project.language_id != source_language:
             raise ValueError("Source adapter returned a project with a mismatched language ID")
         seen: set[str] = set()
