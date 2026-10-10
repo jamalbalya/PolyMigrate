@@ -23,7 +23,7 @@
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
-- [ ] T024 Implement full autonomous migration orchestration and library reconstruction.
+- [x] T024 Orchestrate the current experimental stages end-to-end: inventory, dependency/library resolution, translation, bounded manifest reconstruction, repair, validation, optional behavior comparison, knowledge-store handling, and review reporting. Generated dependencies remain unverified and are never installed automatically.
 - [x] T025 Add isolated build/test execution and bounded automated repair loop.
 - [x] T026 Add safe Graphify CLI query adapter and include graph context in experimental migration; live version compatibility and incremental graph invalidation remain unverified.
 - [x] T027 Add migration E2E fixtures across language pairs and behavior-equivalence checks; real sandboxed Python→Node and Python→Go output comparisons pass, while each result remains limited to explicitly declared cases.
@@ -57,3 +57,5 @@
 - [x] T054 Keep source files inventoried when Python AST parsing fails safely, and emit a warning rather than aborting the migration.
 - [x] T055 Add an optional offline Tree-sitter parser extra with bounded parse/source limits and heuristic fallback; verify syntax diagnostics when the grammar is available.
 - [x] T056 Add an opt-in sandboxed behavior contract that compares source and target stdout against explicit expected outputs, rejects shell/inline execution, and records the gate in the migration review.
+- [ ] T058 Verify target dependency declarations and library wiring through real target builds/integration tests; only upgrade candidate status after the declared dependency is proven to work.
+- [ ] T059 Implement a comprehensive security-review gate for generated code and manifests; keep verified knowledge promotion blocked until this gate has trustworthy evidence.
