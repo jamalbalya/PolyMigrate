@@ -207,7 +207,8 @@ class PythonToJavaScriptTargetAdapter:
                     alternative = [self._print_statement(statement, assigned) for statement in node.orelse]
                 rendered = [f"if ({condition}) {{", *("    " + line for line in body), "}"]
                 if alternative:
-                    rendered.extend(["else {", *("    " + line for line in alternative), "}"])
+                    rendered[-1] = "} else {"
+                    rendered.extend([*("    " + line for line in alternative), "}"])
                 statements.append("\n".join(rendered))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
