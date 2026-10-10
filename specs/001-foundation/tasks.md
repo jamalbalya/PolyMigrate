@@ -75,3 +75,5 @@
 - [x] T068 Add a deterministic Python-to-Rust subset that emits a minimal Cargo project, validates signed-i32 arithmetic, and has offline build/run fixtures; this is still a constrained pair and does not complete T023.
 
 - [x] T069 Add Rust Cargo manifest/import consistency checks and candidate-specific crate proof using an offline local crate, actual Cargo build/test execution, and runtime output; public registry availability remains unverified without an explicit real-project build.
+
+- [x] T070 Extend the deterministic Python-to-JavaScript subset with bounded if/else conditions, short-circuit boolean combinations, and runtime-tested output; branch assignments, elif chains, chained comparisons, and string ordering remain explicitly unsupported.
