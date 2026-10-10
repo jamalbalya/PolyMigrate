@@ -36,6 +36,10 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
         files = self._translate("x = -2147483648\nprint(x)\n")
         self.assertIn("let mut x = -2147483648;", files["src/main.rs"])
 
+    def test_unicode_string_literals_remain_valid_rust_source(self):
+        files = self._translate('print("café")\n')
+        self.assertIn('"café"', files["src/main.rs"])
+
     def test_rejects_integer_overflow(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "signed Rust i32 range"):
             self._translate("x = 2147483647\ny = x + 1\nprint(y)\n")
