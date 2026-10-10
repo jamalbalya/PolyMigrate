@@ -210,7 +210,7 @@ def _kotlin_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
         if text is None:
             warnings.append(f"Could not read {path.relative_to(root).as_posix()}.")
             continue
-        imports.update(re.findall(r"(?m)^\\s*import\\s+([A-Za-z_][A-Za-z0-9_.]*)", text))
+        imports.update(re.findall(r"(?m)^\s*import\s+([A-Za-z_][A-Za-z0-9_.]*)", text))
     manifests = [root / name for name in ("build.gradle", "build.gradle.kts", "pom.xml")]
     present = [path for path in manifests if path.is_file() and not path.is_symlink()]
     declared: set[str] = set()
@@ -230,7 +230,7 @@ def _kotlin_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
                 warnings.append("pom.xml could not be parsed for Kotlin dependency declarations.")
         else:
             declared.update(re.findall(
-                r"""(?m)\\b(?:implementation|api|compileOnly|runtimeOnly|testImplementation|kapt)\\s*\\(?\\s*['"]([^'"]+)['"]""",
+                r"""(?m)\b(?:implementation|api|compileOnly|runtimeOnly|testImplementation|kapt)\s*\(?\s*['"]([^'"]+)['"]""",
                 text,
             ))
     external = {item for item in imports if not item.startswith(("java.", "javax.", "kotlin."))}
@@ -242,12 +242,12 @@ def _kotlin_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
 
 
 _RUBY_STDLIB = {
-    "base64", "benchmark", "bigdecimal", "cgi", "csv", "date", "digest", "English",
-    "erb", "etc", "fcntl", "fileutils", "find", "forwardable", "io/console", "ipaddr",
-    "json", "logger", "matrix", "monitor", "net/http", "net/https", "open-uri", "optparse",
-    "ostruct", "pathname", "pp", "prettyprint", "prime", "psych", "rake", "readline",
-    "resolv", "securerandom", "set", "shellwords", "singleton", "socket", "stringio",
-    "tempfile", "time", "timeout", "tmpdir", "tsort", "uri", "weakref", "yaml", "zlib",
+    "base64", "benchmark", "bigdecimal", "cgi", "csv", "date", "digest", "erb", "etc",
+    "fcntl", "fileutils", "find", "forwardable", "ipaddr", "json", "logger", "matrix",
+    "monitor", "net/http", "net/https", "open-uri", "optparse", "ostruct", "pathname",
+    "pp", "prettyprint", "prime", "psych", "readline", "resolv", "securerandom", "set",
+    "shellwords", "singleton", "socket", "stringio", "tempfile", "time", "timeout",
+    "tmpdir", "tsort", "uri", "weakref", "yaml", "zlib",
 }
 
 
@@ -259,7 +259,7 @@ def _ruby_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
         if text is None:
             warnings.append(f"Could not read {path.relative_to(root).as_posix()}.")
             continue
-        imports.update(re.findall(r"""(?m)^\\s*require(?:_relative)?\\s*\\(?\\s*['"]([^'"]+)['"]""", text))
+        imports.update(re.findall(r"""(?m)^\s*require(?:_relative)?\s*\(?\s*['"]([^'"]+)['"]""", text))
     declared: set[str] = set()
     for name in ("Gemfile", "gems.rb"):
         path = root / name
@@ -268,7 +268,7 @@ def _ruby_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
             if text is None:
                 warnings.append(f"{name} could not be read for gem declarations.")
                 continue
-            declared.update(re.findall(r"""\\bgem\\s*\\(?\\s*['"]([^'"]+)['"]""", text))
+            declared.update(re.findall(r"""\bgem\s*\(?\s*['"]([^'"]+)['"]""", text))
     normalize = lambda value: re.sub(r"[^a-z0-9]", "", value.lower())
     missing = {
         item for item in imports
@@ -290,7 +290,7 @@ def _php_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
         if text is None:
             warnings.append(f"Could not read {path.relative_to(root).as_posix()}.")
             continue
-        imports.update(re.findall(r"(?m)^\\s*use\\s+([A-Za-z_][A-Za-z0-9_\\\\]*)", text))
+        imports.update(re.findall(r"(?m)^\s*use\s+([A-Za-z_][A-Za-z0-9_\\]*)", text))
     composer = root / "composer.json"
     declared: set[str] = set()
     local_namespaces: tuple[str, ...] = ()
@@ -307,18 +307,17 @@ def _php_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
             if isinstance(autoload, dict):
                 psr4 = autoload.get("psr-4", {})
                 if isinstance(psr4, dict):
-                    local_namespaces = tuple(name.strip("\\\\").lower() for name in psr4 if isinstance(name, str))
+                    local_namespaces = tuple(name.strip("\\").lower() for name in psr4 if isinstance(name, str))
         except (json.JSONDecodeError, ValueError):
             warnings.append("composer.json could not be parsed for dependency declarations.")
-    else:
-        if imports:
-            warnings.extend(f"Missing composer.json for PHP namespace import: {item}" for item in sorted(imports))
+    elif imports:
+        warnings.extend(f"Missing composer.json for PHP namespace import: {item}" for item in sorted(imports))
     unresolved = []
     for item in imports:
-        namespace = item.strip("\\\\").lower()
+        namespace = item.strip("\\").lower()
         if any(namespace == prefix or namespace.startswith(prefix) for prefix in local_namespaces):
             continue
-        parts = namespace.split("\\\\")
+        parts = namespace.split("\\")
         package = "/".join(parts[:2]) if len(parts) >= 2 else ""
         if package and package in declared:
             continue
