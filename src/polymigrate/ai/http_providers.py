@@ -80,8 +80,8 @@ class OpenAICompatibleProvider:
         self.provider_id = self.provider_id.strip().lower()
         self.base_url = self.base_url.rstrip("/")
         _validate_base_url(self.base_url)
-        if not self.provider_id or not self.api_key or not self.model_id:
-            raise ValueError("provider_id, api_key, and model_id are required")
+        if not self.provider_id or not self.api_key:
+            raise ValueError("provider_id and api_key are required")
         if self.timeout <= 0:
             raise ValueError("timeout must be positive")
         if not 1 <= self.max_output_tokens <= 16_384:
@@ -102,6 +102,10 @@ class OpenAICompatibleProvider:
         return tuple(model_ids)
 
     def generate(self, request: ModelRequest) -> ModelResponse:
+        if not self.model_id.strip():
+            raise ProviderRequestError(
+                f"{self.provider_id} model is not configured; run 'polymigrate providers --list-models' and set the model ID"
+            )
         token_limit_key = "max_completion_tokens" if self.provider_id == "openai" else "max_tokens"
         payload: dict[str, Any] = {"model": self.model_id, "messages": [{"role": "user", "content": _prompt(request)}],
                                    token_limit_key: self.max_output_tokens}
