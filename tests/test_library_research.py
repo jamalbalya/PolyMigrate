@@ -67,6 +67,19 @@ class LibraryResearchTests(unittest.TestCase):
         self.assertEqual(len(result.searched_queries),3)
         self.assertEqual(len(result.candidates),0)
 
+    def test_github_repository_is_reference_only_not_installable_package(self):
+        repository=PackageCandidate("org/codec",None,"Reference implementation","github-repositories","https://github.com/org/codec")
+        workflow,_=self._workflow([
+            {"queries":["codec implementation"]},
+            {"decision_type":"candidate","candidate_name":"github-repositories:org/codec",
+             "rationale":"Repository contains a potentially useful reference.",
+             "assumptions":["API compatibility must be assessed"],"validation_tests":["port behavior tests"]},
+        ],[PackageSearchResult("go","codec implementation","available",(repository,))])
+        result=workflow.resolve("fake",source_library="source-codec",target_language="go",
+                                required_capabilities=["decode codec"])
+        self.assertEqual(result.decision.strategy,"reference_repository")
+        self.assertTrue(any("reference material only" in warning for warning in result.warnings))
+
 
 if __name__ == "__main__":
     unittest.main()
