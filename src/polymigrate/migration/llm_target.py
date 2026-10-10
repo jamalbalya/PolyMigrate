@@ -13,7 +13,7 @@ class LLMTargetAdapter:
     """Translate source files one by one; output remains unverified until target QA runs."""
     def __init__(self, language_id: str, source_language: str, target_extension: str,
                  providers: ProviderRegistry, provider_id: str, *, allow_source_upload: bool = False,
-                 max_source_chars: int = 100_000) -> None:
+                 max_source_chars: int = 100_000, target_extensions: tuple[str, ...] = ()) -> None:
         if not language_id or language_id.strip().lower() != language_id:
             raise ValueError("language_id must be canonical lowercase text")
         if not source_language or source_language.strip().lower() != source_language:
@@ -25,6 +25,7 @@ class LLMTargetAdapter:
         self.language_id = language_id
         self.source_language = source_language
         self.target_extension = target_extension
+        self.target_extensions = frozenset(ext.lower() for ext in (target_extensions or (target_extension,)))
         self.providers = providers
         self.provider_id = provider_id
         self.allow_source_upload = allow_source_upload
@@ -85,6 +86,8 @@ class LLMTargetAdapter:
                 self.warnings.append(f"{unit.relative_path}: assumptions require verification: {'; '.join(assumptions[:5])}")
             if unsupported:
                 self.warnings.append(f"{unit.relative_path}: unsupported features reported: {'; '.join(unsupported[:5])}")
-            target_path = PurePosixPath(unit.relative_path).with_suffix(self.target_extension).as_posix()
+            source_suffix = PurePosixPath(unit.relative_path).suffix.lower()
+            selected_suffix = source_suffix if source_suffix in self.target_extensions else self.target_extension
+            target_path = PurePosixPath(unit.relative_path).with_suffix(selected_suffix).as_posix()
             artifacts.append(GeneratedArtifact(target_path, raw["content"]))
         return artifacts
