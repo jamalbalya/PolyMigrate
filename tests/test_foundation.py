@@ -190,6 +190,16 @@ class KnowledgeAndSkillsTests(unittest.TestCase):
                                         project_scope="project-b")
             self.assertEqual(len(found), 1)
 
+    def test_failed_duplicate_gate_cannot_be_overwritten_by_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
+            store.save(KnowledgeRecord("draft", "problem", "python", "go", "toolchain", "project-a",
+                                       {"strategy": "adapter"}, (), False, False))
+            evidence = [{"gate": gate, "status": "PASSED"} for gate in sorted(store.REQUIRED_VERIFICATION_GATES)]
+            evidence.append({"gate": "target_build", "status": "FAILED"})
+            with self.assertRaisesRegex(ValueError, "all required validation gates"):
+                store.promote_verified("draft", tuple(evidence), shareable=True)
+
 
 if __name__ == "__main__":
     unittest.main()
