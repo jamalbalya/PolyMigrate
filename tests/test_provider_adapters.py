@@ -12,6 +12,21 @@ from polymigrate.ai.protocols import ModelRequest
 
 
 class ProviderAdapterTests(unittest.TestCase):
+
+    def test_provider_timeouts_must_be_finite_positive_numbers(self):
+        for timeout in (float("nan"), float("inf"), float("-inf"), True, 0):
+            with self.subTest(timeout=timeout), self.assertRaisesRegex(ValueError, "finite positive number"):
+                OpenAICompatibleProvider("router", "key", "model", timeout=timeout)
+
+    def test_output_token_limits_must_be_integers_not_booleans(self):
+        for limit in (1.5, True, 0, 16_385):
+            with self.subTest(limit=limit), self.assertRaisesRegex(ValueError, "integer between 1 and 16384"):
+                GeminiProvider("key", "model", max_output_tokens=limit)
+
+    def test_anthropic_rejects_whitespace_only_model_id(self):
+        with self.assertRaisesRegex(ValueError, "api_key and model_id are required"):
+            AnthropicProvider("key", "   ")
+
     def test_https_base_url_is_accepted(self):
         _validate_base_url("https://example.com/v1")
 
