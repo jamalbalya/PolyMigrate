@@ -19,12 +19,12 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 118 tests passed in the latest verified workflow on Python 3.11, 3.12, and 3.13.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 133 tests passed in the latest verified workflow on Python 3.11, 3.12, and 3.13; the wheel build also verified all six packaged skill assets.
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
 - [ ] T024 Implement full autonomous migration orchestration and library reconstruction.
-- [ ] T025 Add isolated build/test execution and bounded automated repair loop.
+- [x] T025 Add isolated build/test execution and bounded automated repair loop.
 - [x] T026 Add safe Graphify CLI query adapter and include graph context in experimental migration; live version compatibility and incremental graph invalidation remain unverified.
 - [ ] T027 Add full migration E2E fixtures across multiple language pairs and behavior-equivalence checks.
 - [x] T028 Add opt-in same-project draft caching keyed by source, target, toolchain, and Graphify context fingerprints.
@@ -37,3 +37,7 @@
 - [x] T035 Add bounded import inventory and AI dependency-gap planning grounded in observed imports.
 - [x] T036 Integrate library discovery decisions into the CLI migration context and final review summary.
 - [x] T037 Require explicit PASS evidence for all required gates before knowledge can be marked verified or shared.
+- [x] T038 Inject packaged migration skills into CLI model context and enforce per-skill tool scopes in the agent runtime.
+- [x] T039 Add configurable provider output-token budgets and a 2 MB response-body limit.
+- [x] T040 Distinguish passing test evidence from zero-test and unconfirmed test runs.
+- [x] T041 Add bounded post-validation repair attempts that cannot modify test files or write outside the generated project.
