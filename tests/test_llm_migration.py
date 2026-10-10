@@ -55,6 +55,26 @@ class LLMTranslationTests(unittest.TestCase):
             self.assertEqual(source_file.read_text(encoding="utf-8"), "print('hello')")
             self.assertTrue(any("not yet passed build" in warning for warning in result.warnings))
 
+    def test_generated_target_syntax_errors_are_reported_without_discarding_output(self):
+        provider = TranslationProvider(json.dumps({
+            "content": "package main\nfunc main( {\n",
+            "assumptions": [], "unsupported_features": [],
+        }))
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            source.mkdir()
+            (source / "main.py").write_text("print('hello')", encoding="utf-8")
+            parser_probe = Path(tmp) / "parser-probe"
+            parser_probe.mkdir()
+            (parser_probe / "main.go").write_text("package main\n", encoding="utf-8")
+            if "tree-sitter" not in InventorySourceAdapter("go", (".go",)).analyze(parser_probe).metadata["parser_backends"]:
+                self.skipTest("Offline Go Tree-sitter grammar is not available")
+            output = Path(tmp) / "out"
+            result = registry_for(provider).execute(source, "python", "go", output)
+            self.assertEqual(result.status, "GENERATED_UNVERIFIED")
+            self.assertTrue((output / "main.go").is_file())
+            self.assertTrue(any("Tree-sitter reported syntax errors" in warning for warning in result.warnings))
+
     def test_source_upload_requires_explicit_opt_in(self):
         provider = TranslationProvider(json.dumps({"content":"package main","assumptions":[],"unsupported_features":[]}))
         with tempfile.TemporaryDirectory() as tmp:
