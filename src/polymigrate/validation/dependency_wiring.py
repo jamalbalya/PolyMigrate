@@ -10,6 +10,7 @@ import os
 import re
 import sys
 import tomllib
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -200,6 +201,133 @@ def _javascript_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]
     return imports, declared, warnings + [f"Missing package.json dependency declaration: {item}" for item in sorted(missing)]
 
 
+
+def _kotlin_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
+    files, warnings = _files(root, {".kt", ".kts"})
+    imports: set[str] = set()
+    for path in files:
+        text = _read(path)
+        if text is None:
+            warnings.append(f"Could not read {path.relative_to(root).as_posix()}.")
+            continue
+        imports.update(re.findall(r"(?m)^\\s*import\\s+([A-Za-z_][A-Za-z0-9_.]*)", text))
+    manifests = [root / name for name in ("build.gradle", "build.gradle.kts", "pom.xml")]
+    present = [path for path in manifests if path.is_file() and not path.is_symlink()]
+    declared: set[str] = set()
+    for path in present:
+        text = _read(path) or ""
+        if path.name == "pom.xml":
+            try:
+                xml_root = ET.fromstring(text)
+                for node in xml_root.iter():
+                    if node.tag.rsplit("}", 1)[-1] == "dependency":
+                        values = {}
+                        for child in node:
+                            values[child.tag.rsplit("}", 1)[-1]] = (child.text or "").strip()
+                        if values.get("groupId") and values.get("artifactId"):
+                            declared.add(f"{values['groupId']}:{values['artifactId']}")
+            except ET.ParseError:
+                warnings.append("pom.xml could not be parsed for Kotlin dependency declarations.")
+        else:
+            declared.update(re.findall(
+                r"""(?m)\\b(?:implementation|api|compileOnly|runtimeOnly|testImplementation|kapt)\\s*\\(?\\s*['"]([^'"]+)['"]""",
+                text,
+            ))
+    external = {item for item in imports if not item.startswith(("java.", "javax.", "kotlin."))}
+    if external and not present:
+        warnings.extend(f"Missing Kotlin dependency manifest for import: {item}" for item in sorted(external))
+    elif external:
+        warnings.append("Kotlin import-to-coordinate mapping is ambiguous; dependency wiring remains unverified until a real build proves it.")
+    return imports, declared, warnings
+
+
+_RUBY_STDLIB = {
+    "base64", "benchmark", "bigdecimal", "cgi", "csv", "date", "digest", "English",
+    "erb", "etc", "fcntl", "fileutils", "find", "forwardable", "io/console", "ipaddr",
+    "json", "logger", "matrix", "monitor", "net/http", "net/https", "open-uri", "optparse",
+    "ostruct", "pathname", "pp", "prettyprint", "prime", "psych", "rake", "readline",
+    "resolv", "securerandom", "set", "shellwords", "singleton", "socket", "stringio",
+    "tempfile", "time", "timeout", "tmpdir", "tsort", "uri", "weakref", "yaml", "zlib",
+}
+
+
+def _ruby_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
+    files, warnings = _files(root, {".rb"})
+    imports: set[str] = set()
+    for path in files:
+        text = _read(path)
+        if text is None:
+            warnings.append(f"Could not read {path.relative_to(root).as_posix()}.")
+            continue
+        imports.update(re.findall(r"""(?m)^\\s*require(?:_relative)?\\s*\\(?\\s*['"]([^'"]+)['"]""", text))
+    declared: set[str] = set()
+    for name in ("Gemfile", "gems.rb"):
+        path = root / name
+        if path.is_file() and not path.is_symlink():
+            text = _read(path)
+            if text is None:
+                warnings.append(f"{name} could not be read for gem declarations.")
+                continue
+            declared.update(re.findall(r"""\\bgem\\s*\\(?\\s*['"]([^'"]+)['"]""", text))
+    normalize = lambda value: re.sub(r"[^a-z0-9]", "", value.lower())
+    missing = {
+        item for item in imports
+        if item not in _RUBY_STDLIB
+        and not any(normalize(item.split("/", 1)[0]) == normalize(gem) for gem in declared)
+    }
+    if missing and not declared:
+        warnings.extend(f"Missing Gemfile declaration for Ruby require: {item}" for item in sorted(missing))
+    elif missing:
+        warnings.append("Some Ruby require names could not be mapped confidently to declared gems; dependency wiring remains unverified.")
+    return imports, declared, warnings + [f"Missing Ruby dependency declaration: {item}" for item in sorted(missing) if not declared]
+
+
+def _php_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
+    files, warnings = _files(root, {".php"})
+    imports: set[str] = set()
+    for path in files:
+        text = _read(path)
+        if text is None:
+            warnings.append(f"Could not read {path.relative_to(root).as_posix()}.")
+            continue
+        imports.update(re.findall(r"(?m)^\\s*use\\s+([A-Za-z_][A-Za-z0-9_\\\\]*)", text))
+    composer = root / "composer.json"
+    declared: set[str] = set()
+    local_namespaces: tuple[str, ...] = ()
+    if composer.is_file() and not composer.is_symlink():
+        try:
+            data = json.loads(_read(composer) or "")
+            if not isinstance(data, dict):
+                raise ValueError("manifest must be an object")
+            for key in ("require", "require-dev"):
+                values = data.get(key, {})
+                if isinstance(values, dict):
+                    declared.update(name.lower() for name in values if isinstance(name, str))
+            autoload = data.get("autoload", {})
+            if isinstance(autoload, dict):
+                psr4 = autoload.get("psr-4", {})
+                if isinstance(psr4, dict):
+                    local_namespaces = tuple(name.strip("\\\\").lower() for name in psr4 if isinstance(name, str))
+        except (json.JSONDecodeError, ValueError):
+            warnings.append("composer.json could not be parsed for dependency declarations.")
+    else:
+        if imports:
+            warnings.extend(f"Missing composer.json for PHP namespace import: {item}" for item in sorted(imports))
+    unresolved = []
+    for item in imports:
+        namespace = item.strip("\\\\").lower()
+        if any(namespace == prefix or namespace.startswith(prefix) for prefix in local_namespaces):
+            continue
+        parts = namespace.split("\\\\")
+        package = "/".join(parts[:2]) if len(parts) >= 2 else ""
+        if package and package in declared:
+            continue
+        unresolved.append(item)
+    if unresolved and composer.is_file():
+        warnings.append("PHP namespace-to-Composer package mapping is ambiguous; dependency wiring remains unverified until a real build/integration test proves it.")
+    return imports, declared, warnings
+
+
 def review_dependency_wiring(root: Path, language: str) -> DependencyWiringReview:
     """Compare statically observed imports with allowlisted manifest declarations."""
     if root.is_symlink():
@@ -216,6 +344,12 @@ def review_dependency_wiring(root: Path, language: str) -> DependencyWiringRevie
         imports, declared, warnings = _go_dependencies(resolved)
     elif language in {"javascript", "typescript"}:
         imports, declared, warnings = _javascript_dependencies(resolved)
+    elif language == "kotlin":
+        imports, declared, warnings = _kotlin_dependencies(resolved)
+    elif language == "ruby":
+        imports, declared, warnings = _ruby_dependencies(resolved)
+    elif language == "php":
+        imports, declared, warnings = _php_dependencies(resolved)
     else:
         return DependencyWiringReview(
             "UNVERIFIED", language, 0, (), (),
@@ -223,6 +357,7 @@ def review_dependency_wiring(root: Path, language: str) -> DependencyWiringRevie
         )
     missing = tuple(sorted(item.split(": ", 1)[1] for item in warnings if item.startswith("Missing ")))
     incomplete = any("could not" in item.lower() or "stopped at" in item.lower() or "could not read" in item.lower() for item in warnings)
-    status = "BLOCKED" if missing else "UNVERIFIED" if incomplete else "PASSED"
+    requires_real_proof = any("remains unverified" in item.lower() or "remains unverified" in item.lower() or "mapping is ambiguous" in item.lower() for item in warnings)
+    status = "BLOCKED" if missing else "UNVERIFIED" if incomplete or requires_real_proof else "PASSED"
     warnings.append("Static import/manifest consistency does not prove package availability, API compatibility, successful compilation, or runtime behavior.")
     return DependencyWiringReview(status, language, len(imports), tuple(sorted(declared)), missing, tuple(warnings))
