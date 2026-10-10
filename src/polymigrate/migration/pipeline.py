@@ -127,7 +127,7 @@ class MigrationEngine:
         for artifact in artifacts:
             relative = PurePosixPath(artifact.relative_path)
             if (relative.is_absolute() or ".." in relative.parts or not relative.parts
-                    or "\\\\" in artifact.relative_path or "\\x00" in artifact.relative_path
+                    or "\\" in artifact.relative_path or "\x00" in artifact.relative_path
                     or ":" in relative.parts[0]):
                 raise ValueError(f"Target adapter returned unsafe output path: {artifact.relative_path}")
             normalized = relative.as_posix()
