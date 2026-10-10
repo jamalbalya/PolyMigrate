@@ -105,7 +105,7 @@ def _tree_sitter_structure(language_id: str, source_text: str) -> tuple[set[str]
 
 
 def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, ...], tuple[str, ...], str | None, str]:
-    """Extract bounded symbol/import hints; Python uses its real AST, other languages use heuristics."""
+    """Extract bounded symbol/import hints; prefer Python AST or offline Tree-sitter, then fall back to heuristics."""
     symbols: set[str] = set()
     dependencies: set[str] = set()
     warning = None
