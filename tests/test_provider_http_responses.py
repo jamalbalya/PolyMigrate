@@ -18,9 +18,11 @@ class FakeHTTPResponse:
 class ProviderResponseTests(unittest.TestCase):
     def test_openai_compatible_structured_json_response(self):
         response=FakeHTTPResponse({"choices":[{"message":{"content":'{"choice":"ok"}'}}]})
-        with patch("urllib.request.urlopen",return_value=response):
+        with patch("urllib.request.urlopen",return_value=response) as open_url:
             result=OpenAICompatibleProvider("openai","fake-key","test-model").generate(
                 ModelRequest("decision","return json",{},require_structured_output=True))
+        request_payload=json.loads(open_url.call_args.args[0].data.decode("utf-8"))
+        self.assertEqual(request_payload["max_completion_tokens"],8192)
         self.assertEqual(result.structured_data,{"choice":"ok"})
         self.assertEqual(result.provider_id,"openai")
 
