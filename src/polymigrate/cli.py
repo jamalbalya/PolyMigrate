@@ -4,11 +4,12 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from polymigrate.ai.config import build_provider_registry
 from polymigrate.graph.graphify import GraphifyAdapter
-from polymigrate.knowledge import MigrationKnowledgeStore, fingerprint_payload
+from polymigrate.knowledge import KnowledgeRecord, MigrationKnowledgeStore, fingerprint_payload
 from polymigrate.languages import LanguageRegistry
 from polymigrate.migration.adapters import InventorySourceAdapter
 from polymigrate.migration.dependencies import DependencyGapPlanner
@@ -124,6 +125,10 @@ def main(argv: list[str] | None = None) -> int:
             providers, _provider_warnings = build_provider_registry()
             source_adapter = InventorySourceAdapter(source_language.id, source_language.extensions)
             source_project = source_adapter.analyze(args.source)
+            project_scope = fingerprint_payload({
+                "project_root": str(args.source.expanduser().resolve()),
+                "source_files": [{"path": unit.relative_path, "sha256": unit.content_sha256} for unit in source_project.units],
+            }) if knowledge_store else None
             dependency_warnings: list[str] = []
             resolution_warnings: list[str] = []
             dependency_inventory: list[str] = []
