@@ -174,7 +174,7 @@ def validate_generated_project(workspace: Path, language_id: str, image: str | N
                                runner: DockerSandboxRunner | None = None) -> ValidationSuiteResult:
     gates = {
         "target_build": "NOT_RUN", "unit_tests": "NOT_RUN", "integration_tests": "NOT_RUN",
-        "e2e_tests": "NOT_RUN", "behavior_comparison": "NOT_RUN", "security_review": "NOT_RUN",
+        "e2e_tests": "NOT_RUN", "behavior_comparison": "NOT_RUN", "security_review": "NOT_RUN", "dependency_integration": "NOT_RUN",
     }
     if not image:
         return ValidationSuiteResult(gates, (), (
