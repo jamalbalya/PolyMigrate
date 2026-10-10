@@ -89,6 +89,42 @@ class KnowledgeCacheTests(unittest.TestCase):
                 store.save(record)
 
 
+
+    def test_promoted_library_candidate_is_persisted_as_verified_integration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
+            solution = {
+                "kind": "library_resolution",
+                "summary": {
+                    "decision_type": "candidate",
+                    "implementation_status": "CANDIDATE_IDENTIFIED_NOT_WIRED",
+                },
+            }
+            draft = KnowledgeRecord(
+                record_id="candidate-integration-proof", problem_fingerprint="problem",
+                source_language="python", target_language="go", toolchain_fingerprint="toolchain",
+                project_scope="project-a", solution=solution,
+                validation_evidence=(), verified=False, shareable=False,
+            )
+            store.save(draft)
+            evidence = tuple(
+                {"gate": gate, "status": "PASSED"}
+                for gate in MigrationKnowledgeStore.REQUIRED_VERIFICATION_GATES
+            )
+            promoted = store.promote_verified(
+                draft.record_id, evidence, shareable=True
+            )
+            reusable = store.find_reusable(
+                problem_fingerprint="problem", source_language="python", target_language="go",
+                toolchain_fingerprint="toolchain", project_scope="project-b",
+            )
+        self.assertTrue(promoted.verified)
+        self.assertEqual(
+            reusable[0].solution["summary"]["implementation_status"],
+            "VERIFIED_INTEGRATION",
+        )
+        self.assertEqual(reusable[0].solution["summary"]["cache_status"], "VERIFIED_SHARED")
+
     def test_verified_knowledge_requires_dependency_wiring_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
