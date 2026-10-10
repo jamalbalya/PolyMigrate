@@ -42,6 +42,12 @@ Inspect provider configuration without making network requests:
 
     polymigrate providers
 
+To opt in to a live connectivity check, send a small source-free health request to each configured provider:
+
+    polymigrate providers --check
+
+This can incur a small provider charge and verifies connectivity/response shape only; it does not prove that a model can migrate a real project correctly.
+
 ### Experimental AI file translation
 
 The current experimental migrate command translates supported source files one file at a time. It does not yet migrate project manifests, dependencies, frameworks, tests, deployment configuration, or database schemas, and it does not run target builds or regression tests. Its output status is GENERATED_UNVERIFIED.
