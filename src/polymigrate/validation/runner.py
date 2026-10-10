@@ -55,9 +55,9 @@ def _test_execution_evidence(command: ValidationCommand, stdout: str, stderr: st
     if Path(command.argv[0]).name == "mvn" and any(part in {"test", "verify"} for part in command.argv):
         counts = [int(value) for value in re.findall(r"Tests run:\s*(\d+)", output, re.IGNORECASE)]
         return any(value > 0 for value in counts) if counts else None
-    if re.search(r"No tests?(?:\s+files?)?\s+(?:were\s+)?found|Tests:\s*0\s+total", output, re.IGNORECASE):
+    if re.search(r"No tests?(?:\s+files?)?\s+(?:were\s+)?found|Tests:\s*0\s+total|Test Suites:\s*0\s+total", output, re.IGNORECASE):
         return False
-    if re.search(r"Test Suites:\s*\d+|Tests:\s*[1-9]\d*\s|[1-9]\d*\s+passing|Passed!\s+-\s+Failed:", output, re.IGNORECASE):
+    if re.search(r"Test Suites:\s*[1-9]\d*|Tests:\s*[1-9]\d*\s|\d+\s+passed\b|[1-9]\d*\s+passing|(?m)^PASS\s|Passed!\s+-\s+Failed:\s*\d+,\s*Passed:\s*[1-9]\d*", output, re.IGNORECASE):
         return True
     return None
 
