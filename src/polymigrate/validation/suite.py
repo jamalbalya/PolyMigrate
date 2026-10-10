@@ -67,6 +67,7 @@ def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[Valid
         module_mode = () if (workspace / "go.mod").is_file() else (("GO111MODULE", "off"),)
         if go_files:
             commands.append(ValidationCommand("build-go", ("go", "build", "./..."), environment=module_mode))
+            commands.append(ValidationCommand("build-go-vet", ("go", "vet", "./..."), environment=module_mode))
         test_paths = [path for path in go_files if path.endswith("_test.go")]
         if test_paths:
             commands.append(ValidationCommand("unit_tests-go", ("go", "test", "-v", "./..."), environment=module_mode))
