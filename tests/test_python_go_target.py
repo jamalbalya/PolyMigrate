@@ -105,9 +105,48 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
         ):
             self._translate("print = 1\nprint(2)\n")
 
-    def test_rejects_if_statement(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "If"):
-            self._translate("if True:\n    print('yes')\n")
+    def test_rejects_loop_statement(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "For"):
+            self._translate("for item in []:\n    print('yes')\n")
+
+    def test_if_else_comparison_is_translated(self):
+        code = self._translate(
+            'x = 6\nif x > 0:\n    print("positive")\nelse:\n    print("non-positive")\n'
+        )
+        self.assertIn("if (x > 0) {", code)
+        self.assertIn("} else {", code)
+        self.assertIn('fmt.Println("positive")', code)
+
+    def test_compound_conditions_and_truthiness_are_translated(self):
+        code = self._translate(
+            'x = 6\nif x and x < 10:\n    print("in range")\n'
+        )
+        self.assertIn("&&", code)
+        self.assertIn("(x != 0)", code)
+
+    def test_rejects_chained_comparisons(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Chained comparisons"):
+            self._translate('x = 6\nif 0 < x < 10:\n    print("in range")\n')
+
+    def test_rejects_assignments_inside_conditionals(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "only print"):
+            self._translate("x = 1\nif x > 0:\n    y = 2\nprint(x)\n")
+
+    @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
+    def test_if_else_generated_program_builds_and_runs(self):
+        code = self._translate(
+            'x = 6\nif x > 0:\n    print("positive")\nelse:\n    print("non-positive")\n'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.go"
+            path.write_text(code, encoding="utf-8")
+            fmt = subprocess.run(["gofmt", "-w", str(path)], capture_output=True,
+                                 text=True, timeout=10, check=False)
+            self.assertEqual(fmt.returncode, 0, fmt.stderr)
+            run = subprocess.run(["go", "run", str(path)], capture_output=True,
+                                 text=True, timeout=30, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "positive\n")
 
     def test_rejects_multiple_print_arguments(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one"):
