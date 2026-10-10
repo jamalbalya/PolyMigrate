@@ -274,8 +274,6 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
     dependency_result = review_dependency_wiring(result.output_root, "go")
     gates["dependency_wiring"] = dependency_result.status
     gates["dependency_integration"] = "NOT_RUN"
-    if any(item.get("decision_type") == "candidate" for item in []):
-        pass
 
     warnings.extend(security_result.warnings)
     warnings.extend(dependency_result.warnings)
