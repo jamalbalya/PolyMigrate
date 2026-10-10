@@ -13,6 +13,9 @@ authors = [{ name = "Jamal Balya" }]
 keywords = ["code-migration", "refactoring", "llm", "graphify"]
 classifiers = ["Development Status :: 3 - Alpha", "Programming Language :: Python :: 3"]
 
+[project.optional-dependencies]
+parsers = ["tree-sitter-language-pack>=1.6.0,<2.0"]
+
 [project.scripts]
 polymigrate = "polymigrate.cli:main"
 
