@@ -56,12 +56,13 @@ This can incur a small provider charge and verifies connectivity/response shape 
 The offline deterministic strategy currently supports only these deliberately narrow pairs:
 - Python → Go
 - Python → JavaScript
+- Python → Rust
 
 For example:
 
     polymigrate migrate --source ./small-python-project --from python --to javascript --output ./migration-output --strategy deterministic
 
-These translators support a small subset of assignments, integer/string expressions, and single-argument `print()`. They reject unsupported syntax instead of guessing. The JavaScript translator restricts integer arithmetic to JavaScript's safe-integer range. A generated file is not a complete project migration, and a successful syntax/build check does not prove behavior equivalence; review the migration report and supply a behavior spec when applicable.
+These translators support a small subset of assignments, integer/string expressions, and single-argument `print()`. They reject unsupported syntax instead of guessing. The JavaScript translator restricts integer arithmetic to JavaScript's safe-integer range; the Rust translator uses signed 32-bit integers and emits a minimal Cargo project. A generated file is not a complete project migration, and a successful syntax/build check does not prove behavior equivalence; review the migration report and supply a behavior spec when applicable.
 
 ### Experimental AI file translation
 
