@@ -1,0 +1,76 @@
+"""Cache integration tests prove same-project library research is reused."""
+import json
+import os
+import tempfile
+import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
+from pathlib import Path
+from unittest.mock import patch
+
+from polymigrate.ai.protocols import ModelRequest, ModelResponse, ProviderCapabilities
+from polymigrate.ai.registry import ProviderRegistry
+from polymigrate.cli import main
+from polymigrate.migration.decision import LibraryDecision
+from polymigrate.migration.dependencies import DependencyGap, DependencyGapPlan
+from polymigrate.migration.research import LibraryResolutionResult
+
+
+class FakeProvider:
+    provider_id="fake"
+    model_id="test-model"
+    def __init__(self): self.requests=[]
+    def get_capabilities(self): return ProviderCapabilities()
+    def generate(self,request:ModelRequest):
+        self.requests.append(request)
+        return ModelResponse(json.dumps({"content":"package main\nfunc main() {}","assumptions":[],"unsupported_features":[]}),"fake",self.model_id)
+
+
+class FakeGapPlanner:
+    def plan(self, provider_id, project, target_language, graph_context=None, max_gaps=3):
+        return DependencyGapPlan((DependencyGap("requests",("HTTP client",),"Need HTTP client.",("main.py",)),),(),("requests",))
+
+
+class FakeResolutionWorkflow:
+    def __init__(self): self.calls=0
+    def resolve(self, provider_id, **kwargs):
+        self.calls+=1
+        decision=LibraryDecision("custom_implementation",None,"custom_implementation",
+                                 "Custom implementation recommended.",(),(),provider_id)
+        return LibraryResolutionResult(decision,("http client",),(),("No suitable candidate was verified",))
+
+
+class CLILibraryCacheTests(unittest.TestCase):
+    def test_unverified_library_decision_is_reused_only_for_same_project(self):
+        providers=ProviderRegistry()
+        provider=FakeProvider()
+        providers.register(provider)
+        workflow=FakeResolutionWorkflow()
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            source=root/"source"
+            source.mkdir()
+            (source/"main.py").write_text("import requests\nprint('hello')\n",encoding="utf-8")
+            db=root/"knowledge.sqlite"
+            reports=[]
+            for index in (1,2):
+                output=root/f"out-{index}"
+                stdout,stderr=StringIO(),StringIO()
+                with patch.dict(os.environ,{"POLYMIGRATE_KNOWLEDGE_DB":str(db),"POLYMIGRATE_CACHE_DRAFTS":"1"}), \
+                     patch("polymigrate.cli.build_provider_registry",return_value=(providers,())), \
+                     patch("polymigrate.cli.DependencyGapPlanner",return_value=FakeGapPlanner()), \
+                     patch("polymigrate.cli.LibraryResolutionWorkflow",return_value=workflow), \
+                     redirect_stdout(stdout),redirect_stderr(stderr):
+                    code=main(["migrate","--source",str(source),"--from","python","--to","go",
+                               "--output",str(output),"--provider","fake","--allow-source-upload"])
+                self.assertEqual(code,0,stderr.getvalue())
+                reports.append(json.loads((output/"migration-review.json").read_text(encoding="utf-8")))
+        self.assertEqual(workflow.calls,1)
+        self.assertEqual(len(provider.requests),1)
+        self.assertEqual(reports[0]["library_resolution"][0]["cache_status"],"UNVERIFIED_CACHED")
+        self.assertEqual(reports[1]["library_resolution"][0]["cache_status"],"UNVERIFIED_SAME_PROJECT_CACHE")
+        self.assertTrue(any("package metadata may be stale" in warning for warning in reports[1]["warnings"]))
+
+
+if __name__ == "__main__":
+    unittest.main()
