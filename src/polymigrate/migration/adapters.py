@@ -2,12 +2,13 @@
 from __future__ import annotations
 import ast
 import hashlib
+import os
 import re
 from pathlib import Path
 from typing import Iterable
 from polymigrate.migration.pipeline import SourceProject, SourceUnit
 
-_IGNORED_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".mypy_cache", ".pytest_cache", "dist", "build"}
+_IGNORED_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".mypy_cache", ".pytest_cache", "dist", "build", "target", "vendor", ".next"}
 
 _SYMBOL_PATTERNS = {
     "go": re.compile(r"(?m)^\s*(?:func\s+(?:\([^)]*\)\s*)?|type\s+)([A-Za-z_]\w*)"),
@@ -71,10 +72,10 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
 class InventorySourceAdapter:
     """Read supported UTF-8 source files into a hash-checked project inventory."""
     def __init__(self, language_id: str, extensions: Iterable[str], *, max_file_bytes: int = 1_000_000,
-                 max_files: int = 1_000, max_total_bytes: int = 20_000_000) -> None:
+                 max_files: int = 1_000, max_total_bytes: int = 20_000_000,\n                 max_scan_entries: int = 100_000) -> None:
         if not language_id or language_id.strip().lower() != language_id:
             raise ValueError("language_id must be canonical lowercase text")
-        if min(max_file_bytes, max_files, max_total_bytes) < 1:
+        if min(max_file_bytes, max_files, max_total_bytes, max_scan_entries) < 1:
             raise ValueError("source inventory limits must be positive")
         normalized = tuple(sorted({ext.lower() for ext in extensions}))
         if not normalized or any(not ext.startswith(".") or "/" in ext or "\\" in ext for ext in normalized):
@@ -92,22 +93,31 @@ class InventorySourceAdapter:
         units: list[SourceUnit] = []
         warnings: list[str] = []
         total_bytes = 0
-        for path in sorted(root.rglob("*")):
-            relative = path.relative_to(root)
-            if any(part in _IGNORED_DIRS for part in relative.parts):
-                continue
-            if path.is_symlink() or not path.is_file() or path.suffix.lower() not in self.extensions:
-                continue
-            try:
-                size = path.stat().st_size
-                if len(units) >= self.max_files:
-                    raise ValueError(f"Source file count exceeds configured limit ({self.max_files})")
-                if total_bytes + size > self.max_total_bytes:
-                    raise ValueError(f"Source inventory exceeds configured total size limit ({self.max_total_bytes} bytes)")
-                if size > self.max_file_bytes:
-                    warnings.append(f"Skipped oversized source file: {relative.as_posix()}")
+        scanned_entries = 0
+        for current, directories, filenames in os.walk(root, topdown=True, followlinks=False):
+            current_path = Path(current)
+            directories[:] = sorted(
+                name for name in directories
+                if name not in _IGNORED_DIRS and not (current_path / name).is_symlink()
+            )
+            for filename in sorted(filenames):
+                scanned_entries += 1
+                if scanned_entries > self.max_scan_entries:
+                    raise ValueError(f"Source inventory traversal exceeds configured limit ({self.max_scan_entries} entries)")
+                path = current_path / filename
+                relative = path.relative_to(root)
+                if path.is_symlink() or path.suffix.lower() not in self.extensions:
                     continue
-                text = path.read_text(encoding="utf-8")
+                try:
+                    size = path.stat().st_size
+                    if len(units) >= self.max_files:
+                        raise ValueError(f"Source file count exceeds configured limit ({self.max_files})")
+                    if total_bytes + size > self.max_total_bytes:
+                        raise ValueError(f"Source inventory exceeds configured total size limit ({self.max_total_bytes} bytes)")
+                    if size > self.max_file_bytes:
+                        warnings.append(f"Skipped oversized source file: {relative.as_posix()}")
+                        continue
+                    text = path.read_text(encoding="utf-8")
             except (OSError, UnicodeError):
                 warnings.append(f"Skipped unreadable or non-UTF-8 source file: {relative.as_posix()}")
                 continue
