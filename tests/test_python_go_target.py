@@ -106,8 +106,8 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self._translate("print = 1\nprint(2)\n")
 
     def test_rejects_loop_statement(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "For"):
-            self._translate("for item in []:\n    print('yes')\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "While"):
+            self._translate("while True:\n    print('yes')\n")
 
     def test_if_else_comparison_is_translated(self):
         code = self._translate(
@@ -147,6 +147,39 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
                                  text=True, timeout=30, check=False)
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "positive\n")
+
+    def test_range_loop_is_translated(self):
+        code = self._translate("for i in range(3):\n    print(i)\n")
+        self.assertIn("for i := 0; i < 3; i++ {", code)
+        self.assertIn("fmt.Println(i)", code)
+
+    def test_range_loop_uses_statically_known_bounds(self):
+        code = self._translate("start = 1\nstop = 4\nfor i in range(start, stop):\n    print(i)\n")
+        self.assertIn("for i := start; i < stop; i++ {", code)
+
+    def test_rejects_range_step_and_large_loop(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "explicit steps"):
+            self._translate("for i in range(0, 3, 2):\n    print(i)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000-iteration"):
+            self._translate("for i in range(10001):\n    print(i)\n")
+
+    def test_rejects_loop_variable_shadowing(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "cannot shadow"):
+            self._translate("i = 1\nfor i in range(3):\n    print(i)\n")
+
+    @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
+    def test_range_loop_generated_program_builds_and_runs(self):
+        code = self._translate("for i in range(3):\n    print(i)\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.go"
+            path.write_text(code, encoding="utf-8")
+            fmt = subprocess.run(["gofmt", "-w", str(path)], capture_output=True,
+                                 text=True, timeout=10, check=False)
+            self.assertEqual(fmt.returncode, 0, fmt.stderr)
+            run = subprocess.run(["go", "run", str(path)], capture_output=True,
+                                 text=True, timeout=30, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "0\n1\n2\n")
 
     def test_rejects_multiple_print_arguments(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one"):
