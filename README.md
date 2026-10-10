@@ -53,8 +53,10 @@ The CI workflow runs compilation and unit/integration/E2E contract tests across 
 - src/polymigrate/agent/: bounded decision loop and tool allowlist.
 - src/polymigrate/skills/: validated skill metadata.
 - src/polymigrate/graph/: optional Graphify artifact adapter.
-- src/polymigrate/migration/: library replacement strategy ranking.
+- src/polymigrate/migration/: library strategy ranking, evidence-constrained AI decisions, and a safe adapter execution pipeline.
 - src/polymigrate/knowledge.py: persistent evidence-gated knowledge store.
+- src/polymigrate/security/: best-effort secret redaction at model boundaries.
+- src/polymigrate/ai/config.py: environment-based provider setup; use the providers command to inspect configuration without network calls.
 - src/polymigrate/reporting.py: final status derivation.
 - specs/001-foundation/: feature spec, plan, and tasks.
 - skills/: initial migration skill packages.
@@ -66,7 +68,7 @@ Migration work must use an isolated workspace, preserve source input, validate g
 ## Roadmap
 
 1. Verify provider contracts and Graphify integration against supported versions.
-2. Add source/target parser and generator adapters.
+2. Add production-ready source/target parser and generator adapters; current pipeline exposes tested adapter contracts but ships no universal production translator.
 3. Implement the autonomous transformation and dependency-reconstruction engine.
 4. Add sandboxed build/test execution and bounded automated repair.
 5. Add differential behavior testing and multi-language E2E fixtures.
