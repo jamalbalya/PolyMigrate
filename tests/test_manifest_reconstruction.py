@@ -2,10 +2,14 @@
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from polymigrate.ai.protocols import ModelRequest, ModelResponse, ProviderCapabilities
 from polymigrate.ai.registry import ProviderRegistry
+from polymigrate.cli import main
 from polymigrate.migration.adapters import InventorySourceAdapter
 from polymigrate.migration.llm_target import LLMTargetAdapter
 from polymigrate.migration.manifest_reconstruction import reconstruct_target_manifests
@@ -60,6 +64,31 @@ class ManifestReconstructionTests(unittest.TestCase):
             self.assertEqual(result.status, "GENERATED_UNVERIFIED")
             self.assertTrue((root / "out" / "main.go").is_file())
             self.assertEqual((root / "out" / "go.mod").read_text(encoding="utf-8"), "module example.invalid/migrated\\n\\ngo 1.23\\n")
+            self.assertEqual([request.task for request in provider.requests],
+                             ["translate_source_file", "reconstruct_target_manifests"])
+
+    def test_cli_reconstructs_target_manifest_when_source_manifest_exists(self):
+        providers = ProviderRegistry()
+        provider = ManifestFixtureProvider()
+        providers.register(provider)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.py").write_text("print(1)\\n", encoding="utf-8")
+            (source / "pyproject.toml").write_text("[project]\\nname='demo'\\n", encoding="utf-8")
+            output = root / "out"
+            stdout, stderr = StringIO(), StringIO()
+            with patch("polymigrate.cli.build_provider_registry", return_value=(providers, ())), \\
+                 redirect_stdout(stdout), redirect_stderr(stderr):
+                code = main([
+                    "migrate", "--source", str(source), "--from", "python", "--to", "go",
+                    "--output", str(output), "--provider", "fixture", "--allow-source-upload",
+                ])
+            self.assertEqual(code, 0, stderr.getvalue())
+            self.assertTrue((output / "main.go").is_file())
+            self.assertTrue((output / "go.mod").is_file())
+            self.assertIn("unverified", (output / "migration-review.json").read_text(encoding="utf-8").lower())
             self.assertEqual([request.task for request in provider.requests],
                              ["translate_source_file", "reconstruct_target_manifests"])
 
