@@ -77,3 +77,5 @@
 - [x] T069 Add Rust Cargo manifest/import consistency checks and candidate-specific crate proof using an offline local crate, actual Cargo build/test execution, and runtime output; public registry availability remains unverified without an explicit real-project build.
 
 - [x] T070 Extend the deterministic Python-to-JavaScript subset with bounded if/else conditions, short-circuit boolean combinations, and runtime-tested output; branch assignments, elif chains, chained comparisons, and string ordering remain explicitly unsupported.
+
+- [x] T071 Extend the deterministic Python-to-Go subset with bounded if/else conditions, boolean combinations, and integer/string truthiness mapping; validate generated code with Go formatting and runtime fixtures.
