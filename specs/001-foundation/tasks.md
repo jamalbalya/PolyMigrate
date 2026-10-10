@@ -71,3 +71,5 @@
 - [x] T066 Add an offline deterministic Python-to-JavaScript translator for a strict, tested syntax subset and wire it into the CLI; this expands one pair only and does not complete T023.
 
 - [x] T067 Verify locally executed scanner binary identity against operator-managed SHA-256 pins; missing or mismatched pins remain untrusted, and T059 stays open because authenticated binaries alone do not constitute a comprehensive audit.
+
+- [x] T068 Add a deterministic Python-to-Rust subset that emits a minimal Cargo project, validates signed-i32 arithmetic, and has offline build/run fixtures; this is still a constrained pair and does not complete T023.

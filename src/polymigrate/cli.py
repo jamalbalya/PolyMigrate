@@ -24,6 +24,7 @@ from polymigrate.migration.manifests import scan_project_manifests
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
 from polymigrate.migration.python_go_target import PythonToGoTargetAdapter
 from polymigrate.migration.python_javascript_target import PythonToJavaScriptTargetAdapter
+from polymigrate.migration.python_rust_target import PythonToRustTargetAdapter
 from polymigrate.migration.research import LibraryResolutionWorkflow
 from polymigrate.models import MigrationRequest
 from polymigrate.planner import PlanningError, create_plan
@@ -313,12 +314,12 @@ def _derive_final_status(
     return "SUCCESS"
 
 def _run_deterministic_migration(args, source_language, target_language) -> int:
-    """Run the offline Python-to-Go subset translator and local Go checks."""
+    """Run an offline deterministic Python-to-target subset and local checks."""
     pair = (source_language.id, target_language.id)
-    if pair not in {("python", "go"), ("python", "javascript")}:
+    if pair not in {("python", "go"), ("python", "javascript"), ("python", "rust")}:
         raise ValueError(
             "The deterministic strategy currently supports --from python --to go "
-            "or --from python --to javascript"
+            "or --from python --to javascript or --from python --to rust"
         )
 
     context = {}
@@ -336,8 +337,10 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
     adapters.register_source(source_adapter)
     if target_language.id == "go":
         adapters.register_target(PythonToGoTargetAdapter())
-    else:
+    elif target_language.id == "javascript":
         adapters.register_target(PythonToJavaScriptTargetAdapter())
+    else:
+        adapters.register_target(PythonToRustTargetAdapter())
     result = MigrationEngine(adapters).execute(
         args.source,
         source_language.id,
@@ -420,7 +423,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         executions.append(record)
         return status
 
-    main_source = result.output_root / ("main.go" if target_language.id == "go" else "main.js")
+    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js")
     if target_language.id == "go":
         go = shutil.which("go")
         gofmt = shutil.which("gofmt")
@@ -441,14 +444,22 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             else:
                 gates["target_build"] = format_status
                 warnings.append("Go formatting failed; build and vet were not run.")
-    else:
+    elif target_language.id == "javascript":
         node = shutil.which("node")
         if not node:
             gates["target_build"] = "BLOCKED"
             warnings.append("JavaScript validation is blocked because node is not available.")
         else:
             gates["target_build"] = run_check("target_build", [node, "--check", str(main_source)])
-            gates["go_vet"] = "NOT_APPLICABLE"
+        gates["go_vet"] = "NOT_APPLICABLE"
+    else:
+        cargo = shutil.which("cargo")
+        if not cargo:
+            gates["target_build"] = "BLOCKED"
+            warnings.append("Rust validation is blocked because cargo is not available.")
+        else:
+            gates["target_build"] = run_check("target_build", [cargo, "check", "--offline"])
+        gates["go_vet"] = "NOT_APPLICABLE"
 
     security_result = review_generated_output(result.output_root)
     trusted_security_result = run_local_security_scanners(result.output_root, "go")
