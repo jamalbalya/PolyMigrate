@@ -258,7 +258,7 @@ raise "unexpected dependency behavior" unless Localdep.value == "verified"
                 text=True, timeout=30, check=False,
             )
             self.assertEqual(behavior.returncode, 0, behavior.stderr)
-            self.assertEqual(behavior.stdout, "verified\\n")
+            self.assertEqual(behavior.stdout, "verified\n")
             review = review_dependency_wiring(root, "ruby")
             self.assertEqual(review.status, "PASSED")
             candidate = [{
