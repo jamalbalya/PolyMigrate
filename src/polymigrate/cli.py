@@ -7,6 +7,7 @@ from pathlib import Path
 
 from polymigrate.ai.config import build_provider_registry
 from polymigrate.languages import LanguageRegistry
+from polymigrate.graph.graphify import GraphifyAdapter
 from polymigrate.migration.adapters import InventorySourceAdapter
 from polymigrate.migration.llm_target import LLMTargetAdapter
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
@@ -63,6 +64,15 @@ def main(argv: list[str] | None = None) -> int:
                 context = json.loads(args.context_json.read_text(encoding="utf-8"))
                 if not isinstance(context, dict):
                     raise ValueError("context JSON must contain an object")
+            graph = GraphifyAdapter().query(
+                args.source,
+                f"Summarize the project architecture, important dependencies, and call relationships relevant to migrating from {source_language.id} to {target_language.id}. Identify likely high-impact modules and uncertainty.",
+            )
+            context["graphify_status"] = graph.status
+            if graph.output:
+                context["graphify_context"] = graph.output
+            if graph.warning:
+                context["graphify_warning"] = graph.warning
             providers, _warnings = build_provider_registry()
             adapters = AdapterRegistry()
             adapters.register_source(InventorySourceAdapter(source_language.id, source_language.extensions))
