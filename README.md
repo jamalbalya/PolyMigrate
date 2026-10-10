@@ -84,13 +84,16 @@ Provider configuration variables:
 - Anthropic: ANTHROPIC_API_KEY, ANTHROPIC_MODEL, optional ANTHROPIC_BASE_URL.
 - Gemini: GEMINI_API_KEY, GEMINI_MODEL, optional GEMINI_BASE_URL.
 
-To use a local 9Router instance, set its key and an exact model ID available in your 9Router model catalogue. Keep the key in a local environment variable or an untracked .env file; do not paste it into shell history or commit it. For example, after filling the 9Router fields in your local .env file, load them into your shell and run the source-free connectivity check:
+To use a local 9Router instance, set its key in a local environment variable or an untracked .env file; do not paste it into shell history or commit it. You can discover model IDs before selecting a generation model: if the 9Router key is present but POLYMIGRATE_9ROUTER_MODEL is empty, model listing remains available while generation and connectivity checks fail safely until a model is selected. After filling the 9Router key/base URL in your local .env file, load them into your shell and list models:
 
     set -a
     . ./.env
     set +a
-    polymigrate providers
     polymigrate providers --list-models
+
+After choosing an exact returned model ID, set POLYMIGRATE_9ROUTER_MODEL in .env, reload the environment, then run:
+
+    polymigrate providers
     polymigrate providers --check
 
 The model-list command queries the OpenAI-compatible /models endpoint and prints model IDs without printing credentials. Select an exact ID for POLYMIGRATE_9ROUTER_MODEL, then run the connectivity check. The check sends a source-free health prompt and verifies a valid JSON response; it does not prove migration quality. The localhost URL works only from a machine/network namespace that can reach the running 9Router process. GitHub-hosted CI cannot reach a developer localhost automatically. After connectivity succeeds, test an actual migration with:
