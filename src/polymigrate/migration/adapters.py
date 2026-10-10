@@ -100,6 +100,9 @@ class InventorySourceAdapter:
                 name for name in directories
                 if name not in _IGNORED_DIRS and not (current_path / name).is_symlink()
             )
+            scanned_entries += len(directories)
+            if scanned_entries > self.max_scan_entries:
+                raise ValueError(f"Source inventory traversal exceeds configured limit ({self.max_scan_entries} entries)")
             for filename in sorted(filenames):
                 scanned_entries += 1
                 if scanned_entries > self.max_scan_entries:
