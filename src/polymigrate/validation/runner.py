@@ -34,6 +34,33 @@ class SandboxExecution:
     stderr: str = ""
     details: str = ""
 
+
+def _test_execution_evidence(command: ValidationCommand, stdout: str, stderr: str) -> bool | None:
+    """Return True/False when a runner reports test counts, otherwise None."""
+    if not command.command_id.startswith(("unit_tests", "integration_tests", "e2e_tests")):
+        return None
+    output = stdout + "\n" + stderr
+    if "unittest" in command.argv:
+        match = re.search(r"Ran\s+(\d+)\s+tests?", output, re.IGNORECASE)
+        return int(match.group(1)) > 0 if match else None
+    if Path(command.argv[0]).name == "go" and "test" in command.argv:
+        if re.search(r"(?m)^ok\s", output):
+            return True
+        if "[no test files]" in output:
+            return False
+        return None
+    if Path(command.argv[0]).name == "cargo" and "test" in command.argv:
+        counts = [int(value) for value in re.findall(r"running\s+(\d+)\s+tests?", output, re.IGNORECASE)]
+        return any(value > 0 for value in counts) if counts else None
+    if Path(command.argv[0]).name == "mvn" and any(part in {"test", "verify"} for part in command.argv):
+        counts = [int(value) for value in re.findall(r"Tests run:\s*(\d+)", output, re.IGNORECASE)]
+        return any(value > 0 for value in counts) if counts else None
+    if re.search(r"No tests?(?:\s+files?)?\s+(?:were\s+)?found|Tests:\s*0\s+total", output, re.IGNORECASE):
+        return False
+    if re.search(r"Test Suites:\s*\d+|Tests:\s*[1-9]\d*\s|[1-9]\d*\s+passing|Passed!\s+-\s+Failed:", output, re.IGNORECASE):
+        return True
+    return None
+
 class DockerSandboxRunner:
     """Run allowlisted validation commands in a no-network, restricted Docker container."""
     def __init__(self, docker_executable: str = "docker", *, memory_limit: str = "1g",
@@ -135,6 +162,16 @@ class DockerSandboxRunner:
         except OSError as exc:
             return result("BLOCKED", details=f"Docker execution failed ({type(exc).__name__})")
         if completed.returncode == 0:
-            return result("PASSED", 0, completed.stdout, completed.stderr, "Command completed successfully")
+            evidence = _test_execution_evidence(command, completed.stdout, completed.stderr)
+            if evidence is False:
+                return result("NOT_RUN", 0, completed.stdout, completed.stderr,
+                              "Test command exited successfully but reported zero executed tests")
+            if evidence is None and command.command_id.startswith(("unit_tests", "integration_tests", "e2e_tests")):
+                return result("UNVERIFIED", 0, completed.stdout, completed.stderr,
+                              "Test command exited successfully; executed test count could not be independently confirmed")
+            detail = "Command completed successfully"
+            if evidence is True:
+                detail = "Command completed successfully and reported executed tests"
+            return result("PASSED", 0, completed.stdout, completed.stderr, detail)
         return result("FAILED", completed.returncode, completed.stdout, completed.stderr,
                       "Command exited with a non-zero status")
