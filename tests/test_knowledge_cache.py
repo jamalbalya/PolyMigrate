@@ -1,5 +1,6 @@
 """Knowledge cache tests prove identical work is reused only within the configured scope."""
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,6 +38,15 @@ class KnowledgeCacheTests(unittest.TestCase):
             knowledge_store=store, project_scope=scope, cache_drafts=True,
         ))
         return MigrationEngine(registry)
+
+
+    def test_connection_context_closes_sqlite_handle_after_transaction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
+            with store._connection() as connection:
+                connection.execute("SELECT 1").fetchone()
+            with self.assertRaises(sqlite3.ProgrammingError):
+                connection.execute("SELECT 1")
 
     def test_identical_translation_reuses_same_project_draft_without_model_call(self):
         with tempfile.TemporaryDirectory() as tmp:
