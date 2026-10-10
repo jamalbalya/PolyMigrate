@@ -15,6 +15,7 @@ classifiers = ["Development Status :: 3 - Alpha", "Programming Language :: Pytho
 
 [project.optional-dependencies]
 parsers = ["tree-sitter-language-pack>=1.6.0,<2.0"]
+security = ["bandit>=1.8.6,<2.0", "semgrep>=1.100.0,<2.0"]
 
 [project.scripts]
 polymigrate = "polymigrate.cli:main"
@@ -27,4 +28,4 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.setuptools.package-data]
-polymigrate = ["skills/builtin/*/skill.json", "skills/builtin/*/SKILL.md"]
+polymigrate = ["skills/builtin/*/skill.json", "skills/builtin/*/SKILL.md", "security/semgrep_rules.yml"]
