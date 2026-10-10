@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-_IGNORED_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", "dist", "build", "target", "vendor"}
+_IGNORED_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", "dist", "build", "target", "vendor", "tests", "test", "__tests__", "spec", "specs"}
 _MAX_FILES = 10_000
 _MAX_BYTES = 20_000_000
 _NODE_BUILTINS = {
