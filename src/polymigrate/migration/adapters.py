@@ -104,6 +104,23 @@ def _tree_sitter_structure(language_id: str, source_text: str) -> tuple[set[str]
         return None
 
 
+def check_target_syntax(language_id: str, source_text: str) -> str | None:
+    """Return a bounded syntax warning when a parser is available; never execute generated code."""
+    if language_id == "python":
+        try:
+            ast.parse(source_text)
+        except (SyntaxError, RecursionError):
+            return "Python AST reported syntax errors in generated output."
+        return None
+    result = _tree_sitter_structure(language_id, source_text)
+    if result is None:
+        return None
+    _, warning = result
+    if warning and ("syntax errors" in warning or "timed out" in warning or "node limit" in warning):
+        return warning
+    return None
+
+
 def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, ...], tuple[str, ...], str | None, str]:
     """Extract bounded symbol/import hints; prefer Python AST or offline Tree-sitter, then fall back to heuristics."""
     symbols: set[str] = set()
