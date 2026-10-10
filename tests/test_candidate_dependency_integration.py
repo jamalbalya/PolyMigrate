@@ -78,21 +78,31 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
             package = root / "localdep"
             package.mkdir()
             (package / "__init__.py").write_text(
-                'def value(): return "verified"\\n', encoding="utf-8"
+                """def value():
+    return "verified"
+""",
+                encoding="utf-8",
             )
             (root / "requirements.txt").write_text(
-                "localdep==0.1.0\\n", encoding="utf-8"
+                """localdep==0.1.0
+""",
+                encoding="utf-8",
             )
             (root / "main.py").write_text(
-                "import localdep\\nprint(localdep.value())\\n", encoding="utf-8"
+                """import localdep
+print(localdep.value())
+""",
+                encoding="utf-8",
             )
             tests = root / "tests" / "integration"
             tests.mkdir(parents=True)
             (tests / "test_dependency.py").write_text(
-                "import unittest\\nimport localdep\\n"
-                "class DependencyIntegrationTest(unittest.TestCase):\\n"
-                "    def test_dependency_api(self):\\n"
-                "        self.assertEqual(localdep.value(), 'verified')\\n",
+                """import unittest
+import localdep
+class DependencyIntegrationTest(unittest.TestCase):
+    def test_dependency_api(self):
+        self.assertEqual(localdep.value(), "verified")
+""",
                 encoding="utf-8",
             )
             compile_result = subprocess.run(
@@ -124,7 +134,6 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
                 "python",
             )
             self.assertEqual(status, "PASSED")
-
 
     def test_go_dependency_candidate_is_proven_by_real_local_module_build_and_integration_test(self):
         if shutil.which("go") is None:
