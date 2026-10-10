@@ -68,8 +68,8 @@ class DependencyExtractor:
             for line in unit.source_text.splitlines():
                 packages: list[str] = []
                 if project.language_id == "python":
-                    import_match = re.match(r"^\\s*import\\s+(.+)$", line)
-                    from_match = re.match(r"^\\s*from\\s+([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*)\\s+import\\b", line)
+                    import_match = re.match(r"^\s*import\s+(.+)$", line)
+                    from_match = re.match(r"^\s*from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s+import\b", line)
                     if import_match:
                         packages.extend(part.strip().split()[0] for part in import_match.group(1).split(",") if part.strip())
                     elif from_match:
@@ -81,7 +81,7 @@ class DependencyExtractor:
                             packages.append(package)
                     # Go import blocks contain one quoted path on each line.
                     if project.language_id == "go" and not packages and line.strip().startswith(('"', "'")):
-                        match = re.match(r"""^\\s*["']([^"']+)["']""", line)
+                        match = re.match(r"""^\s*["']([^"']+)["']""", line)
                         if match:
                             packages.append(match.group(1))
                 for package in packages:
