@@ -107,10 +107,17 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
                     timeout=60, check=False,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr[-4000:])
+            behavior = subprocess.run(
+                ("go", "run", "."), cwd=root, env=env, capture_output=True,
+                text=True, timeout=60, check=False,
+            )
+            self.assertEqual(behavior.returncode, 0, behavior.stderr[-4000:])
+            self.assertEqual(behavior.stdout, "verified\\n")
             review = review_dependency_wiring(root, "go")
             self.assertEqual(review.status, "PASSED")
+            gates = {**self.gates, "behavior_comparison": "PASSED"}
             status, _ = _candidate_dependency_integration_status(
-                [self.candidate], review, self.gates, "go"
+                [self.candidate], review, gates, "go"
             )
             self.assertEqual(status, "PASSED")
 
