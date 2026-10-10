@@ -706,7 +706,7 @@ def main(argv: list[str] | None = None) -> int:
             security_evidence_result = _load_security_evidence(args.security_evidence)
             dependency_wiring_result = review_dependency_wiring(result.output_root, target_language.id)
             validation.gates["dependency_wiring"] = dependency_wiring_result.status
-            validation.gates["security_review"] = trusted_security_result.status
+            validation.gates["security_review"] = _security_review_gate_status(trusted_security_result)
             behavior_result = None
             if args.behavior_spec is not None:
                 source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
