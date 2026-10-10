@@ -57,6 +57,27 @@ class ProviderCLITests(unittest.TestCase):
         self.assertNotIn("do-not-print", stdout.getvalue())
         self.assertNotIn("do-not-print", stderr.getvalue())
 
+    def test_list_models_prints_ids_without_printing_credentials(self):
+        class ModelProvider:
+            provider_id = "9router"
+            model_id = "selected-model"
+            def get_capabilities(self):
+                return ProviderCapabilities()
+            def list_models(self):
+                return ("model-a", "model-b")
+
+        registry = ProviderRegistry()
+        registry.register(ModelProvider())
+        stdout, stderr = StringIO(), StringIO()
+        with patch("polymigrate.cli.build_provider_registry", return_value=(registry, ())), \
+             redirect_stdout(stdout), redirect_stderr(stderr):
+            result = main(["providers", "--list-models"])
+        self.assertEqual(result, 0)
+        self.assertIn("model-a", stdout.getvalue())
+        self.assertIn("model-b", stdout.getvalue())
+        self.assertNotIn("credential", stdout.getvalue().lower())
+        self.assertEqual(stderr.getvalue(), "")
+
     def test_providers_command_is_offline_and_safe_when_unconfigured(self):
         stdout, stderr = StringIO(), StringIO()
         with patch("polymigrate.cli.build_provider_registry", return_value=(ProviderRegistry(), ())), redirect_stdout(stdout), redirect_stderr(stderr):
