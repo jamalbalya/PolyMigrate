@@ -29,6 +29,15 @@ class SkillRegistry:
             raise ValueError("Skill id must be non-empty lowercase canonical text")
         if not skill.version.strip() or not skill.description.strip():
             raise ValueError("Skill version and description are required")
+        if len(skill.id) > 100 or len(skill.version) > 50 or len(skill.description) > 500:
+            raise ValueError("Skill metadata exceeds the configured size limits")
+        if len(skill.instructions) > 20_000:
+            raise ValueError("Skill instructions exceed the 20000-character limit")
+        if len(skill.input_contract) > 20 or len(skill.output_contract) > 20 or len(skill.allowed_tools) > 20:
+            raise ValueError("Skill contracts and tool lists must contain at most 20 entries")
+        if any(not isinstance(item, str) or not item.strip() or len(item) > 200
+               for item in (*skill.input_contract, *skill.output_contract, *skill.allowed_tools)):
+            raise ValueError("Skill contracts and tool names must be bounded non-empty strings")
         if len(set(skill.allowed_tools)) != len(skill.allowed_tools):
             raise ValueError("Skill allowed_tools must not contain duplicates")
         forbidden = sorted(set(skill.allowed_tools) - self._allowed_tools)
@@ -42,12 +51,24 @@ class SkillRegistry:
         if not root.is_dir():
             raise ValueError(f"Skill directory does not exist: {root}")
         loaded: list[Skill] = []
+        root_resolved = root.resolve(strict=True)
         for metadata_path in sorted(root.glob("*/skill.json")):
+            instructions_path = metadata_path.parent / "SKILL.md"
             try:
+                if metadata_path.is_symlink() or metadata_path.parent.is_symlink() or instructions_path.is_symlink():
+                    raise ValueError("skill package may not use symlinked files")
+                if metadata_path.stat().st_size > 1_000_000 or instructions_path.stat().st_size > 20_000:
+                    raise ValueError("skill package exceeds the configured file size limits")
+                if root_resolved not in metadata_path.resolve(strict=True).parents or root_resolved not in instructions_path.resolve(strict=True).parents:
+                    raise ValueError("skill package paths must remain within the skill directory")
                 metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-                instructions = (metadata_path.parent / "SKILL.md").read_text(encoding="utf-8")
+                instructions = instructions_path.read_text(encoding="utf-8")
                 if not isinstance(metadata, dict):
                     raise ValueError("metadata root must be an object")
+                for key in ("input_contract", "output_contract", "allowed_tools"):
+                    value = metadata.get(key, [])
+                    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                        raise ValueError(f"{key} must be a list of strings")
                 skill = Skill(
                     id=metadata["id"], version=metadata["version"], description=metadata["description"],
                     input_contract=tuple(metadata.get("input_contract", [])),
