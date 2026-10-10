@@ -146,7 +146,10 @@ class KnowledgeAndSkillsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
             store.save(KnowledgeRecord("r1", "problem", "python", "go", "toolchain", "project-a",
-                                       {"strategy": "adapter"}, (), False, True))
+                                       {"strategy": "adapter"}, (), False, False))
+            with self.assertRaisesRegex(ValueError, "cannot be shared"):
+                store.save(KnowledgeRecord("r2", "problem", "python", "go", "toolchain", "project-a",
+                                           {"strategy": "adapter"}, (), False, True))
             found = store.find_reusable(problem_fingerprint="problem", source_language="python",
                                         target_language="go", toolchain_fingerprint="toolchain",
                                         project_scope="project-b")
@@ -154,8 +157,9 @@ class KnowledgeAndSkillsTests(unittest.TestCase):
     def test_verified_shared_knowledge_can_be_reused(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
+            evidence = tuple({"gate": gate, "status": "PASSED"} for gate in sorted(store.REQUIRED_VERIFICATION_GATES))
             store.save(KnowledgeRecord("r1", "problem", "python", "go", "toolchain", "project-a",
-                                       {"strategy": "adapter"}, ({"test": "passed"},), True, True))
+                                       {"strategy": "adapter"}, evidence, True, True))
             found = store.find_reusable(problem_fingerprint="problem", source_language="python",
                                         target_language="go", toolchain_fingerprint="toolchain",
                                         project_scope="project-b")
@@ -170,6 +174,21 @@ class KnowledgeAndSkillsTests(unittest.TestCase):
         registry.register(skill)
         with self.assertRaises(ValueError):
             registry.register(skill)
+
+    def test_verified_promotion_requires_every_gate_to_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
+            store.save(KnowledgeRecord("draft", "problem", "python", "go", "toolchain", "project-a",
+                                       {"strategy": "adapter"}, (), False, False))
+            with self.assertRaisesRegex(ValueError, "all required validation gates"):
+                store.promote_verified("draft", ({"gate": "target_build", "status": "PASSED"},), shareable=True)
+            evidence = tuple({"gate": gate, "status": "PASSED"} for gate in sorted(store.REQUIRED_VERIFICATION_GATES))
+            promoted = store.promote_verified("draft", evidence, shareable=True)
+            self.assertTrue(promoted.verified)
+            found = store.find_reusable(problem_fingerprint="problem", source_language="python",
+                                        target_language="go", toolchain_fingerprint="toolchain",
+                                        project_scope="project-b")
+            self.assertEqual(len(found), 1)
 
 
 if __name__ == "__main__":
