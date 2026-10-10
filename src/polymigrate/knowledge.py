@@ -89,6 +89,33 @@ class MigrationKnowledgeStore:
             verified=bool(row["verified"]), shareable=bool(row["shareable"]),
         ) for row in rows]
 
+
+    def find_cached_draft(self, *, problem_fingerprint: str, source_language: str,
+                          target_language: str, toolchain_fingerprint: str,
+                          project_scope: str) -> list[KnowledgeRecord]:
+        """Find unverified drafts only within the exact same project scope."""
+        with self._connect() as connection:
+            rows = connection.execute("""
+                SELECT * FROM migration_knowledge
+                WHERE problem_fingerprint = ? AND source_language = ? AND target_language = ?
+                  AND toolchain_fingerprint = ? AND project_scope = ?
+                  AND verified = 0 AND shareable = 0
+                ORDER BY record_id ASC
+            """, (problem_fingerprint, source_language, target_language,
+                  toolchain_fingerprint, project_scope)).fetchall()
+        return [KnowledgeRecord(
+            record_id=row["record_id"],
+            problem_fingerprint=row["problem_fingerprint"],
+            source_language=row["source_language"],
+            target_language=row["target_language"],
+            toolchain_fingerprint=row["toolchain_fingerprint"],
+            project_scope=row["project_scope"],
+            solution=json.loads(row["solution_json"]),
+            validation_evidence=tuple(json.loads(row["evidence_json"])),
+            verified=bool(row["verified"]),
+            shareable=bool(row["shareable"]),
+        ) for row in rows]
+
     def count(self) -> int:
         with self._connect() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM migration_knowledge").fetchone()[0])
