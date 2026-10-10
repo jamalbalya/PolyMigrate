@@ -52,13 +52,15 @@ Configure a provider key and explicit model ID, then opt in to sending source co
     export OPENAI_MODEL=...
     polymigrate migrate --source ./my-project --from python --to go --output ./migration-output --provider openai --allow-source-upload
 
+Optional isolated validation images use environment variables named POLYMIGRATE_DOCKER_IMAGE_PYTHON, POLYMIGRATE_DOCKER_IMAGE_GO, POLYMIGRATE_DOCKER_IMAGE_JAVASCRIPT, POLYMIGRATE_DOCKER_IMAGE_TYPESCRIPT, POLYMIGRATE_DOCKER_IMAGE_JAVA, POLYMIGRATE_DOCKER_IMAGE_RUST, POLYMIGRATE_DOCKER_IMAGE_CSHARP, and similarly for supported language IDs. Images must already exist locally; no image pull is performed.
+
 Provider configuration variables:
 - OpenAI-compatible API: OPENAI_API_KEY, OPENAI_MODEL, optional OPENAI_BASE_URL.
 - OpenRouter: OPENROUTER_API_KEY, OPENROUTER_MODEL, optional OPENROUTER_BASE_URL.
 - Anthropic: ANTHROPIC_API_KEY, ANTHROPIC_MODEL, optional ANTHROPIC_BASE_URL.
 - Gemini: GEMINI_API_KEY, GEMINI_MODEL, optional GEMINI_BASE_URL.
 
-The source-upload flag is required to transmit source text to an external model. Recognizable secrets are redacted on a best-effort basis, but redaction is not guaranteed to find every secret and may alter source semantics. Do not send confidential code to an external provider unless your data-handling policy permits it. Review the generated migration-review.json; all build, test, security, and behavior gates are explicitly marked NOT_RUN in this experimental mode.
+The source-upload flag is required to transmit source text to an external model. Recognizable secrets are redacted on a best-effort basis, but redaction is not guaranteed to find every secret and may alter source semantics. Do not send confidential code to an external provider unless your data-handling policy permits it. Review the generated migration-review.json. By default all validation gates are NOT_RUN. If a target-language Docker image is already available locally and configured, selected build and unit-test commands run in a restricted container with no network, a read-only root filesystem, dropped capabilities, resource limits, and only the generated workspace mounted. The image is never pulled automatically. Security review and behavior-equivalence checks remain NOT_RUN in this experimental mode.
 
 ### Optional local knowledge cache
 
