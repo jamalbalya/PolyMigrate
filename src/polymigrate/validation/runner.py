@@ -45,12 +45,18 @@ class DockerSandboxRunner:
 
     def run(self, workspace: Path, image: str, command: ValidationCommand) -> SandboxExecution:
         started = time.monotonic()
-        def result(status: str, exit_code: int | None = None, stdout: str = "",
-                   stderr: str = "", details: str = "") -> SandboxExecution:
+        def text_value(value: object) -> str:
+            if isinstance(value, bytes):
+                return value.decode("utf-8", errors="replace")
+            return value if isinstance(value, str) else ""
+
+        def result(status: str, exit_code: int | None = None, stdout: object = "",
+                   stderr: object = "", details: str = "") -> SandboxExecution:
+            safe_stdout = text_value(stdout)[-self.max_output_chars:]
+            safe_stderr = text_value(stderr)[-self.max_output_chars:]
             return SandboxExecution(
                 command.command_id, status, image, exit_code, round(time.monotonic() - started, 3),
-                redact_text(stdout[-self.max_output_chars:]),
-                redact_text(stderr[-self.max_output_chars:]), details,
+                redact_text(safe_stdout), redact_text(safe_stderr), details,
             )
         if not command.command_id.strip() or not command.argv:
             raise ValueError("Validation command ID and argv are required")
