@@ -51,6 +51,18 @@ To opt in to a live connectivity check, send a small source-free health request 
 
 This can incur a small provider charge and verifies connectivity/response shape only; it does not prove that a model can migrate a real project correctly.
 
+### Deterministic translation subset
+
+The offline deterministic strategy currently supports only these deliberately narrow pairs:
+- Python → Go
+- Python → JavaScript
+
+For example:
+
+    polymigrate migrate --source ./small-python-project --from python --to javascript --output ./migration-output --strategy deterministic
+
+These translators support a small subset of assignments, integer/string expressions, and single-argument `print()`. They reject unsupported syntax instead of guessing. The JavaScript translator restricts integer arithmetic to JavaScript's safe-integer range. A generated file is not a complete project migration, and a successful syntax/build check does not prove behavior equivalence; review the migration report and supply a behavior spec when applicable.
+
 ### Experimental AI file translation
 
 The current experimental migrate command translates supported source files one file at a time. It scans a bounded allowlist of source manifests and can attempt constrained AI reconstruction of allowlisted target manifests when source manifests or resolved dependency-gap evidence exist; these outputs remain unverified and dependencies are never installed automatically. Dependency wiring, frameworks, tests, deployment configuration, and database schemas are not yet migrated end-to-end, and full-project target builds/regression tests are not yet run automatically for every project. Its output status is GENERATED_UNVERIFIED.
