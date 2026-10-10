@@ -79,9 +79,24 @@ Optional isolated validation images use environment variables named POLYMIGRATE_
 
 Provider configuration variables:
 - OpenAI-compatible API: OPENAI_API_KEY, OPENAI_MODEL, optional OPENAI_BASE_URL.
+- Local 9Router Proxy: POLYMIGRATE_9ROUTER_API_KEY, POLYMIGRATE_9ROUTER_MODEL, optional POLYMIGRATE_9ROUTER_BASE_URL (defaults to http://localhost:20128/v1) and POLYMIGRATE_9ROUTER_MAX_OUTPUT_TOKENS. This uses the same OpenAI-compatible Chat Completions adapter and does not advertise native tool calling.
 - OpenRouter: OPENROUTER_API_KEY, OPENROUTER_MODEL, optional OPENROUTER_BASE_URL.
 - Anthropic: ANTHROPIC_API_KEY, ANTHROPIC_MODEL, optional ANTHROPIC_BASE_URL.
 - Gemini: GEMINI_API_KEY, GEMINI_MODEL, optional GEMINI_BASE_URL.
+
+To use a local 9Router instance, set its key and an exact model ID available in your 9Router model catalogue. Keep the key in a local environment variable or an untracked .env file; do not paste it into shell history or commit it. For example, after filling the 9Router fields in your local .env file, load them into your shell and run the source-free connectivity check:
+
+    set -a
+    . ./.env
+    set +a
+    polymigrate providers
+    polymigrate providers --check
+
+The check sends a source-free health prompt and verifies a valid JSON response; it does not prove migration quality. The localhost URL works only from a machine/network namespace that can reach the running 9Router process. GitHub-hosted CI cannot reach a developer localhost automatically. After connectivity succeeds, test an actual migration with:
+
+    polymigrate migrate --source ./sample-python-project --from python --to go --output ./migration-output --provider 9router --allow-source-upload
+
+This sends source code to the configured model. Use a disposable, non-confidential sample project for live tests and review the generated output and migration-review.json; the result remains GENERATED_UNVERIFIED until all target validation gates pass.
 
 The source-upload flag is required to transmit source text to an external model. Recognizable secrets are redacted on a best-effort basis, but redaction is not guaranteed to find every secret and may alter source semantics. Do not send confidential code to an external provider unless your data-handling policy permits it. Review the generated migration-review.json. By default validation gates are NOT_RUN. If a target-language Docker image is already available locally and configured, selected build and unit-test commands run in a restricted container with no network, a read-only root filesystem, dropped capabilities, resource limits, and only the generated workspace mounted. The image is never pulled automatically. A bounded heuristic static security scan runs on generated output and records findings in `migration-review.json`; high- and medium-risk findings block the migration report for review. This scan is not a comprehensive audit, so the separate `security_review` verification gate remains NOT_RUN. A static dependency-wiring check compares observed Python, Go, and JavaScript/TypeScript imports with target manifests; missing declarations block the report, but this check does not prove package availability, API compatibility, or successful builds. Behavior comparison runs only when a project-specific `--behavior-spec` is supplied.
 
