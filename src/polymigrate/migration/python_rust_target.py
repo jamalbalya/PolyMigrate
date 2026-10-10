@@ -7,7 +7,6 @@ is rejected. Integer arithmetic is limited to signed i32.
 from __future__ import annotations
 
 import ast
-import json
 import re
 
 from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject
