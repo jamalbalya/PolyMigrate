@@ -44,6 +44,9 @@ class LLMTargetAdapter:
             "Experimental per-file translation only: project manifests, dependency migration, tests, and framework wiring are not migrated automatically.",
             "Generated output has not passed target compilation, regression tests, security review, or behavior-equivalence checks.",
         ]
+        graph_warning = context.get("graphify_warning")
+        if isinstance(graph_warning, str) and graph_warning:
+            self.warnings.append(f"Graphify context warning: {graph_warning}")
         artifacts: list[GeneratedArtifact] = []
         safe_context = redact_payload(context)
         for unit in project.units:
