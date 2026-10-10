@@ -77,6 +77,16 @@ class DockerSandboxTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "memory/CPU"):
             DockerSandboxRunner(memory_limit="--privileged")
 
+    def test_docker_daemon_error_is_not_misreported_as_missing_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result_from_inspect = subprocess.CompletedProcess(
+                ["docker", "image", "inspect"], 1, "", "Cannot connect to the Docker daemon")
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), \
+                 patch("polymigrate.validation.runner.subprocess.run", return_value=result_from_inspect):
+                result = DockerSandboxRunner().run(Path(tmp), "python:3.13", ValidationCommand("compile", ("python", "-V")))
+        self.assertEqual(result.status, "BLOCKED")
+        self.assertIn("daemon or permissions", result.details)
+
 
 if __name__ == "__main__":
     unittest.main()
