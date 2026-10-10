@@ -1,0 +1,65 @@
+"""Validation suite tests use a fake runner and never require Docker."""
+import tempfile
+import unittest
+from pathlib import Path
+
+from polymigrate.validation.runner import SandboxExecution
+from polymigrate.validation.suite import validate_generated_project
+
+
+class FakeRunner:
+    def __init__(self, statuses):
+        self.statuses = iter(statuses)
+        self.commands = []
+    def run(self, workspace, image, command):
+        self.commands.append(command)
+        status = next(self.statuses)
+        return SandboxExecution(command.command_id, status, image,
+                               0 if status == "PASSED" else 1, 0.01,
+                               details="fake validation result")
+
+
+class ValidationSuiteTests(unittest.TestCase):
+    def test_no_image_means_validation_is_not_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = validate_generated_project(Path(tmp), "python", None)
+        self.assertTrue(all(value == "NOT_RUN" for value in result.gates.values()))
+        self.assertIn("not configured", result.warnings[0])
+
+    def test_python_build_and_unit_tests_run_in_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.py").write_text("print('hello')", encoding="utf-8")
+            tests = root / "tests"
+            tests.mkdir()
+            (tests / "test_app.py").write_text("def test_smoke(): pass", encoding="utf-8")
+            runner = FakeRunner(["PASSED", "PASSED"])
+            result = validate_generated_project(root, "python", "python:3.13", runner)
+        self.assertEqual(result.gates["target_build"], "PASSED")
+        self.assertEqual(result.gates["unit_tests"], "PASSED")
+        self.assertEqual(len(runner.commands), 2)
+
+    def test_build_failure_skips_unit_tests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.py").write_text("print('hello')", encoding="utf-8")
+            tests = root / "tests"
+            tests.mkdir()
+            (tests / "test_app.py").write_text("def test_smoke(): pass", encoding="utf-8")
+            runner = FakeRunner(["FAILED"])
+            result = validate_generated_project(root, "python", "python:3.13", runner)
+        self.assertEqual(result.gates["target_build"], "FAILED")
+        self.assertEqual(result.gates["unit_tests"], "NOT_RUN")
+        self.assertEqual(len(runner.commands), 1)
+        self.assertTrue(any("Skipped unit_tests" in warning for warning in result.warnings))
+
+    def test_unsupported_layout_is_reported_not_assumed_passed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = validate_generated_project(root, "kotlin", "kotlin:latest", FakeRunner([]))
+        self.assertTrue(all(value == "NOT_RUN" for value in result.gates.values()))
+        self.assertTrue(any("No safe default validation commands" in warning for warning in result.warnings))
+
+
+if __name__ == "__main__":
+    unittest.main()
