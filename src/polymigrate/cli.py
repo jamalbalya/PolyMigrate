@@ -172,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 gap_plan = DependencyGapPlanner(providers).plan(
                     args.provider, source_project, target_language.id, graph.output, max_gaps=3,
+                    manifest_context=source_manifests,
                 )
                 dependency_inventory = list(gap_plan.observed_dependencies)
                 dependency_warnings.extend(gap_plan.warnings)
