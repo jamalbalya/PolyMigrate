@@ -157,7 +157,7 @@ def _command_environment(workspace: Path, argv: tuple[str, ...]) -> tuple[tuple[
             ("CARGO_NET_OFFLINE", "true"),
         )
     if executable in {"npm", "npx"}:
-        return (("npm_config_offline", "true"), ("NPM_CONFIG_UPDATE_NOTIFIER", "false"))
+        return (("npm_config_offline", "true"), ("npm_config_cache", "/workspace/.polymigrate-npm-cache"), ("NPM_CONFIG_UPDATE_NOTIFIER", "false"))
     return ()
 
 
@@ -182,6 +182,16 @@ def compare_behavior(
         try:
             _copy_project_snapshot(source_root, source_snapshot)
             _copy_project_snapshot(target_root, target_snapshot)
+            for workspace in (source_snapshot, target_snapshot):
+                for name in (
+                    ".polymigrate-gocache", ".polymigrate-gotmp", ".polymigrate-gopath",
+                    ".polymigrate-gomodcache", ".cargo-home", ".cargo-target",
+                    ".polymigrate-npm-cache",
+                ):
+                    cache_dir = workspace / name
+                    if cache_dir.exists() and not cache_dir.is_dir():
+                        raise ValueError("Behavior workspace conflicts with a reserved build-cache path")
+                    cache_dir.mkdir(exist_ok=True)
         except (OSError, ValueError) as exc:
             return BehaviorComparisonResult(
                 "BLOCKED", (), (redact_text(f"Behavior comparison snapshot failed ({type(exc).__name__})."),)
