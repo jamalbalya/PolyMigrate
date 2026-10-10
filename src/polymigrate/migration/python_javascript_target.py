@@ -101,6 +101,35 @@ class PythonToJavaScriptTargetAdapter:
             return sign + value, "int"
         raise UnsupportedPythonSyntax(f"Unsupported expression syntax: {type(node).__name__}")
 
+    def _range_spec(
+        self, node: ast.For, assigned: set[str]
+    ) -> tuple[str, str, int, int]:
+        call = node.iter
+        if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Name) or call.func.id != "range":
+            raise UnsupportedPythonSyntax("Only range() loops are supported")
+        if "range" in assigned:
+            raise UnsupportedPythonSyntax("Shadowing the range() builtin is not supported")
+        if call.keywords or len(call.args) not in {1, 2}:
+            raise UnsupportedPythonSyntax("range() supports one or two arguments; explicit steps are not supported")
+        if len(call.args) == 1:
+            start_expression, start_value = "0", 0
+            stop_node = call.args[0]
+            stop_expression, stop_type = self._expr(stop_node, assigned)
+            if stop_type != "int":
+                raise UnsupportedPythonSyntax("range() bounds must be integers")
+            stop_value = self._checked_integer_value(stop_node, self._int_values)
+        else:
+            start_node, stop_node = call.args
+            start_expression, start_type = self._expr(start_node, assigned)
+            stop_expression, stop_type = self._expr(stop_node, assigned)
+            if start_type != "int" or stop_type != "int":
+                raise UnsupportedPythonSyntax("range() bounds must be integers")
+            start_value = self._checked_integer_value(start_node, self._int_values)
+            stop_value = self._checked_integer_value(stop_node, self._int_values)
+        if max(0, stop_value - start_value) > 10_000:
+            raise UnsupportedPythonSyntax("range() exceeds the 10000-iteration static limit")
+        return start_expression, stop_expression, start_value, stop_value
+
     def _condition(self, node: ast.expr, assigned: set[str]) -> str:
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
             return f"!({self._condition(node.operand, assigned)})"
@@ -134,7 +163,7 @@ class PythonToJavaScriptTargetAdapter:
 
     def _print_statement(self, node: ast.stmt, assigned: set[str]) -> str:
         if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
-            raise UnsupportedPythonSyntax("Conditional bodies may contain only print() statements")
+            raise UnsupportedPythonSyntax("Control-flow bodies may contain only print() statements")
         call = node.value
         if not isinstance(call.func, ast.Name) or call.func.id != "print":
             raise UnsupportedPythonSyntax("Only calls to print() are supported in conditional bodies")
@@ -195,6 +224,28 @@ class PythonToJavaScriptTargetAdapter:
                     raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
                 expr, _ = self._expr(call.args[0], assigned)
                 statements.append(f"console.log({expr});")
+            elif isinstance(node, ast.For):
+                if not isinstance(node.target, ast.Name):
+                    raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
+                name = node.target.id
+                if not re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", name) or name in _JS_KEYWORDS:
+                    raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not supported in JavaScript")
+                if name in assigned:
+                    raise UnsupportedPythonSyntax("range() loop variables cannot shadow assigned variables")
+                if node.orelse:
+                    raise UnsupportedPythonSyntax("for/else statements are not supported")
+                if not node.body:
+                    raise UnsupportedPythonSyntax("Empty loop bodies are not supported")
+                start_expression, stop_expression, _, _ = self._range_spec(node, assigned)
+                assigned.add(name)
+                self._types[name] = "int"
+                body = [self._print_statement(statement, assigned) for statement in node.body]
+                assigned.remove(name)
+                self._types.pop(name, None)
+                self._int_values.pop(name, None)
+                rendered = [f"for (let {name} = {start_expression}; {name} < {stop_expression}; {name}++) {{",
+                            *("    " + line for line in body), "}"]
+                statements.append("\n".join(rendered))
             elif isinstance(node, ast.If):
                 condition = self._condition(node.test, assigned)
                 if not node.body:
