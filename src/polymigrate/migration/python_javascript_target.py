@@ -201,7 +201,7 @@ class PythonToJavaScriptTargetAdapter:
                 name = node.targets[0].id
                 if name == "print":
                     raise UnsupportedPythonSyntax("Variable name 'print' conflicts with the supported print() builtin")
-                if not re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", name) or name in _JS_KEYWORDS:
+                if not re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", name) or name in _JS_KEYWORDS or name in {"print", "console"}:
                     raise UnsupportedPythonSyntax(f"Variable name '{name}' is not supported in JavaScript")
                 expr, inferred_type = self._expr(node.value, assigned)
                 if name in assigned:
