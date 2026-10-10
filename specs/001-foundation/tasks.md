@@ -67,3 +67,5 @@
 - [x] T063 Add fail-closed local scanner evidence aggregation and record scanner execution details; keep the comprehensive security-review gate INCOMPLETE until scanner provenance is authenticated and the audit is comprehensive.
 - [x] T064 Add real offline candidate-dependency proof fixtures for Go, Python, JavaScript/TypeScript, and Ruby; public package equivalence and unsupported target languages remain open under T058.
 - [x] T065 Reduce false-positive Go import inventory and avoid heuristic symbol union when Tree-sitter parsing is available; production parser and generator coverage remains open under T023.
+
+- [x] T066 Add an offline deterministic Python-to-JavaScript translator for a strict, tested syntax subset and wire it into the CLI; this expands one pair only and does not complete T023.
