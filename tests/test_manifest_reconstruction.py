@@ -79,7 +79,7 @@ class ManifestReconstructionTests(unittest.TestCase):
             (source / "pyproject.toml").write_text("[project]\\nname='demo'\\n", encoding="utf-8")
             output = root / "out"
             stdout, stderr = StringIO(), StringIO()
-            with patch("polymigrate.cli.build_provider_registry", return_value=(providers, ())), \\
+            with patch("polymigrate.cli.build_provider_registry", return_value=(providers, ())), \
                  redirect_stdout(stdout), redirect_stderr(stderr):
                 code = main([
                     "migrate", "--source", str(source), "--from", "python", "--to", "go",
