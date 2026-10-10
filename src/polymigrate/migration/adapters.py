@@ -82,24 +82,66 @@ _TREE_SITTER_SYMBOL_TYPES = {
 _TREE_SITTER_NAME_TYPES = {"identifier", "type_identifier", "field_identifier", "property_identifier", "constant", "simple_identifier"}
 
 
-def _tree_sitter_structure(language_id: str, source_text: str) -> tuple[set[str], str | None] | None:
-    """Parse with an already-available grammar only; never trigger grammar downloads."""
-    try:
-        parser = None
-        if _TREE_SITTER_REGISTRY is not None and _get_tree_sitter_parser is not None:
-            try:
-                if _TREE_SITTER_REGISTRY.has_parser(language_id):
-                    parser = _get_tree_sitter_parser(language_id)
-            except Exception:
-                parser = None
-        if parser is None:
-            parser = _direct_tree_sitter_parser(language_id)
-        if parser is None:
-            return None
+def _offline_tree_sitter_parser(language_id: str):
+    """Return an already-installed parser without triggering grammar downloads."""
+    parser = None
+    if _TREE_SITTER_REGISTRY is not None and _get_tree_sitter_parser is not None:
+        try:
+            if _TREE_SITTER_REGISTRY.has_parser(language_id):
+                parser = _get_tree_sitter_parser(language_id)
+        except Exception:
+            parser = None
+    if parser is None:
+        parser = _direct_tree_sitter_parser(language_id)
+    if parser is not None:
         if hasattr(parser, "set_max_source_bytes"):
             parser.set_max_source_bytes(1_000_000)
         if hasattr(parser, "set_parse_timeout_ms"):
             parser.set_parse_timeout_ms(250)
+    return parser
+
+
+def _tree_sitter_imports(language_id: str, source_text: str) -> set[str] | None:
+    """Extract imports from AST import nodes; None means no offline parser exists."""
+    parser = _offline_tree_sitter_parser(language_id)
+    if parser is None:
+        return None
+    try:
+        tree = parser.parse(source_text.encode("utf-8"))
+    except Exception:
+        return set()
+    if tree is None:
+        return set()
+    node_types = {
+        "go": {"import_spec"},
+        "javascript": {"import_statement", "export_statement", "call_expression"},
+        "typescript": {"import_statement", "export_statement", "call_expression"},
+    }.get(language_id, set())
+    imports: set[str] = set()
+    stack = [tree.root_node]
+    visited = 0
+    while stack and visited < 100_000:
+        node = stack.pop()
+        visited += 1
+        if node.type in node_types and node.text:
+            text = node.text.decode("utf-8", errors="replace")
+            if language_id in {"javascript", "typescript"} and node.type == "call_expression":
+                if not re.search(r"\\b(?:require|import)\\s*\\(", text):
+                    stack.extend(reversed(node.named_children))
+                    continue
+            match = re.search(r'''["']([^"']+)["']''', text)
+            if match:
+                imports.add(match.group(1))
+        stack.extend(reversed(node.named_children))
+    return imports
+
+
+def _tree_sitter_structure(language_id: str, source_text: str) -> tuple[set[str], str | None] | None:
+    """Parse with an already-available grammar only; never trigger grammar downloads."""
+    try:
+        parser = _offline_tree_sitter_parser(language_id)
+        if parser is None:
+            return None
         tree = parser.parse(source_text.encode("utf-8"))
         if tree is None:
             return set(), "Tree-sitter parsing timed out or exceeded its source limit; heuristic hints were retained."
@@ -190,8 +232,14 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
         # parser can misclassify declarations inside comments and string literals.
         if symbol_pattern and tree_sitter_result is None:
             symbols.update(match.group(1) for match in symbol_pattern.finditer(source_text))
-        if language_id == "go":
-            dependencies.update(_extract_go_imports(source_text))
+        if language_id in {"go", "javascript", "typescript"}:
+            parsed_imports = _tree_sitter_imports(language_id, source_text)
+            if parsed_imports is not None:
+                dependencies.update(parsed_imports)
+            elif language_id == "go":
+                dependencies.update(_extract_go_imports(source_text))
+            elif import_pattern:
+                dependencies.update(match.group(1) for match in import_pattern.finditer(source_text))
         elif import_pattern:
             dependencies.update(match.group(1) for match in import_pattern.finditer(source_text))
         if symbol_pattern is None:
