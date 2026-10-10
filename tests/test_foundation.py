@@ -1,6 +1,5 @@
 """Core contract tests for the PolyMigrate foundation."""
 from __future__ import annotations
-
 import json
 import tempfile
 import unittest
@@ -14,7 +13,7 @@ from polymigrate.graph.graphify import GraphifyAdapter
 from polymigrate.knowledge import KnowledgeRecord, MigrationKnowledgeStore, fingerprint_payload
 from polymigrate.languages import Language, LanguageRegistry
 from polymigrate.migration.library_resolution import rank_candidates
-from polymigrate.models import Evidence, FinalReviewSummary, LibraryCandidate, MigrationRequest, MigrationStatus, ValidationResult
+from polymigrate.models import Evidence, LibraryCandidate, MigrationRequest, MigrationStatus, ValidationResult
 from polymigrate.planner import PlanningError, create_plan
 from polymigrate.reporting import build_final_summary
 from polymigrate.skills.registry import Skill, SkillRegistry
@@ -102,9 +101,11 @@ class ResolutionAndReportTests(unittest.TestCase):
 class ProviderAndAgentTests(unittest.TestCase):
     def test_provider_capability_is_enforced(self):
         registry = ProviderRegistry()
-        registry.register(FakeProvider([]))
-        result = registry.generate("fake", ModelRequest("test", "prompt", {}, require_tool_calling=True))
-        self.assertEqual(result.provider_id, "fake")
+        provider = FakeProvider([])
+        provider.get_capabilities = lambda: ProviderCapabilities(structured_output=True, tool_calling=False)
+        registry.register(provider)
+        with self.assertRaises(ProviderCapabilityError):
+            registry.generate("fake", ModelRequest("test", "prompt", {}, require_tool_calling=True))
     def test_tool_allowlist_blocks_unregistered_action(self):
         tools = ToolRegistry()
         with self.assertRaises(PermissionError):
