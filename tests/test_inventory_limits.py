@@ -19,8 +19,8 @@ class InventoryLimitTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "main.py").write_text(
-                "import requests\\nfrom project.helpers import parse\\n"
-                "class Client:\\n    pass\\n\\ndef fetch(url):\\n    return url\\n",
+                "import requests\nfrom project.helpers import parse\n"
+                "class Client:\n    pass\n\ndef fetch(url):\n    return url\n",
                 encoding="utf-8",
             )
             project = InventorySourceAdapter("python", (".py",)).analyze(root)
@@ -34,7 +34,7 @@ class InventoryLimitTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "main.go").write_text(
-                'package main\\nimport "fmt"\\ntype Service struct {}\\nfunc Run() {}\\n',
+                'package main\nimport "fmt"\ntype Service struct {}\nfunc Run() {}\n',
                 encoding="utf-8",
             )
             project = InventorySourceAdapter("go", (".go",)).analyze(root)
