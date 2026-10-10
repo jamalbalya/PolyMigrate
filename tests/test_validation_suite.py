@@ -60,6 +60,28 @@ class ValidationSuiteTests(unittest.TestCase):
         self.assertTrue(all(value == "NOT_RUN" for value in result.gates.values()))
         self.assertTrue(any("No safe default validation commands" in warning for warning in result.warnings))
 
+    def test_go_without_module_uses_legacy_module_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.go").write_text("package main", encoding="utf-8")
+            (root / "main_test.go").write_text("package main", encoding="utf-8")
+            runner = FakeRunner(["PASSED", "PASSED"])
+            result = validate_generated_project(root, "go", "golang:latest", runner)
+        self.assertEqual(result.gates["target_build"], "PASSED")
+        self.assertEqual(result.gates["unit_tests"], "PASSED")
+        self.assertEqual(runner.commands[0].argv, ("go", "build", "./..."))
+        self.assertEqual(runner.commands[0].environment, (("GO111MODULE", "off"),))
+
+    def test_go_module_project_keeps_module_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "go.mod").write_text("module example.test/app", encoding="utf-8")
+            (root / "main.go").write_text("package main", encoding="utf-8")
+            runner = FakeRunner(["PASSED"])
+            result = validate_generated_project(root, "go", "golang:latest", runner)
+        self.assertEqual(result.gates["target_build"], "PASSED")
+        self.assertEqual(runner.commands[0].environment, ())
+
 
 if __name__ == "__main__":
     unittest.main()
