@@ -56,6 +56,12 @@ class DockerSandboxTests(unittest.TestCase):
             self.assertEqual(result.status, "TIMEOUT")
             self.assertNotIn("secret", result.stdout)
 
+    def test_invalid_environment_key_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            command = ValidationCommand("bad-env", ("python", "-V"), environment=(("BAD-NAME", "value"),))
+            with self.assertRaisesRegex(ValueError, "environment"):
+                DockerSandboxRunner().run(Path(tmp), "python:3.13", command)
+
 
 if __name__ == "__main__":
     unittest.main()
