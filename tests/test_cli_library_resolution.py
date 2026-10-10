@@ -63,6 +63,8 @@ class CLILibraryResolutionTests(unittest.TestCase):
         self.assertEqual(report["library_resolution"][0]["implementation_status"],"CUSTOM_IMPLEMENTATION_RECOMMENDED")
         self.assertIn("library_resolution",provider.requests[0].prompt)
         self.assertIn("custom_implementation",provider.requests[0].prompt)
+        self.assertIn("migration_skills",provider.requests[0].prompt)
+        self.assertIn("library-replacement",provider.requests[0].prompt)
 
 
 if __name__ == "__main__":
