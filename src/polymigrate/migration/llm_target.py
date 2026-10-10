@@ -89,7 +89,10 @@ class LLMTargetAdapter:
             if safe_source != unit.source_text:
                 self.warnings.append(f"Recognizable secret patterns were redacted in {unit.relative_path}; output semantics may be affected.")
             source_suffix = PurePosixPath(unit.relative_path).suffix.lower()
-            selected_suffix = source_suffix if source_suffix in self.target_extensions else self.target_extension
+            if source_suffix == ".jsx" and ".tsx" in self.target_extensions:
+                selected_suffix = ".tsx"
+            else:
+                selected_suffix = source_suffix if source_suffix in self.target_extensions else self.target_extension
             problem_fingerprint = fingerprint_payload({
                 "source_sha256": unit.content_sha256, "source_language": self.source_language,
                 "target_language": self.language_id, "target_suffix": selected_suffix,
