@@ -24,6 +24,7 @@ from polymigrate.skills.registry import SkillRegistry
 from polymigrate.validation.repair import AutonomousRepairLoop
 from polymigrate.validation.suite import validate_generated_project
 from polymigrate.validation.behavior import compare_behavior
+from polymigrate.security.static_review import review_generated_output
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -304,6 +305,7 @@ def main(argv: list[str] | None = None) -> int:
                 providers, args.provider, target_language.id, target_language.extensions,
             ).run(result.output_root, validation_image, context, initial_validation=initial_validation)
             validation = repair_result.validation
+            static_security_result = review_generated_output(result.output_root)
             behavior_result = None
             if args.behavior_spec is not None:
                 source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
@@ -333,12 +335,12 @@ def main(argv: list[str] | None = None) -> int:
             all_warnings = list(result.warnings) + list(validation.warnings) + list(repair_result.warnings) + list(resolution_warnings)
             if behavior_result is not None:
                 all_warnings.extend(behavior_result.warnings)
-            failed_gates = {"FAILED", "BLOCKED", "TIMEOUT"}
-            if any(value in failed_gates for value in gates.values()):
+            failed_gates = {"FAILED", "BLOCKED", "TIMEOUT", "INCOMPLETE"}
+            if static_security_result.status in {"FAILED", "BLOCKED", "INCOMPLETE"} or any(value in failed_gates for value in gates.values()):
                 overall_status = "BLOCKED"
-            elif any(value == "PASSED" for value in gates.values()) and any(
+            elif static_security_result.status == "REVIEW_REQUIRED" or (any(value == "PASSED" for value in gates.values()) and any(
                 value == "NOT_RUN" for value in gates.values()
-            ):
+            )):
                 overall_status = "PARTIAL"
             else:
                 overall_status = "GENERATED_UNVERIFIED"
@@ -352,12 +354,13 @@ def main(argv: list[str] | None = None) -> int:
                 "dependency_inventory": dependency_inventory, "library_resolution": library_resolutions,
                 "warnings": all_warnings, "validation_image": validation_image,
                 "repair": repair_result.to_dict(),
+                "static_security_scan": static_security_result.to_dict(),
                 "behavior_comparison": behavior_result.to_dict() if behavior_result is not None else {
                     "status": "NOT_RUN", "cases_checked": 0,
                     "warnings": ["No behavior spec was supplied; behavior equivalence was not tested."],
                 },
                 "validation_gates": gates, "validation_results": validation.to_dict(),
-                "note": "Experimental per-file translation with optional constrained target-manifest reconstruction; dependencies are not installed automatically and full-project behavior is not guaranteed.",
+                "note": "Experimental per-file translation with optional constrained target-manifest reconstruction; dependencies are not installed automatically and full-project behavior is not guaranteed. Static security scanning is heuristic and does not replace comprehensive security review.",
             }
             report_path = result.output_root / "migration-review.json"
             report_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
