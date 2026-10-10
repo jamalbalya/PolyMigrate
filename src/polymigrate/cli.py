@@ -80,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "migrate":
         try:
+            if not args.allow_source_upload:
+                raise PermissionError("Source upload is disabled; pass --allow-source-upload to enable external AI analysis")
             language_registry = LanguageRegistry()
             source_language = language_registry.get(args.source_language)
             target_language = language_registry.get(args.target_language)
