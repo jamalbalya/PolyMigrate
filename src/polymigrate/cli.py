@@ -274,6 +274,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
     dependency_result = review_dependency_wiring(result.output_root, "go")
     gates["dependency_wiring"] = dependency_result.status
     gates["dependency_integration"] = "PASSED"
+    warnings.append("No candidate library dependencies were selected; candidate-specific dependency integration proof is not applicable.")
 
     warnings.extend(security_result.warnings)
     warnings.extend(dependency_result.warnings)
