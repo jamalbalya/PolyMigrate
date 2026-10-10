@@ -198,7 +198,7 @@ class AutonomousRepairLoop:
         root_resolved = root.resolve(strict=True)
         for relative_path, content in changes.items():
             relative = PurePosixPath(relative_path)
-            if relative.is_absolute() or not relative.parts or ".." in relative.parts or "\\" in relative_path or "\x00" in relative_path:
+            if (relative.is_absolute() or not relative.parts or ".." in relative.parts or "\\" in relative_path or "\x00" in relative_path or ":" in relative.parts[0]):
                 raise ValueError("Repair returned an unsafe path")
             if relative.suffix not in self.extensions or relative_path == "migration-review.json":
                 raise ValueError("Repair returned a non-source file path")
