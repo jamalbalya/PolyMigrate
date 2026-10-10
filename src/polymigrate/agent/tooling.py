@@ -16,7 +16,7 @@ def _only_keys(arguments: dict[str, Any], allowed: set[str], required: set[str])
     if unknown:
         raise ValueError(f"Unknown tool argument(s): {', '.join(sorted(unknown))}")
     if missing:
-        raise ValueError(f"Missing tool argument(s): {', '.join(sorted(missing)))
+        raise ValueError(f"Missing tool argument(s): {', '.join(sorted(missing))}")
 
 
 def register_package_search_tool(tools: ToolRegistry, searcher: PackageRegistrySearcher | None = None) -> None:
