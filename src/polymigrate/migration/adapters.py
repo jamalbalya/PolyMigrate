@@ -126,7 +126,7 @@ def _tree_sitter_imports(language_id: str, source_text: str) -> set[str] | None:
         if node.type in node_types and node.text:
             text = node.text.decode("utf-8", errors="replace")
             if language_id in {"javascript", "typescript"} and node.type == "call_expression":
-                if not re.search(r"\\b(?:require|import)\\s*\\(", text):
+                if not re.search(r"\b(?:require|import)\s*\(", text):
                     stack.extend(reversed(node.named_children))
                     continue
             match = re.search(r'''["']([^"']+)["']''', text)
