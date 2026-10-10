@@ -12,8 +12,8 @@ from polymigrate.security.redaction import redact_text
 
 _SHELLS = {"sh", "bash", "zsh", "dash", "ash", "cmd", "powershell", "pwsh"}
 _IMAGE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@_+-]{0,254}$")
-_MEMORY_LIMIT = re.compile(r"^\\d+(?:[kKmMgGtTpP]i?[bB]?)?$")
-_CPU_LIMIT = re.compile(r"^\\d+(?:\\.\\d+)?$")
+_MEMORY_LIMIT = re.compile(r"^\d+(?:[kKmMgGtTpP]i?[bB]?)?$")
+_CPU_LIMIT = re.compile(r"^\d+(?:\.\d+)?$")
 
 @dataclass(frozen=True)
 class ValidationCommand:
