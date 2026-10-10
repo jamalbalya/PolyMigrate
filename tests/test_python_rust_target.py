@@ -40,6 +40,15 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
         files = self._translate('print("café")\n')
         self.assertIn('"café"', files["src/main.rs"])
 
+    def test_escapes_rust_control_characters(self):
+        files = self._translate('print("a\\b\\f")\n')
+        self.assertIn('\\u{8}', files["src/main.rs"])
+        self.assertIn('\\u{c}', files["src/main.rs"])
+
+    def test_rejects_lone_unicode_surrogates(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Lone Unicode surrogates"):
+            self._translate('print("\\ud800")\n')
+
     def test_rejects_integer_overflow(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "signed Rust i32 range"):
             self._translate("x = 2147483647\ny = x + 1\nprint(y)\n")
