@@ -159,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
             source_adapter = InventorySourceAdapter(source_language.id, source_language.extensions)
             source_project = source_adapter.analyze(args.source)
             source_manifests, manifest_scan_warnings = scan_project_manifests(args.source)
+            source_manifest_fingerprint = fingerprint_payload(source_manifests)
             context["source_manifests"] = source_manifests
             context["manifest_scan_warnings"] = manifest_scan_warnings
             context["reconstruct_manifests"] = bool(source_manifests)
@@ -183,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
                         "kind": "library_resolution", "source_language": source_language.id,
                         "source_library": gap.source_library, "target_language": target_language.id,
                         "required_capabilities": list(gap.required_capabilities),
+                        "source_manifest_fingerprint": source_manifest_fingerprint,
                     })
                     toolchain_fingerprint = fingerprint_payload({
                         "library_resolution_schema": 1, "target_language": target_language.id,
