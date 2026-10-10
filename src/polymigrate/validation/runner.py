@@ -4,13 +4,16 @@ import re
 import shutil
 import subprocess
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
 from polymigrate.security.redaction import redact_text
 
 _SHELLS = {"sh", "bash", "zsh", "dash", "ash", "cmd", "powershell", "pwsh"}
+_IMAGE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@_+-]{0,254}$")
+_MEMORY_LIMIT = re.compile(r"^\\d+(?:[kKmMgGtTpP]i?[bB]?)?$")
+_CPU_LIMIT = re.compile(r"^\\d+(?:\\.\\d+)?$")
 
 @dataclass(frozen=True)
 class ValidationCommand:
@@ -35,8 +38,8 @@ class DockerSandboxRunner:
     """Run allowlisted validation commands in a no-network, restricted Docker container."""
     def __init__(self, docker_executable: str = "docker", *, memory_limit: str = "1g",
                  cpus: str = "2", pids_limit: int = 256, max_output_chars: int = 10_000) -> None:
-        if not docker_executable.strip() or not memory_limit.strip() or not cpus.strip():
-            raise ValueError("Docker executable and resource limits are required")
+        if not docker_executable.strip() or not _MEMORY_LIMIT.fullmatch(memory_limit) or not _CPU_LIMIT.fullmatch(cpus):
+            raise ValueError("Docker executable and valid memory/CPU limits are required")
         if pids_limit < 1 or max_output_chars < 1:
             raise ValueError("pids_limit and max_output_chars must be positive")
         self.docker_executable = docker_executable
@@ -72,8 +75,8 @@ class DockerSandboxRunner:
         executable_name = Path(command.argv[0]).name.lower()
         if executable_name in _SHELLS:
             raise ValueError("Shell commands are not permitted; provide an explicit executable and arguments")
-        if not image or any(ch.isspace() for ch in image):
-            raise ValueError("A single pre-pulled container image reference is required")
+        if not image or not _IMAGE_REF.fullmatch(image):
+            raise ValueError("A valid single pre-pulled container image reference is required")
         if "," in str(workspace):
             raise ValueError("Workspace paths containing commas are not supported by the Docker mount syntax")
         if workspace.is_symlink():
@@ -98,8 +101,9 @@ class DockerSandboxRunner:
             return result("BLOCKED", details=f"Docker image preflight failed ({type(exc).__name__})")
         if inspected.returncode != 0:
             return result("BLOCKED", details="Validation image is not available locally; no image was pulled")
+        container_name = "polymigrate-" + uuid.uuid4().hex
         docker_argv = [
-            docker, "run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL",
+            docker, "run", "--rm", "--name", container_name, "--network=none", "--read-only", "--cap-drop=ALL",
             "--security-opt=no-new-privileges", f"--pids-limit={self.pids_limit}",
             f"--memory={self.memory_limit}", f"--cpus={self.cpus}",
             *[item for key, value in command.environment for item in ("--env", f"{key}={value}")],
@@ -113,8 +117,16 @@ class DockerSandboxRunner:
                 timeout=command.timeout_seconds, check=False,
             )
         except subprocess.TimeoutExpired as exc:
-            return result("TIMEOUT", stdout=exc.stdout or "", stderr=exc.stderr or "",
-                          details="Validation command exceeded its time limit")
+            cleanup_failures = []
+            for cleanup_argv in ([docker, "kill", container_name], [docker, "rm", "-f", container_name]):
+                try:
+                    subprocess.run(cleanup_argv, capture_output=True, text=True, timeout=5.0, check=False)
+                except Exception as cleanup_exc:
+                    cleanup_failures.append(type(cleanup_exc).__name__)
+            detail = "Validation command exceeded its time limit; container cleanup was attempted."
+            if cleanup_failures:
+                detail += " Cleanup commands could not all be confirmed."
+            return result("TIMEOUT", stdout=exc.stdout or "", stderr=exc.stderr or "", details=detail)
         except OSError as exc:
             return result("BLOCKED", details=f"Docker execution failed ({type(exc).__name__})")
         if completed.returncode == 0:
