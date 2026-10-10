@@ -260,6 +260,26 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         for finding in security_result.findings
     )
 
+    # Run target-language test suites only inside an explicitly configured,
+    # already-available validation image. Never pull an image automatically.
+    validation_image = os.environ.get("POLYMIGRATE_DOCKER_IMAGE_GO", "").strip() or None
+    suite_result = validate_generated_project(
+        result.output_root, target_language.id, validation_image
+    )
+    for gate_name in ("unit_tests", "integration_tests", "e2e_tests"):
+        gates[gate_name] = suite_result.gates.get(gate_name, "NOT_RUN")
+    if validation_image and suite_result.gates.get("target_build", "NOT_RUN") != "NOT_RUN":
+        gates["target_build"] = suite_result.gates["target_build"]
+    if validation_image:
+        vet_execution = next(
+            (item for item in suite_result.executions if item.command_id == "build-go-vet"),
+            None,
+        )
+        if vet_execution is not None:
+            gates["go_vet"] = vet_execution.status
+    executions.extend(suite_result.to_dict()["executions"])
+    warnings.extend(suite_result.warnings)
+
     if not args.behavior_spec:
         behavior = {
             "status": "NOT_RUN",
@@ -307,7 +327,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         "dependency_inventory": [],
         "library_resolution": [],
         "warnings": warnings,
-        "validation_image": None,
+        "validation_image": validation_image,
         "repair": {
             "status": "NOT_RUN",
             "attempts": [],
