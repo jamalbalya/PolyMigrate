@@ -22,6 +22,23 @@ _RUST_KEYWORDS = {
 }
 
 
+def _rust_string_literal(value: str) -> str:
+    parts = ['"']
+    escapes = {'"': '\\"', "\\\\": "\\\\\\\\", "\\n": "\\\\n", "\\r": "\\\\r", "\\t": "\\\\t", "\\0": "\\\\0"}
+    for char in value:
+        codepoint = ord(char)
+        if 0xD800 <= codepoint <= 0xDFFF:
+            raise UnsupportedPythonSyntax("Lone Unicode surrogates cannot be represented in Rust UTF-8 source")
+        if char in escapes:
+            parts.append(escapes[char])
+        elif codepoint < 0x20 or codepoint == 0x7F:
+            parts.append(f"\\\\u{{{codepoint:x}}}")
+        else:
+            parts.append(char)
+    parts.append('"')
+    return "".join(parts)
+
+
 class UnsupportedPythonSyntax(ValueError):
     """Raised when syntax is outside the supported translation subset."""
 
@@ -71,7 +88,7 @@ class PythonToRustTargetAdapter:
                 self._checked_integer_value(node, self._int_values)
                 return str(node.value), "int"
             if isinstance(node.value, str):
-                return json.dumps(node.value, ensure_ascii=False), "string"
+                return _rust_string_literal(node.value), "string"
             raise UnsupportedPythonSyntax("Only integer and string literals are supported")
         if isinstance(node, ast.Name):
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", node.id) or node.id in _RUST_KEYWORDS:
