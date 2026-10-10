@@ -1,8 +1,14 @@
 """Candidate-specific dependency proof requires declaration, import, and executed gates."""
+import os
+import shutil
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
 from polymigrate.cli import _candidate_dependency_integration_status
+from polymigrate.validation.dependency_wiring import review_dependency_wiring
 
 
 class CandidateDependencyIntegrationTests(unittest.TestCase):
@@ -61,6 +67,73 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(status, "NOT_RUN")
         self.assertIn("not implemented for target language python", warnings[0])
+
+
+    def test_go_dependency_candidate_is_proven_by_real_local_module_build_and_integration_test(self):
+        if shutil.which("go") is None:
+            self.skipTest("Go toolchain is unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dep = root / "third_party" / "dep"
+            dep.mkdir(parents=True)
+            (dep / "go.mod").write_text(
+                """module github.com/acme/dep
+
+go 1.23
+""",
+                encoding="utf-8",
+            )
+            (dep / "dep.go").write_text(
+                """package dep
+func Value() string { return "verified" }
+""",
+                encoding="utf-8",
+            )
+            (root / "go.mod").write_text(
+                """module example.com/app
+
+go 1.23
+require github.com/acme/dep v0.0.0
+replace github.com/acme/dep => ./third_party/dep
+""",
+                encoding="utf-8",
+            )
+            (root / "main.go").write_text(
+                """package main
+import ("fmt"; "github.com/acme/dep")
+func main() { fmt.Println(dep.Value()) }
+""",
+                encoding="utf-8",
+            )
+            (root / "main_test.go").write_text(
+                """package main
+import ("testing"; "github.com/acme/dep")
+func TestDependencyIntegration(t *testing.T) {
+    if dep.Value() != "verified" { t.Fatal("unexpected dependency behavior") }
+}
+""",
+                encoding="utf-8",
+            )
+            env = {**os.environ, "GOTOOLCHAIN": "local", "GOPROXY": "off"}
+            for command in (("go", "build", "./..."), ("go", "test", "./...")):
+                result = subprocess.run(
+                    command, cwd=root, env=env, capture_output=True, text=True,
+                    timeout=60, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr[-4000:])
+            behavior = subprocess.run(
+                ("go", "run", "."), cwd=root, env=env, capture_output=True,
+                text=True, timeout=60, check=False,
+            )
+            self.assertEqual(behavior.returncode, 0, behavior.stderr[-4000:])
+            self.assertEqual(behavior.stdout, "verified\n")
+            review = review_dependency_wiring(root, "go")
+            self.assertEqual(review.status, "PASSED")
+            gates = {**self.gates, "behavior_comparison": "PASSED"}
+            status, _ = _candidate_dependency_integration_status(
+                [self.candidate], review, gates, "go"
+            )
+            self.assertEqual(status, "PASSED")
 
     def test_repository_reference_is_not_a_package_integration_proof(self):
         candidate = {
