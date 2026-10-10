@@ -1,5 +1,6 @@
 """Graphify CLI adapter tests use mocked subprocesses and never invoke a real executable."""
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -64,6 +65,13 @@ class GraphifyQueryTests(unittest.TestCase):
                 result = GraphifyAdapter(max_output_chars=3).query(root, "trace calls")
             self.assertEqual(result.output, "abc")
             self.assertIn("truncated", result.warning)
+
+    def test_graphify_environment_excludes_provider_secrets_and_disables_query_logs(self):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "do-not-inherit", "PATH": "/usr/bin"}, clear=True):
+            environment = GraphifyAdapter._safe_environment()
+        self.assertNotIn("OPENAI_API_KEY", environment)
+        self.assertEqual(environment["GRAPHIFY_QUERY_LOG_DISABLE"], "1")
+        self.assertEqual(environment["PATH"], "/usr/bin")
 
 
 if __name__ == "__main__":
