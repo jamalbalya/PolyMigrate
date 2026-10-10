@@ -49,6 +49,10 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "If"):
             self._translate("if True:\n    print('yes')\n")
 
+    def test_rejects_console_shadowing_when_print_is_used(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "conflicts with the console.log"):
+            self._translate('console = "shadow"\nprint("hello")\n')
+
     def test_rejects_unused_variables(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "never used"):
             self._translate("x = 1\nprint(42)\n")
