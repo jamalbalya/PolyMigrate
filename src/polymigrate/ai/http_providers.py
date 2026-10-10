@@ -35,9 +35,10 @@ def _prompt(request: ModelRequest) -> str:
     return f"{prefix}Task: {request.task}\nContext JSON:\n{context}\n\nInstructions:\n{request.prompt}"
 
 
-def _request_json(url: str, headers: dict[str, str], payload: dict[str, Any], timeout: float) -> dict[str, Any]:
-    body = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(url, data=body, headers={**headers, "Content-Type": "application/json"}, method="POST")
+def _request_json(url: str, headers: dict[str, str], payload: dict[str, Any] | None, timeout: float) -> dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request_headers = {**headers, **({"Content-Type": "application/json"} if body is not None else {})}
+    request = urllib.request.Request(url, data=body, headers=request_headers, method="POST" if body is not None else "GET")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             response_body = response.read(2_000_001)
@@ -88,6 +89,17 @@ class OpenAICompatibleProvider:
 
     def get_capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(structured_output=True, tool_calling=False, streaming=False)
+
+    def list_models(self) -> tuple[str, ...]:
+        """Return model IDs exposed by the OpenAI-compatible endpoint without logging credentials."""
+        data = _request_json(f"{self.base_url}/models", {"Authorization": f"Bearer {self.api_key}"}, None, self.timeout)
+        entries = data.get("data")
+        if not isinstance(entries, list):
+            raise ProviderRequestError("LLM provider model catalogue is missing data list")
+        model_ids = sorted({item["id"] for item in entries if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"]})
+        if not model_ids:
+            raise ProviderRequestError("LLM provider model catalogue contained no model IDs")
+        return tuple(model_ids)
 
     def generate(self, request: ModelRequest) -> ModelResponse:
         token_limit_key = "max_completion_tokens" if self.provider_id == "openai" else "max_tokens"
