@@ -34,11 +34,12 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
         self.assertIn("not applicable", warnings[0])
 
     def test_generic_green_gates_do_not_replace_candidate_specific_test_evidence(self):
-        status, warnings = _candidate_dependency_integration_status(
-            [self.candidate], self.review, self.gates, "go"
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            status, warnings = _candidate_dependency_integration_status(
+                [self.candidate], self.review, self.gates, "go", project_root=Path(tmp)
+            )
         self.assertEqual(status, "NOT_RUN")
-        self.assertIn("requires the generated project root", warnings[0])
+        self.assertIn("No recognized integration/test file imports candidate package", warnings[0])
 
     def test_missing_import_does_not_pass_candidate_proof(self):
         review = SimpleNamespace(
