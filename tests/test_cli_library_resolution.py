@@ -62,7 +62,7 @@ class CLILibraryResolutionTests(unittest.TestCase):
                            "--output",str(output),"--provider","fake","--allow-source-upload"])
             report=json.loads((output/"migration-review.json").read_text(encoding="utf-8"))
             generated_manifest=(output/"go.mod").read_text(encoding="utf-8")
-        self.assertEqual(code,0,stderr.getvalue())
+        self.assertEqual(code, 3, stderr.getvalue())
         self.assertEqual(report["dependency_inventory"],["requests"])
         self.assertIn("module example.com/migrated", generated_manifest)
         self.assertEqual(report["library_resolution"][0]["strategy"],"custom_implementation")

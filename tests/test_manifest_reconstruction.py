@@ -85,7 +85,7 @@ class ManifestReconstructionTests(unittest.TestCase):
                     "migrate", "--source", str(source), "--from", "python", "--to", "go",
                     "--output", str(output), "--provider", "fixture", "--allow-source-upload",
                 ])
-            self.assertEqual(code, 0, stderr.getvalue())
+            self.assertEqual(code, 3, stderr.getvalue())
             self.assertTrue((output / "main.go").is_file())
             self.assertTrue((output / "go.mod").is_file())
             review = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))

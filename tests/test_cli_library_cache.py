@@ -66,7 +66,7 @@ class CLILibraryCacheTests(unittest.TestCase):
                      redirect_stdout(stdout),redirect_stderr(stderr):
                     code=main(["migrate","--source",str(source),"--from","python","--to","go",
                                "--output",str(output),"--provider","fake","--allow-source-upload"])
-                self.assertEqual(code,0,stderr.getvalue())
+                self.assertEqual(code, 3, stderr.getvalue())
                 reports.append(json.loads((output/"migration-review.json").read_text(encoding="utf-8")))
         self.assertEqual(workflow.calls,2)
         self.assertEqual(reports[0]["library_resolution"][0]["cache_status"],"UNVERIFIED_CACHED")
@@ -99,7 +99,7 @@ class CLILibraryCacheTests(unittest.TestCase):
                      redirect_stdout(stdout),redirect_stderr(stderr):
                     code=main(["migrate","--source",str(source_dir),"--from","python","--to","go",
                                "--output",str(output),"--provider","fake","--allow-source-upload"])
-                self.assertEqual(code,0,stderr.getvalue())
+                self.assertEqual(code, 3, stderr.getvalue())
                 reports.append(json.loads((output/"migration-review.json").read_text(encoding="utf-8")))
         self.assertEqual(workflow.calls,2)
         self.assertEqual(len(provider.requests),6)  # One translation and one manifest reconstruction request per run; research is counted by workflow.calls.

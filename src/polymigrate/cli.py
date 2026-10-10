@@ -32,6 +32,7 @@ from polymigrate.validation.behavior import compare_behavior
 from polymigrate.validation.dependency_wiring import review_dependency_wiring
 from polymigrate.security.static_review import review_generated_output
 from polymigrate.security.evidence_gate import evaluate_security_evidence
+from polymigrate.security.scanner_runner import run_trusted_security_scanners
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -171,7 +172,7 @@ def _derive_final_status(
     required_gates: set[str],
 ) -> str:
     """Derive the public final status from validation evidence."""
-    failed = {"FAILED", "BLOCKED", "TIMEOUT", "INCOMPLETE"}
+    failed = {"FAILED", "BLOCKED", "TIMEOUT", "INCOMPLETE", "REVIEW_REQUIRED"}
 
     if (
         security_status in {"FAILED", "BLOCKED", "INCOMPLETE", "REVIEW_REQUIRED"}
@@ -323,10 +324,12 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             warnings.append("Go formatting failed; build and vet were not run.")
 
     security_result = review_generated_output(result.output_root)
+    trusted_security_result = run_trusted_security_scanners(result.output_root, "go")
     security_evidence_result = _load_security_evidence(args.security_evidence)
     dependency_result = review_dependency_wiring(result.output_root, "go")
     gates["dependency_wiring"] = dependency_result.status
     gates["dependency_integration"] = "PASSED"
+    gates["security_review"] = trusted_security_result.status
     warnings.append("No candidate library dependencies were selected; candidate-specific dependency integration proof is not applicable.")
 
     warnings.extend(security_result.warnings)
@@ -389,6 +392,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             "e2e_tests",
             "behavior_comparison",
             "dependency_integration",
+            "security_review",
         },
     )
 
@@ -413,6 +417,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         },
         "static_security_scan": security_result.to_dict(),
         "external_security_evidence": security_evidence_result.to_dict(),
+        "trusted_security_scan": trusted_security_result.to_dict(),
         "dependency_wiring_review": dependency_result.to_dict(),
         "behavior_comparison": behavior,
         "validation_gates": gates,
@@ -690,9 +695,11 @@ def main(argv: list[str] | None = None) -> int:
             ).run(result.output_root, validation_image, context, initial_validation=initial_validation)
             validation = repair_result.validation
             static_security_result = review_generated_output(result.output_root)
+            trusted_security_result = run_trusted_security_scanners(result.output_root, target_language.id)
             security_evidence_result = _load_security_evidence(args.security_evidence)
             dependency_wiring_result = review_dependency_wiring(result.output_root, target_language.id)
             validation.gates["dependency_wiring"] = dependency_wiring_result.status
+            validation.gates["security_review"] = trusted_security_result.status
             behavior_result = None
             if args.behavior_spec is not None:
                 source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
@@ -746,6 +753,7 @@ def main(argv: list[str] | None = None) -> int:
                     "e2e_tests",
                     "behavior_comparison",
                     "dependency_integration",
+                    "security_review",
                 },
             )
             summary = {
@@ -760,6 +768,7 @@ def main(argv: list[str] | None = None) -> int:
                 "repair": repair_result.to_dict(),
                 "static_security_scan": static_security_result.to_dict(),
                 "external_security_evidence": security_evidence_result.to_dict(),
+                "trusted_security_scan": trusted_security_result.to_dict(),
                 "dependency_wiring_review": dependency_wiring_result.to_dict(),
                 "behavior_comparison": behavior_result.to_dict() if behavior_result is not None else {
                     "status": "NOT_RUN", "cases_checked": 0,

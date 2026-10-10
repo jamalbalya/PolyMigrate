@@ -40,9 +40,9 @@ class MigrateCLIE2ETests(unittest.TestCase):
             with patch("polymigrate.cli.build_provider_registry", return_value=(self.registry, ())), redirect_stdout(stdout), redirect_stderr(stderr):
                 code = main(["migrate", "--source", str(source), "--from", "python", "--to", "go",
                              "--output", str(output), "--provider", "fake", "--allow-source-upload"])
-            self.assertEqual(code, 0, stderr.getvalue())
+            self.assertEqual(code, 3, stderr.getvalue())
             report = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))
-            self.assertEqual(report["status"], "PARTIAL")
+            self.assertEqual(report["status"], "BLOCKED")
             self.assertEqual(report["validation_gates"]["target_build"], "NOT_RUN")
             self.assertEqual(report["validation_gates"]["dependency_integration"], "PASSED")
             self.assertTrue((output / "main.go").is_file())
@@ -84,7 +84,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
                 for warning in report["warnings"]
             ))
 
-    def test_deterministic_scan_does_not_claim_comprehensive_security_review(self):
+    def test_deterministic_scan_blocks_when_trusted_scanners_are_unavailable(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "source"
             source.mkdir()
@@ -121,13 +121,15 @@ class MigrateCLIE2ETests(unittest.TestCase):
                 (output / "migration-review.json").read_text(encoding="utf-8")
             )
 
-        self.assertEqual(code, 0, stderr.getvalue())
+        self.assertEqual(code, 3, stderr.getvalue())
         self.assertEqual(report["static_security_scan"]["status"], "PASSED")
         self.assertTrue(
             report["static_security_scan"]["not_a_comprehensive_audit"]
         )
-        self.assertEqual(report["validation_gates"]["security_review"], "NOT_RUN")
-        self.assertEqual(report["status"], "PARTIAL")
+        self.assertEqual(report["trusted_security_scan"]["status"], "INCOMPLETE")
+        self.assertFalse(report["trusted_security_scan"]["scanner_provenance_verified"])
+        self.assertEqual(report["validation_gates"]["security_review"], "INCOMPLETE")
+        self.assertEqual(report["status"], "BLOCKED")
 
     def test_deterministic_migration_blocks_unverified_dependency_review(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -214,7 +216,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
                     "--strategy", "deterministic", "--behavior-spec", str(spec),
                 ])
 
-            self.assertEqual(code, 0, stderr.getvalue())
+            self.assertEqual(code, 3, stderr.getvalue())
             validate_suite.assert_called_once()
             self.assertEqual(validate_suite.call_args.args[1:], ("go", "golang:1.23-alpine"))
             report = json.loads(
@@ -226,7 +228,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
             self.assertEqual(report["validation_gates"]["integration_tests"], "NOT_RUN")
             self.assertEqual(report["validation_gates"]["e2e_tests"], "NOT_RUN")
             self.assertEqual(report["validation_image"], "golang:1.23-alpine")
-            self.assertEqual(report["status"], "PARTIAL")
+            self.assertEqual(report["status"], "BLOCKED")
 
     def test_deterministic_migration_rejects_unsupported_language_pair(self):
         with tempfile.TemporaryDirectory() as tmp:

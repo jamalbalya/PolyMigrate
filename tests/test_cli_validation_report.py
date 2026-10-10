@@ -97,7 +97,7 @@ class ValidationReportCLITests(unittest.TestCase):
         self.assertTrue(report["static_security_scan"]["not_a_comprehensive_audit"])
         self.assertIn("dependency_wiring_review", report)
         self.assertTrue(report["dependency_wiring_review"]["does_not_prove_build_or_api_compatibility"])
-        self.assertEqual(report["validation_gates"]["security_review"], "NOT_RUN")
+        self.assertEqual(report["validation_gates"]["security_review"], "INCOMPLETE")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,96 @@
+rules:
+  - id: polymigrate.python.dynamic-eval
+    languages: [python]
+    severity: ERROR
+    message: Dynamic evaluation can execute untrusted source text.
+    pattern: eval($X)
+  - id: polymigrate.python.os-system
+    languages: [python]
+    severity: ERROR
+    message: os.system executes a shell command.
+    pattern: os.system($X)
+  - id: polymigrate.javascript.dynamic-eval
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Dynamic evaluation can execute untrusted source text.
+    pattern: eval($X)
+  - id: polymigrate.javascript.new-function
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: The Function constructor evaluates dynamic source text.
+    pattern: new Function(...)
+  - id: polymigrate.javascript.innerhtml
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Assigning innerHTML can create DOM injection risks.
+    pattern: $EL.innerHTML = $X
+  - id: polymigrate.go.command-exec
+    languages: [go]
+    severity: WARNING
+    message: Command execution requires validation of executable and arguments.
+    pattern: exec.Command($X, ...)
+  - id: polymigrate.go.command-exec-context
+    languages: [go]
+    severity: WARNING
+    message: Command execution requires validation of executable and arguments.
+    pattern: exec.CommandContext($CTX, $X, ...)
+  - id: polymigrate.java.runtime-exec
+    languages: [java, kotlin]
+    severity: ERROR
+    message: Runtime.exec can execute operating-system commands.
+    pattern: Runtime.getRuntime().exec(...)
+  - id: polymigrate.java.object-deserialization
+    languages: [java, kotlin]
+    severity: ERROR
+    message: Object deserialization can instantiate attacker-controlled object graphs.
+    pattern: new ObjectInputStream(...)
+  - id: polymigrate.php.dynamic-eval
+    languages: [php]
+    severity: ERROR
+    message: Dynamic evaluation can execute untrusted source text.
+    pattern: eval($X)
+  - id: polymigrate.php.shell-exec
+    languages: [php]
+    severity: ERROR
+    message: Shell execution can run operating-system commands.
+    pattern: shell_exec($X)
+  - id: polymigrate.php.unserialize
+    languages: [php]
+    severity: ERROR
+    message: Unserialization of untrusted data can instantiate attacker-controlled objects.
+    pattern: unserialize($X)
+  - id: polymigrate.ruby.dynamic-eval
+    languages: [ruby]
+    severity: ERROR
+    message: Dynamic evaluation can execute untrusted source text.
+    pattern: eval($X)
+  - id: polymigrate.ruby.system
+    languages: [ruby]
+    severity: WARNING
+    message: Shell execution requires validation of command and arguments.
+    pattern: system($X)
+  - id: polymigrate.native.system
+    languages: [c, cpp]
+    severity: ERROR
+    message: system() executes shell commands.
+    pattern: system($X)
+  - id: polymigrate.csharp.process-start
+    languages: [csharp]
+    severity: WARNING
+    message: Process.Start can execute operating-system commands.
+    pattern: Process.Start($X)
+  - id: polymigrate.csharp.binaryformatter
+    languages: [csharp]
+    severity: ERROR
+    message: BinaryFormatter is unsafe for untrusted serialized data.
+    pattern: new BinaryFormatter()
+  - id: polymigrate.rust.command
+    languages: [rust]
+    severity: WARNING
+    message: Command execution requires validation of executable and arguments.
+    pattern: Command::new($X)
+  - id: polymigrate.swift.process-launch
+    languages: [swift]
+    severity: WARNING
+    message: Process launch requires validation of executable and arguments.
+    pattern: Process.launchedProcess($CMD, arguments: $ARGS)
