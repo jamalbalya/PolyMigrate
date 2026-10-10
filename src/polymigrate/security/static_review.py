@@ -4,6 +4,7 @@ This is defense-in-depth, not a complete security audit or proof of safety.
 """
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,6 +66,19 @@ _RULES_BY_EXTENSION: dict[str, set[str]] = {
     ".yaml": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL"},
     ".yml": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL"},
     ".properties": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL"},
+    ".c": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "WEAK_HASH"},
+    ".h": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "WEAK_HASH"},
+    ".cc": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "WEAK_HASH"},
+    ".cpp": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "WEAK_HASH"},
+    ".hpp": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "WEAK_HASH"},
+    ".swift": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "WEAK_HASH"},
+    ".kt": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "WEAK_HASH"},
+    ".kts": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "MANIFEST_LIFECYCLE_HOOK"},
+    ".scala": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "WEAK_HASH"},
+    ".sql": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL"},
+    ".sh": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "OS_SYSTEM_COMMAND"},
+    ".bash": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "OS_SYSTEM_COMMAND"},
+    ".ps1": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL"},
     ".env": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL"},
 }
 _ALL_RULES = {rule_id: (severity, description, pattern) for rule_id, severity, description, pattern in _RULES}
@@ -122,7 +136,7 @@ def review_generated_output(root: Path) -> StaticSecurityReview:
     files_scanned = 0
     bytes_scanned = 0
     truncated = False
-    for current, directories, filenames in __import__("os").walk(resolved, topdown=True, followlinks=False):
+    for current, directories, filenames in os.walk(resolved, topdown=True, followlinks=False):
         current_path = Path(current)
         directories[:] = sorted(
             name for name in directories
@@ -153,7 +167,7 @@ def review_generated_output(root: Path) -> StaticSecurityReview:
             suffix = path.suffix.lower()
             basename = path.name.lower()
             rule_ids = set(_RULES_BY_EXTENSION.get(suffix, set()))
-            if basename in {"package.json", "composer.json", "cargo.toml", "pom.xml", "pyproject.toml", "build.gradle", "build.gradle.kts"}:
+            if basename in {"package.json", "composer.json", "cargo.toml", "pom.xml", "pyproject.toml", "build.gradle", "build.gradle.kts", "go.mod", "gemfile", "requirements.txt", "package.swift", "cmakelists.txt"}:
                 rule_ids.add("MANIFEST_LIFECYCLE_HOOK")
             relative = path.relative_to(resolved).as_posix()
             for rule_id in sorted(rule_ids):
