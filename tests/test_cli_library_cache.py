@@ -27,7 +27,7 @@ class FakeProvider:
 
 
 class FakeGapPlanner:
-    def plan(self, provider_id, project, target_language, graph_context=None, max_gaps=3):
+    def plan(self, provider_id, project, target_language, graph_context=None, max_gaps=3, manifest_context=None):
         return DependencyGapPlan((DependencyGap("requests",("HTTP client",),"Need HTTP client.",("main.py",)),),(),("requests",))
 
 
