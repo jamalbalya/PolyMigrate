@@ -13,6 +13,7 @@ from polymigrate.graph.graphify import GraphifyAdapter
 from polymigrate.migration.adapters import InventorySourceAdapter
 from polymigrate.migration.llm_target import LLMTargetAdapter
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
+from polymigrate.validation.suite import validate_generated_project
 from polymigrate.models import MigrationRequest
 from polymigrate.planner import PlanningError, create_plan
 
@@ -94,26 +95,37 @@ def main(argv: list[str] | None = None) -> int:
             result = MigrationEngine(adapters).execute(
                 args.source, source_language.id, target_language.id, args.output, context,
             )
+            image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{target_language.id.upper()}"
+            validation_image = os.environ.get(image_variable, "").strip() or None
+            validation = validate_generated_project(
+                result.output_root, target_language.id, validation_image,
+            )
+            gates = validation.gates
+            all_warnings = list(result.warnings) + list(validation.warnings)
+            failed_gates = {"FAILED", "BLOCKED", "TIMEOUT"}
+            if any(value in failed_gates for value in gates.values()):
+                overall_status = "BLOCKED"
+            elif any(value == "PASSED" for value in gates.values()) and any(
+                value == "NOT_RUN" for value in gates.values()
+            ):
+                overall_status = "PARTIAL"
+            else:
+                overall_status = "GENERATED_UNVERIFIED"
             summary = {
-                "status": result.status,
+                "status": overall_status,
                 "source_language": result.source_language,
                 "target_language": result.target_language,
                 "generated_files": list(result.generated_files),
-                "warnings": list(result.warnings),
-                "validation_gates": {
-                    "target_build": "NOT_RUN",
-                    "unit_tests": "NOT_RUN",
-                    "integration_tests": "NOT_RUN",
-                    "e2e_tests": "NOT_RUN",
-                    "behavior_comparison": "NOT_RUN",
-                    "security_review": "NOT_RUN",
-                },
+                "warnings": all_warnings,
+                "validation_image": validation_image,
+                "validation_gates": gates,
+                "validation_results": validation.to_dict(),
                 "note": "Experimental file translation only; this is not a verified full-project migration.",
             }
             report_path = result.output_root / "migration-review.json"
             report_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             print(json.dumps(summary, indent=2, sort_keys=True))
-            return 0
+            return 3 if overall_status == "BLOCKED" else 0
         except (PlanningError, ValueError, OSError, RuntimeError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
