@@ -25,6 +25,45 @@ class AdditionalDependencyWiringTests(unittest.TestCase):
         self.assertEqual(result.status, "UNVERIFIED")
         self.assertTrue(result.to_dict()["does_not_prove_build_or_api_compatibility"])
 
+    def test_rust_external_crate_without_cargo_manifest_is_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.rs").write_text("use serde::Serialize;\nfn main() {}\n", encoding="utf-8")
+            result = review_dependency_wiring(root, "rust")
+        self.assertEqual(result.status, "BLOCKED")
+        self.assertIn("serde", result.missing_declarations)
+
+    def test_rust_declared_crate_import_passes_static_consistency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "main.rs").write_text(
+                "use serde::Serialize;\nuse std::fmt;\nfn main() {}\n", encoding="utf-8"
+            )
+            (root / "Cargo.toml").write_text(
+                '[package]\nname = "demo"\nversion = "0.1.0"\nedition = "2021"\n'
+                '[dependencies]\nserde = "1"\n', encoding="utf-8"
+            )
+            result = review_dependency_wiring(root, "rust")
+        self.assertEqual(result.status, "PASSED")
+        self.assertIn("serde", result.observed_imports)
+        self.assertTrue(result.to_dict()["does_not_prove_build_or_api_compatibility"])
+
+    def test_rust_comment_imports_do_not_create_dependency_findings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.rs").write_text(
+                '// use fake_crate::Thing;\nfn main() { let _text = "use other_crate::Thing;"; }\n',
+                encoding="utf-8",
+            )
+            (root / "Cargo.toml").write_text(
+                '[package]\nname = "demo"\nversion = "0.1.0"\nedition = "2021"\n',
+                encoding="utf-8",
+            )
+            result = review_dependency_wiring(root, "rust")
+        self.assertEqual(result.status, "PASSED")
+        self.assertEqual(result.observed_imports, ())
+
     def test_ruby_stdlib_import_needs_no_gemfile(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

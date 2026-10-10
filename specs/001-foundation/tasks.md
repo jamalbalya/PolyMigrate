@@ -60,7 +60,7 @@
 - [ ] T058 Verify target dependency declarations and library wiring through real target builds/integration tests; only upgrade candidate status after the declared dependency is proven to work.
 - [ ] T059 Implement a comprehensive security-review gate for generated code and manifests; keep verified knowledge promotion blocked until this gate has trustworthy evidence.
 - [x] T060 Add a bounded static security scan for generated files, report high/medium/low findings without echoing secret values, block on high-risk findings, and explicitly keep the comprehensive security-review gate unverified.
-- [x] T061 Add a static dependency-wiring review for Python, Go, and JavaScript/TypeScript imports versus target manifests; missing declarations block output, while build/API compatibility remains explicitly unverified.
+- [x] T061 Add a static dependency-wiring review for Python, Go, Rust, and JavaScript/TypeScript imports versus target manifests; missing declarations block output, while build/API compatibility remains explicitly unverified.
 
 - [x] T062 Run `go vet ./...` in the restricted target-validation container for Go outputs and cover command selection in tests; this adds static analysis but does not replace build, integration, behavior, or security gates.
 
@@ -73,3 +73,5 @@
 - [x] T067 Verify locally executed scanner binary identity against operator-managed SHA-256 pins; missing or mismatched pins remain untrusted, and T059 stays open because authenticated binaries alone do not constitute a comprehensive audit.
 
 - [x] T068 Add a deterministic Python-to-Rust subset that emits a minimal Cargo project, validates signed-i32 arithmetic, and has offline build/run fixtures; this is still a constrained pair and does not complete T023.
+
+- [x] T069 Add Rust Cargo manifest/import consistency checks and candidate-specific crate proof using an offline local crate, actual Cargo build/test execution, and runtime output; public registry availability remains unverified without an explicit real-project build.

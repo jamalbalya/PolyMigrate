@@ -62,6 +62,60 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
         self.assertIn("integration_tests=PASSED", warnings[0])
 
 
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_rust_candidate_is_proven_by_real_local_crate_build_and_integration_test(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "tests").mkdir()
+            (root / "localdep" / "src").mkdir(parents=True)
+            (root / "Cargo.toml").write_text(
+                '[package]\nname = "fixture-app"\nversion = "0.1.0"\nedition = "2021"\n'
+                '[dependencies]\nlocaldep = { path = "localdep" }\n'
+                '[workspace]\nmembers = ["localdep"]\n',
+                encoding="utf-8",
+            )
+            (root / "src" / "main.rs").write_text(
+                'use localdep::value;\nfn main() { println!("{}", value()); }\n',
+                encoding="utf-8",
+            )
+            (root / "localdep" / "Cargo.toml").write_text(
+                '[package]\nname = "localdep"\nversion = "0.1.0"\nedition = "2021"\n',
+                encoding="utf-8",
+            )
+            (root / "localdep" / "src" / "lib.rs").write_text(
+                'pub fn value() -> &\'static str { "verified" }\n',
+                encoding="utf-8",
+            )
+            (root / "tests" / "test_dependency.rs").write_text(
+                'use localdep::value;\n#[test]\nfn candidate_api_works() { assert_eq!(value(), "verified"); }\n',
+                encoding="utf-8",
+            )
+            build_and_test = subprocess.run(
+                ("cargo", "test", "--offline", "--quiet"), cwd=root,
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(build_and_test.returncode, 0, build_and_test.stderr)
+            behavior = subprocess.run(
+                ("cargo", "run", "--offline", "--quiet"), cwd=root,
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(behavior.returncode, 0, behavior.stderr)
+            self.assertEqual(behavior.stdout, "verified\n")
+            review = review_dependency_wiring(root, "rust")
+            self.assertEqual(review.status, "PASSED", review.warnings)
+            candidate = [{
+                "decision_type": "candidate",
+                "selected_package": {"name": "localdep", "registry": "crates.io"},
+            }]
+            status, _ = _candidate_dependency_integration_status(
+                candidate, review,
+                {"target_build": "PASSED", "integration_tests": "PASSED",
+                 "behavior_comparison": "PASSED"},
+                "rust", project_root=root,
+            )
+            self.assertEqual(status, "PASSED")
+
     def test_python_candidate_without_matching_declaration_stays_unverified(self):
         candidate = {
             "decision_type": "candidate",
