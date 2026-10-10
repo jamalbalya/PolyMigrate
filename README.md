@@ -107,3 +107,7 @@ Migration work must use an isolated workspace, preserve source input, validate g
 ## License
 
 MIT. See LICENSE.
+
+### Library replacement research
+
+The package discovery module queries fixed public endpoints for npm, crates.io, Maven Central, NuGet, RubyGems, Packagist, PyPI search, and GitHub repository fallback for selected languages. The AI-guided resolution workflow generates bounded search terms, ranks only discovered candidates, and can recommend a custom implementation when no candidate is returned. Registry descriptions are untrusted metadata, not proof of semantic equivalence; package installation is never automatic. These tools can be registered with the agent through the package and Graphify tooling helpers.
