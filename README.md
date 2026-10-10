@@ -23,7 +23,8 @@ The provider adapters have not yet been verified against live credentials in thi
 ## Requirements
 
 - Python 3.11 or newer.
-- No third-party runtime dependency is required for the current planning path.
+- No third-party runtime dependency is required for the planning path; offline Tree-sitter parsing is optional.
+- Install richer parser support with `python -m pip install -e ".[parsers]"`; only already-available local grammars are used, with heuristic fallback.
 - Live AI use requires credentials for the chosen provider; no credentials are committed.
 - Install the project in editable mode to use the polymigrate command.
 
