@@ -71,7 +71,7 @@ class PythonToRustTargetAdapter:
                 self._checked_integer_value(node, self._int_values)
                 return str(node.value), "int"
             if isinstance(node.value, str):
-                return json.dumps(node.value, ensure_ascii=True), "string"
+                return json.dumps(node.value, ensure_ascii=False), "string"
             raise UnsupportedPythonSyntax("Only integer and string literals are supported")
         if isinstance(node, ast.Name):
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", node.id) or node.id in _RUST_KEYWORDS:
