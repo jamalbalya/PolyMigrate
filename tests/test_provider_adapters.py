@@ -15,6 +15,24 @@ class ProviderAdapterTests(unittest.TestCase):
     def test_https_base_url_is_accepted(self):
         _validate_base_url("https://example.com/v1")
 
+
+    def test_invalid_port_is_rejected_as_configuration_error(self):
+        with self.assertRaisesRegex(ValueError, "valid URL with a valid port"):
+            _validate_base_url("https://example.com:not-a-port/v1")
+
+    def test_credentials_in_base_url_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "must not embed credentials"):
+            _validate_base_url("https://user:password@example.com/v1")
+
+    def test_query_and_fragment_in_base_url_are_rejected(self):
+        for url in ("https://example.com/v1?api_key=secret", "https://example.com/v1#fragment"):
+            with self.subTest(url=url), self.assertRaisesRegex(ValueError, "query string or fragment"):
+                _validate_base_url(url)
+
+    def test_malformed_ipv6_base_url_is_rejected_cleanly(self):
+        with self.assertRaisesRegex(ValueError, "valid URL with a valid port"):
+            _validate_base_url("https://[not-an-ipv6-address]/v1")
+
     def test_plain_http_non_loopback_is_rejected(self):
         with self.assertRaises(ValueError):
             _validate_base_url("http://example.com/v1")
