@@ -61,3 +61,5 @@
 - [ ] T059 Implement a comprehensive security-review gate for generated code and manifests; keep verified knowledge promotion blocked until this gate has trustworthy evidence.
 - [x] T060 Add a bounded static security scan for generated files, report high/medium/low findings without echoing secret values, block on high-risk findings, and explicitly keep the comprehensive security-review gate unverified.
 - [x] T061 Add a static dependency-wiring review for Python, Go, and JavaScript/TypeScript imports versus target manifests; missing declarations block output, while build/API compatibility remains explicitly unverified.
+
+- [x] T062 Run `go vet ./...` in the restricted target-validation container for Go outputs and cover command selection in tests; this adds static analysis but does not replace build, integration, behavior, or security gates.
