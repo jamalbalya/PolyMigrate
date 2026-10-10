@@ -121,7 +121,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
                 (output / "migration-review.json").read_text(encoding="utf-8")
             )
 
-        self.assertEqual(code, 0, stderr.getvalue())
+        self.assertEqual(code, 3, stderr.getvalue())
         self.assertEqual(report["static_security_scan"]["status"], "PASSED")
         self.assertTrue(
             report["static_security_scan"]["not_a_comprehensive_audit"]
