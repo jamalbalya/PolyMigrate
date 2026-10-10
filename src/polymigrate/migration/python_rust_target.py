@@ -133,6 +133,8 @@ class PythonToRustTargetAdapter:
                 name = node.targets[0].id
                 if name == "print":
                     raise UnsupportedPythonSyntax("Variable name 'print' conflicts with the supported print() builtin")
+                if name == "_":
+                    raise UnsupportedPythonSyntax("The Python underscore placeholder is not supported in Rust")
                 if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _RUST_KEYWORDS:
                     raise UnsupportedPythonSyntax(f"Variable name '{name}' is not supported in Rust")
                 expr, inferred_type = self._expr(node.value, assigned)
