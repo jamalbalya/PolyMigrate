@@ -702,7 +702,6 @@ def main(argv: list[str] | None = None) -> int:
                 library_resolutions, dependency_wiring_result, validation.gates, target_language.id
             )
             validation.gates["dependency_integration"] = dependency_integration_status
-            all_warnings.extend(dependency_integration_warnings)
             gates = validation.gates
             if knowledge_store and library_resolutions:
                 required_gates = MigrationKnowledgeStore.REQUIRED_VERIFICATION_GATES
@@ -725,10 +724,7 @@ def main(argv: list[str] | None = None) -> int:
             all_warnings = list(result.warnings) + list(validation.warnings) + list(repair_result.warnings) + list(resolution_warnings)
             all_warnings.extend(static_security_result.warnings)
             all_warnings.extend(dependency_wiring_result.warnings)
-            if any(item.get("decision_type") == "candidate" for item in library_resolutions):
-                all_warnings.append("Candidate-specific dependency integration proof was not run; library candidates cannot be promoted to verified knowledge.")
-            else:
-                all_warnings.append("No candidate library dependencies were selected; candidate-specific dependency integration proof is not applicable.")
+            all_warnings.extend(dependency_integration_warnings)
             all_warnings.extend(
                 f"Static security finding {finding.rule_id} ({finding.severity}) at {finding.path}:{finding.line}."
                 for finding in static_security_result.findings
