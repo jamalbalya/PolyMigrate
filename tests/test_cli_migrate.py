@@ -44,6 +44,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
             report = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "PARTIAL")
             self.assertEqual(report["validation_gates"]["target_build"], "NOT_RUN")
+            self.assertEqual(report["validation_gates"]["dependency_integration"], "NOT_RUN")
             self.assertTrue((output / "main.go").is_file())
             self.assertEqual(source_file.read_text(encoding="utf-8"), "print('hello')")
 
