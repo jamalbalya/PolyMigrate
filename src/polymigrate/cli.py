@@ -341,11 +341,11 @@ def main(argv: list[str] | None = None) -> int:
             if behavior_result is not None:
                 all_warnings.extend(behavior_result.warnings)
             failed_gates = {"FAILED", "BLOCKED", "TIMEOUT", "INCOMPLETE"}
-            if static_security_result.status in {"FAILED", "BLOCKED", "INCOMPLETE"} or any(value in failed_gates for value in gates.values()):
+            if static_security_result.status in {"FAILED", "BLOCKED", "INCOMPLETE", "REVIEW_REQUIRED"} or any(value in failed_gates for value in gates.values()):
                 overall_status = "BLOCKED"
-            elif static_security_result.status == "REVIEW_REQUIRED" or (any(value == "PASSED" for value in gates.values()) and any(
+            elif any(value == "PASSED" for value in gates.values()) and any(
                 value == "NOT_RUN" for value in gates.values()
-            )):
+            ):
                 overall_status = "PARTIAL"
             else:
                 overall_status = "GENERATED_UNVERIFIED"
