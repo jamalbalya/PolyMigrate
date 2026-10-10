@@ -216,9 +216,7 @@ def _candidate_dependency_integration_status(
             return "NOT_RUN", [f"Candidate dependency integration proof requires {gate}=PASSED."]
     declared = dependency_review.declared_dependencies
     observed_imports = dependency_review.observed_imports
-    if project_root is None:
-        return "NOT_RUN", ["Candidate-specific integration evidence requires the generated project root."]
-    candidate_test_imports = _candidate_test_imports(project_root, target_language)
+    candidate_test_imports = _candidate_test_imports(project_root, target_language) if project_root is not None else set()
 
     def normalize(value: str) -> str:
         if target_language == "python":
@@ -258,6 +256,8 @@ def _candidate_dependency_integration_status(
             )
         if not import_match:
             return "NOT_RUN", [f"Candidate package '{package_name}' is not observed in target source imports."]
+        if project_root is None:
+            return "NOT_RUN", ["Candidate-specific integration evidence requires the generated project root."]
         if target_language == "python":
             test_match = any(normalize(item) == normalize(package_name) for item in candidate_test_imports)
         elif target_language in {"javascript", "typescript"}:
