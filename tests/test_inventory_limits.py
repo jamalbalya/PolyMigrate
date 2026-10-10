@@ -33,7 +33,7 @@ class InventoryLimitTests(unittest.TestCase):
     def test_python_parse_failure_keeps_source_with_warning(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "broken.py").write_text("def broken(:\\n", encoding="utf-8")
+            (root / "broken.py").write_text("def broken(:\n", encoding="utf-8")
             project = InventorySourceAdapter("python", (".py",)).analyze(root)
             self.assertEqual(len(project.units), 1)
             self.assertEqual(project.units[0].symbols, ())
