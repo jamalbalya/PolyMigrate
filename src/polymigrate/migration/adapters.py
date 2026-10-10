@@ -1,11 +1,72 @@
 """Built-in source inventory adapter; it inventories text source files but does not claim full parsing."""
 from __future__ import annotations
+import ast
 import hashlib
+import re
 from pathlib import Path
 from typing import Iterable
 from polymigrate.migration.pipeline import SourceProject, SourceUnit
 
 _IGNORED_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".mypy_cache", ".pytest_cache", "dist", "build"}
+
+_SYMBOL_PATTERNS = {
+    "go": re.compile(r"(?m)^\\s*(?:func\\s+(?:\\([^)]*\\)\\s*)?|type\\s+)([A-Za-z_]\\w*)"),
+    "javascript": re.compile(r"(?m)^\\s*(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?(?:function|class|interface|type|enum|const|let|var)\\s+([A-Za-z_$][\\w$]*)"),
+    "typescript": re.compile(r"(?m)^\\s*(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?(?:function|class|interface|type|enum|const|let|var)\\s+([A-Za-z_$][\\w$]*)"),
+    "java": re.compile(r"\\b(?:class|interface|enum|record)\\s+([A-Za-z_]\\w*)"),
+    "kotlin": re.compile(r"\\b(?:class|interface|object|fun|typealias)\\s+([A-Za-z_]\\w*)"),
+    "rust": re.compile(r"\\b(?:fn|struct|enum|trait|type)\\s+([A-Za-z_]\\w*)"),
+    "csharp": re.compile(r"\\b(?:class|interface|enum|record|struct)\\s+([A-Za-z_]\\w*)"),
+    "cpp": re.compile(r"\\b(?:class|struct|enum|namespace)\\s+([A-Za-z_]\\w*)"),
+    "c": re.compile(r"\\b(?:struct|enum|union|typedef)\\s+([A-Za-z_]\\w*)"),
+    "ruby": re.compile(r"(?m)^\\s*(?:class|module|def)\\s+([A-Za-z_]\\w*[!?=]?)"),
+    "php": re.compile(r"\\b(?:class|interface|trait|enum|function)\\s+([A-Za-z_]\\w*)"),
+    "swift": re.compile(r"\\b(?:class|struct|enum|protocol|func|actor)\\s+([A-Za-z_]\\w*)"),
+}
+_IMPORT_PATTERNS = {
+    "javascript": re.compile(r"""\\b(?:from\\s*|import\\s*(?:\\(\\s*)?|require\\s*\\(\\s*)['"]([^'"]+)['"]"""),
+    "typescript": re.compile(r"""\\b(?:from\\s*|import\\s*(?:\\(\\s*)?|require\\s*\\(\\s*)['"]([^'"]+)['"]"""),
+    "go": re.compile(r"""(?m)^\\s*(?:import\\s+)?["']([^"']+)["']"""),
+    "rust": re.compile(r"(?m)^\\s*(?:use|extern\\s+crate)\\s+([A-Za-z_]\\w*)"),
+    "java": re.compile(r"(?m)^\\s*import\\s+(?:static\\s+)?([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)+)"),
+    "kotlin": re.compile(r"(?m)^\\s*import\\s+([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)+)"),
+    "csharp": re.compile(r"(?m)^\\s*using\\s+([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*)\\s*;"),
+    "cpp": re.compile(r"(?m)^\\s*#\\s*include\\s*[<"]([^>"]+)[>"]"),
+    "c": re.compile(r"(?m)^\\s*#\\s*include\\s*[<"]([^>"]+)[>"]"),
+    "ruby": re.compile(r"""(?m)^\\s*require(?:_relative)?\\s*['"]([^'"]+)['"]"""),
+    "php": re.compile(r"(?m)^\\s*use\\s+([A-Za-z_\\\\][A-Za-z0-9_\\\\]*)"),
+    "swift": re.compile(r"(?m)^\\s*import\\s+([A-Za-z_]\\w*)"),
+}
+
+
+def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, ...], tuple[str, ...], str | None]:
+    """Extract bounded symbol/import hints; Python uses its real AST, other languages use heuristics."""
+    symbols: set[str] = set()
+    dependencies: set[str] = set()
+    warning = None
+    if language_id == "python":
+        try:
+            tree = ast.parse(source_text)
+        except SyntaxError:
+            return (), (), "Python syntax could not be parsed; source text was retained without AST hints."
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                symbols.add(node.name)
+            elif isinstance(node, ast.Import):
+                dependencies.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                dependencies.add(node.module)
+    else:
+        symbol_pattern = _SYMBOL_PATTERNS.get(language_id)
+        import_pattern = _IMPORT_PATTERNS.get(language_id)
+        if symbol_pattern:
+            symbols.update(match.group(1) for match in symbol_pattern.finditer(source_text))
+        if import_pattern:
+            dependencies.update(match.group(1) for match in import_pattern.finditer(source_text))
+        if symbol_pattern is None:
+            warning = f"No structural symbol extractor is configured for {language_id}; only source text is available."
+    return tuple(sorted(symbols)[:200]), tuple(sorted(dependencies)[:100]), warning
+
 
 class InventorySourceAdapter:
     """Read supported UTF-8 source files into a hash-checked project inventory."""
@@ -50,10 +111,15 @@ class InventorySourceAdapter:
             except (OSError, UnicodeError):
                 warnings.append(f"Skipped unreadable or non-UTF-8 source file: {relative.as_posix()}")
                 continue
+            symbols, dependencies, structure_warning = _extract_structure(self.language_id, text)
+            if structure_warning:
+                warnings.append(f"{relative.as_posix()}: {structure_warning}")
             units.append(SourceUnit(
                 relative_path=relative.as_posix(),
                 source_text=text,
                 content_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                symbols=symbols,
+                dependencies=dependencies,
             ))
             total_bytes += size
         if not units:
