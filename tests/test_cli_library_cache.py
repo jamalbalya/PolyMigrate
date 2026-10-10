@@ -59,7 +59,7 @@ class CLILibraryCacheTests(unittest.TestCase):
                 manifest.write_text(f"[project]\\nname='demo'\\nversion='{version}'\\n",encoding="utf-8")
                 output=root/f"out-{index}"
                 stdout,stderr=StringIO(),StringIO()
-                with patch.dict(os.environ,{"POLYMIGRATE_KNOWLEDGE_DB":str(db),"POLYMIGRATE_CACHE_DRAFTS":"1"}), \\
+                with patch.dict(os.environ,{"POLYMIGRATE_KNOWLEDGE_DB":str(db),"POLYMIGRATE_CACHE_DRAFTS":"1"}), \
                      patch("polymigrate.cli.build_provider_registry",return_value=(providers,())), \\
                      patch("polymigrate.cli.DependencyGapPlanner",return_value=FakeGapPlanner()), \\
                      patch("polymigrate.cli.LibraryResolutionWorkflow",return_value=workflow), \\
