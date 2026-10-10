@@ -49,6 +49,53 @@ class StaticSecurityReviewTests(unittest.TestCase):
         self.assertEqual(result.status, "PASSED")
         self.assertTrue(any("not a comprehensive security audit" in warning for warning in result.warnings))
 
+
+    def test_go_command_execution_requires_security_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.go").write_text(
+                'package main\\nimport "os/exec"\\nfunc main() { exec.Command("echo", "safe") }\\n',
+                encoding="utf-8",
+            )
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "REVIEW_REQUIRED")
+        self.assertIn("GO_COMMAND_EXEC", {item.rule_id for item in result.findings})
+
+    def test_php_shell_execution_is_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "index.php").write_text("<?php shell_exec($input);\\n", encoding="utf-8")
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "FAILED")
+        self.assertIn("PHP_SHELL_EXEC", {item.rule_id for item in result.findings})
+
+    def test_ruby_dynamic_eval_is_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.rb").write_text("eval(user_input)\\n", encoding="utf-8")
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "FAILED")
+        self.assertIn("RUBY_DYNAMIC_EVAL", {item.rule_id for item in result.findings})
+
+    def test_jvm_unsafe_deserialization_is_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Main.java").write_text(
+                "class Main { Object read(ObjectInputStream input) throws Exception { return input.readObject(); } }\\n",
+                encoding="utf-8",
+            )
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "FAILED")
+        self.assertIn("JVM_UNSAFE_DESERIALIZATION", {item.rule_id for item in result.findings})
+
+    def test_native_system_command_is_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.c").write_text('#include <stdlib.h>\\nint main() { system("echo unsafe"); }\\n', encoding="utf-8")
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "FAILED")
+        self.assertIn("NATIVE_SYSTEM_COMMAND", {item.rule_id for item in result.findings})
+
     def test_symlink_root_is_blocked(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
