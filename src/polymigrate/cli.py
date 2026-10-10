@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from polymigrate.ai.config import build_provider_registry
+from polymigrate.ai.protocols import ModelRequest
 from polymigrate.graph.graphify import GraphifyAdapter
 from polymigrate.knowledge import KnowledgeRecord, MigrationKnowledgeStore, fingerprint_payload
 from polymigrate.languages import LanguageRegistry
@@ -32,7 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--to", dest="target_language", required=True, help="Target language ID")
     plan.add_argument("--output", required=True, type=Path, help="Output directory")
     plan.add_argument("--json", dest="json_path", type=Path, help="Optional path for a copy of the plan JSON")
-    subparsers.add_parser("providers", help="Show configured AI providers without making network requests")
+    providers = subparsers.add_parser("providers", help="Show configured AI providers without making network requests")
+    providers.add_argument("--check", action="store_true", help="Send a minimal, source-free live request to each configured provider")
     migrate = subparsers.add_parser("migrate", help="Experimental AI file translation; output remains unverified")
     migrate.add_argument("--source", required=True, type=Path, help="Source project directory")
     migrate.add_argument("--from", dest="source_language", required=True, help="Source language ID")
@@ -92,7 +94,32 @@ def main(argv: list[str] | None = None) -> int:
             print("No AI providers configured. Set a provider API key and model ID in environment variables.")
         for warning in warnings:
             print(f"warning: {warning}", file=sys.stderr)
-        return 0
+        if not args.check:
+            return 0
+        if not configured:
+            print("Provider connectivity check could not run: no providers are configured.", file=sys.stderr)
+            return 1
+        failed = False
+        for provider in configured:
+            try:
+                capabilities = provider.get_capabilities()
+                response = provider.generate(ModelRequest(
+                    task="provider_connectivity_check",
+                    prompt='Return only this JSON object: {"status":"ok"}',
+                    context={"purpose": "source-free connectivity check"},
+                    require_structured_output=capabilities.structured_output,
+                ))
+                payload = response.structured_data
+                if payload is None:
+                    payload = json.loads(response.content)
+                if not isinstance(payload, dict) or payload.get("status") != "ok":
+                    raise ValueError("unexpected health-check response")
+                print(f"  connectivity: PASS ({provider.provider_id})")
+            except Exception as exc:
+                failed = True
+                # Do not print exception text: some third-party errors may contain request details.
+                print(f"  connectivity: FAIL ({provider.provider_id}; {type(exc).__name__})")
+        return 1 if failed else 0
     if args.command == "migrate":
         try:
             if not args.allow_source_upload:
