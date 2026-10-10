@@ -253,6 +253,63 @@ _RUBY_STDLIB = {
 }
 
 
+def _rust_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
+    """Check Rust crate imports against Cargo dependency tables; this is static evidence only."""
+    files, warnings = _files(root, {".rs"})
+    imports: set[str] = set()
+    local_modules: set[str] = set()
+    for path in files:
+        if path.name == "mod.rs":
+            local_modules.add(path.parent.name)
+        elif path.stem != "lib" and path.stem != "main":
+            local_modules.add(path.stem)
+        text = _read(path)
+        if text is None:
+            warnings.append(f"Could not read {path.relative_to(root).as_posix()}.")
+            continue
+        # The patterns are anchored to Rust import declarations; comment stripping is
+        # conservative and does not execute or evaluate source text.
+        clean = re.sub(r"/\\*.*?\\*/|//[^\\n]*", "", text, flags=re.DOTALL)
+        imports.update(re.findall(
+            r"(?m)^\\s*(?:pub\\s+)?use\\s+([A-Za-z_][A-Za-z0-9_]*)(?:::|(?:\\s+as\\s+[A-Za-z_][A-Za-z0-9_]*)?\\s*;)",
+            clean,
+        ))
+        imports.update(re.findall(r"(?m)^\\s*extern\\s+crate\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*;", clean))
+    declared: set[str] = set()
+    manifest = root / "Cargo.toml"
+    if not manifest.is_file() or manifest.is_symlink():
+        if files:
+            warnings.append("Missing Cargo.toml manifest.")
+    else:
+        try:
+            if manifest.stat().st_size > 1_000_000:
+                raise ValueError("Cargo.toml exceeds the manifest size limit.")
+            data = tomllib.loads(_read(manifest) or "")
+            def collect_dependency_tables(value: Any) -> None:
+                if not isinstance(value, dict):
+                    return
+                for key in ("dependencies", "dev-dependencies", "build-dependencies"):
+                    table = value.get(key)
+                    if isinstance(table, dict):
+                        declared.update(name for name in table if isinstance(name, str))
+                for nested in value.values():
+                    if isinstance(nested, dict):
+                        collect_dependency_tables(nested)
+            collect_dependency_tables(data)
+        except (OSError, ValueError, UnicodeError, tomllib.TOMLDecodeError, RecursionError):
+            warnings.append("Cargo.toml could not be parsed for dependency declarations.")
+    builtin = {"std", "core", "alloc", "crate", "self", "super"}
+    normalize = lambda value: value.replace("-", "_").casefold()
+    external = {
+        item for item in imports
+        if item not in builtin and item not in local_modules
+    }
+    declared_normalized = {normalize(item) for item in declared}
+    missing = {item for item in external if normalize(item) not in declared_normalized}
+    warnings.extend(f"Missing Cargo.toml dependency declaration: {item}" for item in sorted(missing))
+    return imports, declared, warnings
+
+
 def _ruby_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
     files, warnings = _files(root, {".rb"})
     imports: set[str] = set()
@@ -347,6 +404,8 @@ def review_dependency_wiring(root: Path, language: str) -> DependencyWiringRevie
         imports, declared, warnings = _kotlin_dependencies(resolved)
     elif language == "ruby":
         imports, declared, warnings = _ruby_dependencies(resolved)
+    elif language == "rust":
+        imports, declared, warnings = _rust_dependencies(resolved)
     elif language == "php":
         imports, declared, warnings = _php_dependencies(resolved)
     else:
