@@ -212,7 +212,10 @@ def main(argv: list[str] | None = None) -> int:
                         summary["problem_fingerprint"] = problem_fingerprint
                         summary["toolchain_fingerprint"] = toolchain_fingerprint
                         if knowledge_store and cache_drafts and project_scope:
-                            record_id = "library-" + problem_fingerprint[:24]
+                            # Drafts must be unique per project scope. Otherwise an unverified draft
+                            # from another project can overwrite a verified/shareable record for the
+                            # same library gap because problem_fingerprint is intentionally project-agnostic.
+                            record_id = "library-" + problem_fingerprint[:16] + "-" + project_scope[:12]
                             summary["knowledge_record_id"] = record_id
                             summary["cache_status"] = "UNVERIFIED_CACHED"
                             try:
