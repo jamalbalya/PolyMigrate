@@ -27,7 +27,7 @@ class ValidationReportCLITests(unittest.TestCase):
         registry.register(FakeProvider())
         gates={"target_build":"FAILED","unit_tests":"NOT_RUN","integration_tests":"NOT_RUN",
                "e2e_tests":"NOT_RUN","behavior_comparison":"NOT_RUN","security_review":"NOT_RUN"}
-        validation=SimpleNamespace(gates=gates,warnings=("build failed",),to_dict=lambda:{"gates":gates,"executions":[],"warnings":["build failed"]})
+        validation=SimpleNamespace(gates=gates,executions=(),warnings=("build failed",),to_dict=lambda:{"gates":gates,"executions":[],"warnings":["build failed"]})
         with tempfile.TemporaryDirectory() as tmp:
             source=Path(tmp)/"source"
             source.mkdir()
