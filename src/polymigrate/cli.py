@@ -126,6 +126,8 @@ def _candidate_dependency_integration_status(
         ]
     if dependency_review.status != "PASSED":
         return "NOT_RUN", ["Candidate dependency integration proof requires a PASSED dependency wiring review."]
+    if target_language != "go":
+        return "NOT_RUN", [f"Candidate dependency resolution/build proof is not implemented for target language {target_language}; this gate remains unverified."]
     for gate in ("target_build", "integration_tests", "behavior_comparison"):
         if gates.get(gate) != "PASSED":
             return "NOT_RUN", [f"Candidate dependency integration proof requires {gate}=PASSED."]
