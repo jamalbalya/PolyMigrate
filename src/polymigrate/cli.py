@@ -6,6 +6,10 @@ import sys
 from pathlib import Path
 
 from polymigrate.ai.config import build_provider_registry
+from polymigrate.languages import LanguageRegistry
+from polymigrate.migration.adapters import InventorySourceAdapter
+from polymigrate.migration.llm_target import LLMTargetAdapter
+from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
 from polymigrate.models import MigrationRequest
 from polymigrate.planner import PlanningError, create_plan
 
@@ -20,6 +24,15 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--output", required=True, type=Path, help="Output directory outside the source tree")
     plan.add_argument("--json", dest="json_path", type=Path, help="Optional path for a copy of the plan JSON")
     subparsers.add_parser("providers", help="Show configured AI providers without making network requests")
+    migrate = subparsers.add_parser("migrate", help="Experimental AI file translation; output remains unverified")
+    migrate.add_argument("--source", required=True, type=Path, help="Source project directory")
+    migrate.add_argument("--from", dest="source_language", required=True, help="Source language ID")
+    migrate.add_argument("--to", dest="target_language", required=True, help="Target language ID")
+    migrate.add_argument("--output", required=True, type=Path, help="New or empty output directory outside source")
+    migrate.add_argument("--provider", required=True, help="Configured provider ID, e.g. openai, anthropic, gemini, openrouter")
+    migrate.add_argument("--allow-source-upload", action="store_true",
+                         help="Explicitly allow source code to be sent to the configured external AI provider")
+    migrate.add_argument("--context-json", type=Path, help="Optional JSON object with non-secret migration constraints")
     return parser
 
 
@@ -40,6 +53,50 @@ def main(argv: list[str] | None = None) -> int:
         for warning in warnings:
             print(f"warning: {warning}", file=sys.stderr)
         return 0
+    if args.command == "migrate":
+        try:
+            language_registry = LanguageRegistry()
+            source_language = language_registry.get(args.source_language)
+            target_language = language_registry.get(args.target_language)
+            context = {}
+            if args.context_json:
+                context = json.loads(args.context_json.read_text(encoding="utf-8"))
+                if not isinstance(context, dict):
+                    raise ValueError("context JSON must contain an object")
+            providers, _warnings = build_provider_registry()
+            adapters = AdapterRegistry()
+            adapters.register_source(InventorySourceAdapter(source_language.id, source_language.extensions))
+            target_adapter = LLMTargetAdapter(
+                target_language.id, source_language.id, target_language.extensions[0],
+                providers, args.provider, allow_source_upload=args.allow_source_upload,
+            )
+            adapters.register_target(target_adapter)
+            result = MigrationEngine(adapters).execute(
+                args.source, source_language.id, target_language.id, args.output, context,
+            )
+            summary = {
+                "status": result.status,
+                "source_language": result.source_language,
+                "target_language": result.target_language,
+                "generated_files": list(result.generated_files),
+                "warnings": list(result.warnings),
+                "validation_gates": {
+                    "target_build": "NOT_RUN",
+                    "unit_tests": "NOT_RUN",
+                    "integration_tests": "NOT_RUN",
+                    "e2e_tests": "NOT_RUN",
+                    "behavior_comparison": "NOT_RUN",
+                    "security_review": "NOT_RUN",
+                },
+                "note": "Experimental file translation only; this is not a verified full-project migration.",
+            }
+            report_path = result.output_root / "migration-review.json"
+            report_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            print(json.dumps(summary, indent=2, sort_keys=True))
+            return 0
+        except (PlanningError, ValueError, OSError, RuntimeError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
     try:
         request = MigrationRequest(args.source, args.source_language, args.target_language, args.output)
         plan = create_plan(request)
