@@ -12,7 +12,7 @@ class FakeHTTPResponse:
         self.payload = json.dumps(payload).encode("utf-8")
     def __enter__(self): return self
     def __exit__(self, *args): return False
-    def read(self): return self.payload
+    def read(self, limit=-1): return self.payload if limit < 0 else self.payload[:limit]
 
 
 class ProviderResponseTests(unittest.TestCase):
