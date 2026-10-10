@@ -146,6 +146,11 @@ class AutonomousRepairLoop:
         rationale = payload.get("rationale", "")
         if not isinstance(rationale, str) or len(rationale) > 2_000:
             raise ValueError("Repair rationale must be a string of at most 2000 characters")
+        assumptions = payload.get("assumptions", [])
+        if not isinstance(assumptions, list) or len(assumptions) > 20 or not all(
+            isinstance(item, str) and len(item) <= 500 for item in assumptions
+        ):
+            raise ValueError("Repair assumptions must contain at most 20 strings of at most 500 characters")
         files = payload.get("files")
         if not isinstance(files, list) or len(files) > self.max_files_per_attempt:
             raise ValueError("Repair files must be a bounded list")
@@ -230,6 +235,7 @@ class AutonomousRepairLoop:
                     handle.write(content)
                     handle.flush()
                     os.fsync(handle.fileno())
+                os.chmod(temporary_name, destination.stat().st_mode)
                 os.replace(temporary_name, destination)
             finally:
                 if temporary_name and os.path.exists(temporary_name):
