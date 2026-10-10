@@ -39,6 +39,15 @@ class InventoryLimitTests(unittest.TestCase):
             self.assertEqual(project.units[0].symbols, ())
             self.assertTrue(any("could not be parsed safely" in warning for warning in project.metadata["warnings"]))
 
+    def test_offline_tree_sitter_reports_syntax_errors_when_grammar_is_available(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.go").write_text("package main\\nfunc main( {\\n", encoding="utf-8")
+            project = InventorySourceAdapter("go", (".go",)).analyze(root)
+            if "tree-sitter" not in project.metadata["parser_backends"]:
+                self.skipTest("Offline Go Tree-sitter grammar is not available")
+            self.assertTrue(any("Tree-sitter reported syntax errors" in warning for warning in project.metadata["warnings"]))
+
     def test_go_structure_hints_include_types_functions_and_imports(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
