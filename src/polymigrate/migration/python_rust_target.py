@@ -258,7 +258,7 @@ class PythonToRustTargetAdapter:
                 if not isinstance(node.target, ast.Name):
                     raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
                 name = node.target.id
-                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _RUST_KEYWORDS or name == "_":
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _RUST_KEYWORDS or name in {"_", "print"}:
                     raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not supported in Rust")
                 if name in assigned:
                     raise UnsupportedPythonSyntax("range() loop variables cannot shadow assigned variables")
