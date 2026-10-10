@@ -87,7 +87,7 @@ class BehaviorComparisonTests(unittest.TestCase):
                 return ProviderCapabilities()
             def generate(self, request: ModelRequest):
                 return ModelResponse(json.dumps({
-                    "content": "package main\\nfunc main() {}\\n",
+                    "content": "package main\nfunc main() {}\n",
                     "assumptions": [], "unsupported_features": [],
                 }), self.provider_id, self.model_id)
 
@@ -97,14 +97,14 @@ class BehaviorComparisonTests(unittest.TestCase):
             root = Path(tmp)
             source = root / "source"
             source.mkdir()
-            (source / "main.py").write_text("print(42)\\n", encoding="utf-8")
+            (source / "main.py").write_text("print(42)\n", encoding="utf-8")
             spec = root / "behavior.json"
             spec.write_text("{}", encoding="utf-8")
             output = root / "out"
             stdout, stderr = StringIO(), StringIO()
             behavior = BehaviorComparisonResult("PASSED", (), (), 1)
-            with patch("polymigrate.cli.build_provider_registry", return_value=(providers, ())), \\
-                 patch("polymigrate.cli.compare_behavior", return_value=behavior), \\
+            with patch("polymigrate.cli.build_provider_registry", return_value=(providers, ())), \
+                 patch("polymigrate.cli.compare_behavior", return_value=behavior), \
                  redirect_stdout(stdout), redirect_stderr(stderr):
                 code = main([
                     "migrate", "--source", str(source), "--from", "python", "--to", "go",
