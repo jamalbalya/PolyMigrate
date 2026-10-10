@@ -54,9 +54,10 @@ class MigrateCLIE2ETests(unittest.TestCase):
             (source / "main.py").write_text("print('hello')", encoding="utf-8")
             output = Path(tmp) / "out"
             stderr = StringIO()
-            with patch("polymigrate.cli.build_provider_registry", return_value=(self.registry, ())), redirect_stderr(stderr):
+            with patch("polymigrate.cli.build_provider_registry", return_value=(self.registry, ())) as build_registry, redirect_stderr(stderr):
                 code = main(["migrate", "--source", str(source), "--from", "python", "--to", "go",
                              "--output", str(output), "--provider", "fake"])
+            build_registry.assert_not_called()
             self.assertEqual(code, 2)
             self.assertIn("Source upload is disabled", stderr.getvalue())
             self.assertFalse(output.exists())
