@@ -10,12 +10,19 @@
 - [x] T008 Implement optional Graphify artifact adapter.
 - [x] T009 Implement deterministic migration planner and output-path validation.
 - [x] T010 Implement CLI plan command and JSON output.
-- [x] T011 Add unit, integration, and E2E tests.
-- [x] T012 Add CI workflow and development documentation.
+- [x] T011 Add unit, integration, and E2E contract tests.
+- [x] T012 Add CI workflow, package installation check, and development documentation.
 - [x] T013 Add persistent evidence-gated migration knowledge store.
 - [x] T014 Add bounded agent runtime and allowlisted tool execution.
-- [ ] T015 Validate provider adapters against current provider API contracts and live credentials.
-- [ ] T016 Implement actual language transformation adapters and migration execution.
-- [ ] T017 Add isolated build/test execution and automated repair loop.
-- [ ] T018 Verify Graphify CLI integration and incremental invalidation on the target environment.
-- [ ] T019 Add full migration E2E fixtures across multiple language pairs.
+- [x] T015 Add HTTP adapters for OpenAI-compatible, Anthropic, and Gemini APIs; no live-credential claim.
+- [x] T016 Add environment-based provider configuration and offline provider diagnostics.
+- [x] T017 Add best-effort secret redaction for model-boundary payloads.
+- [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
+- [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 47 tests passed at the last verified run.
+- [ ] T021 Verify provider adapters against current API contracts and live credentials.
+- [ ] T022 Implement production source parsers and target generators across language pairs.
+- [ ] T023 Implement full autonomous migration orchestration and library reconstruction.
+- [ ] T024 Add isolated build/test execution and bounded automated repair loop.
+- [ ] T025 Verify Graphify CLI integration and incremental graph invalidation on the target environment.
+- [ ] T026 Add full migration E2E fixtures across multiple language pairs and behavior-equivalence checks.
