@@ -161,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
             source_manifests, manifest_scan_warnings = scan_project_manifests(args.source)
             context["source_manifests"] = source_manifests
             context["manifest_scan_warnings"] = manifest_scan_warnings
+            context["reconstruct_manifests"] = bool(source_manifests)
             project_scope = fingerprint_payload({
                 "project_root": str(args.source.expanduser().resolve()),
                 "source_files": [{"path": unit.relative_path, "sha256": unit.content_sha256} for unit in source_project.units],
