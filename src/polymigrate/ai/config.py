@@ -8,6 +8,19 @@ from polymigrate.ai.http_providers import AnthropicProvider, GeminiProvider, Ope
 from polymigrate.ai.registry import ProviderRegistry
 
 
+def _max_output_tokens(env: Mapping[str, str], key: str, warnings: list[str]) -> int:
+    raw = env.get(key, "8192").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        warnings.append(f"{key} must be an integer; using the safe default of 8192")
+        return 8192
+    if not 1 <= value <= 16_384:
+        warnings.append(f"{key} must be between 1 and 16384; using the safe default of 8192")
+        return 8192
+    return value
+
+
 def build_provider_registry(environ: Mapping[str, str] | None = None) -> tuple[ProviderRegistry, tuple[str, ...]]:
     """Build a registry from environment variables and return non-secret configuration warnings.
 
@@ -39,17 +52,21 @@ def build_provider_registry(environ: Mapping[str, str] | None = None) -> tuple[P
             provider = OpenAICompatibleProvider(
                 provider_id="openai", api_key=api_key, model_id=model_id,
                 base_url=env.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+                max_output_tokens=_max_output_tokens(env, "OPENAI_MAX_OUTPUT_TOKENS", warnings),
             )
         elif provider_id == "openrouter":
             provider = OpenAICompatibleProvider(
                 provider_id="openrouter", api_key=api_key, model_id=model_id,
                 base_url=env.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+                max_output_tokens=_max_output_tokens(env, "OPENROUTER_MAX_OUTPUT_TOKENS", warnings),
             )
         elif provider_id == "anthropic":
             provider = AnthropicProvider(api_key=api_key, model_id=model_id,
-                                         base_url=env.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1"))
+                                         base_url=env.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1"),
+                                         max_output_tokens=_max_output_tokens(env, "ANTHROPIC_MAX_OUTPUT_TOKENS", warnings))
         else:
             provider = GeminiProvider(api_key=api_key, model_id=model_id,
-                                      base_url=env.get("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"))
+                                      base_url=env.get("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),
+                                      max_output_tokens=_max_output_tokens(env, "GEMINI_MAX_OUTPUT_TOKENS", warnings))
         registry.register(provider)
     return registry, tuple(warnings)
