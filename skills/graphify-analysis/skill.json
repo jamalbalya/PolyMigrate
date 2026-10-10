@@ -1,0 +1,8 @@
+{
+  "id": "graphify-analysis",
+  "version": "1.0.0",
+  "description": "Use code graph artifacts to analyze dependencies and change impact without assuming an undocumented schema.",
+  "input_contract": ["project_root", "changed_components"],
+  "output_contract": ["graph_status", "affected_components", "warnings"],
+  "allowed_tools": ["read_source", "inspect_graph"]
+}
