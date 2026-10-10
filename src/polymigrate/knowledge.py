@@ -34,14 +34,19 @@ class MigrationKnowledgeStore:
 
     @classmethod
     def _has_verified_evidence(cls, evidence: tuple[dict[str, Any], ...]) -> bool:
-        statuses: dict[str, str] = {}
+        statuses: dict[str, list[str]] = {}
         for item in evidence:
             if not isinstance(item, dict):
                 return False
             gate, status = item.get("gate"), item.get("status")
             if isinstance(gate, str) and isinstance(status, str):
-                statuses[gate] = status.upper()
-        return all(statuses.get(gate) == "PASSED" for gate in cls.REQUIRED_VERIFICATION_GATES)
+                statuses.setdefault(gate, []).append(status.upper())
+                if gate in cls.REQUIRED_VERIFICATION_GATES and status.upper() != "PASSED":
+                    return False
+        return all(
+            statuses.get(gate) and all(status == "PASSED" for status in statuses[gate])
+            for gate in cls.REQUIRED_VERIFICATION_GATES
+        )
     def __init__(self, database_path: Path) -> None:
         self.database_path = database_path
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
