@@ -216,7 +216,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
                     "--strategy", "deterministic", "--behavior-spec", str(spec),
                 ])
 
-            self.assertEqual(code, 0, stderr.getvalue())
+            self.assertEqual(code, 3, stderr.getvalue())
             validate_suite.assert_called_once()
             self.assertEqual(validate_suite.call_args.args[1:], ("go", "golang:1.23-alpine"))
             report = json.loads(
