@@ -94,6 +94,28 @@ class LLMTranslationTests(unittest.TestCase):
         self.assertNotIn("sk-12345678901234567890", provider.requests[0].prompt)
         self.assertTrue(any("redacted" in warning for warning in target.warnings))
 
+    def test_manifest_context_is_redacted_before_provider_prompt(self):
+        provider = TranslationProvider(json.dumps({
+            "content": "package main", "assumptions": [], "unsupported_features": [],
+        }))
+        providers = ProviderRegistry()
+        providers.register(provider)
+        target = LLMTargetAdapter("go", "python", ".go", providers, "fake", allow_source_upload=True)
+        source_text = "print('hello')"
+        project = SourceProject(Path("."), "python", (
+            SourceUnit("main.py", source_text, hashlib.sha256(source_text.encode()).hexdigest()),
+        ))
+        target.generate(project, {
+            "source_manifests": [{
+                "path": "package.json",
+                "content": '{"name":"demo","api_key":"sk-12345678901234567890"}',
+            }],
+        })
+        prompt = provider.requests[0].prompt
+        self.assertIn("package.json", prompt)
+        self.assertNotIn("sk-12345678901234567890", prompt)
+        self.assertIn("[REDACTED]", prompt)
+
     def test_inventory_skips_ignored_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
