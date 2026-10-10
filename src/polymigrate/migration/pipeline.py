@@ -153,9 +153,17 @@ class MigrationEngine:
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(artifact_content, encoding="utf-8")
             written.append(normalized)
+        warnings = [
+            "Generated output has not yet passed build, test, security, or behavior-equivalence gates."
+        ]
+        project_warnings = project.metadata.get("warnings", [])
+        if isinstance(project_warnings, list):
+            warnings.extend(item for item in project_warnings if isinstance(item, str))
+        adapter_warnings = getattr(target_adapter, "warnings", [])
+        if isinstance(adapter_warnings, list):
+            warnings.extend(item for item in adapter_warnings if isinstance(item, str))
         return MigrationExecutionResult(
             status="GENERATED_UNVERIFIED", source_language=source_language,
             target_language=target_language, output_root=output,
-            generated_files=tuple(sorted(written)),
-            warnings=("Generated output has not yet passed build, test, security, or behavior-equivalence gates.",),
+            generated_files=tuple(sorted(written)), warnings=tuple(warnings),
         )
