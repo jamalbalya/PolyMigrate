@@ -280,6 +280,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             context["dependency_inventory"] = dependency_inventory
             context["library_resolution"] = library_resolutions
+            context["reconstruct_manifests"] = bool(source_manifests or library_resolutions)
             context["dependency_planning_warnings"] = dependency_warnings
             context["library_resolution_warnings"] = resolution_warnings
 
