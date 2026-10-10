@@ -77,27 +77,41 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
             dep = root / "third_party" / "dep"
             dep.mkdir(parents=True)
             (dep / "go.mod").write_text(
-                "module github.com/acme/dep\n\ngo 1.23\n", encoding="utf-8"
+                """module github.com/acme/dep
+
+go 1.23
+""",
+                encoding="utf-8",
             )
             (dep / "dep.go").write_text(
-                'package dep\nfunc Value() string { return "verified" }\n',
+                """package dep
+func Value() string { return "verified" }
+""",
                 encoding="utf-8",
             )
             (root / "go.mod").write_text(
-                "module example.com/app\n\ngo 1.23\n"
-                "require github.com/acme/dep v0.0.0\n"
-                "replace github.com/acme/dep => ./third_party/dep\n",
+                """module example.com/app
+
+go 1.23
+require github.com/acme/dep v0.0.0
+replace github.com/acme/dep => ./third_party/dep
+""",
                 encoding="utf-8",
             )
             (root / "main.go").write_text(
-                'package main\nimport ("fmt"; "github.com/acme/dep")\n'
-                'func main() { fmt.Println(dep.Value()) }\n',
+                """package main
+import ("fmt"; "github.com/acme/dep")
+func main() { fmt.Println(dep.Value()) }
+""",
                 encoding="utf-8",
             )
             (root / "main_test.go").write_text(
-                'package main\nimport ("testing"; "github.com/acme/dep")\n'
-                'func TestDependencyIntegration(t *testing.T) { '
-                'if dep.Value() != "verified" { t.Fatal("unexpected dependency behavior") } }\n',
+                """package main
+import ("testing"; "github.com/acme/dep")
+func TestDependencyIntegration(t *testing.T) {
+    if dep.Value() != "verified" { t.Fatal("unexpected dependency behavior") }
+}
+""",
                 encoding="utf-8",
             )
             env = {**os.environ, "GOTOOLCHAIN": "local", "GOPROXY": "off"}
