@@ -37,6 +37,9 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
         code = self._translate('greeting = "hello" + " world"\nprint(greeting)\n')
         self.assertIn('let greeting = ("hello" + " world");', code)
 
+    def test_normalizes_negative_zero_to_preserve_python_print_output(self):
+        self.assertIn("console.log(0);", self._translate("print(-0)\n"))
+
     def test_rejects_unsafe_integer_arithmetic(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "safe integer range"):
             self._translate("x = 9007199254740991\ny = x + 1\nprint(y)\n")
