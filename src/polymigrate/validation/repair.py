@@ -71,6 +71,10 @@ class AutonomousRepairLoop:
                 warnings.append("Repair stopped because validation was blocked by environment or sandbox prerequisites.")
                 return RepairLoopResult("BLOCKED", validation, tuple(attempts), tuple(warnings))
             failures = [item for item in validation.executions if item.status in {"FAILED", "TIMEOUT"}]
+            gate_failures = [value for value in validation.gates.values() if value in {"FAILED", "TIMEOUT"}]
+            if not failures and gate_failures:
+                warnings.append("Validation gates report failure without matching command evidence; automatic repair was not attempted.")
+                return RepairLoopResult("UNRESOLVED", validation, tuple(attempts), tuple(warnings))
             if not failures:
                 status = "NO_FAILURES_DETECTED" if not attempts else "REPAIRED_AND_RETESTED"
                 if any(value == "NOT_RUN" for value in validation.gates.values()):
@@ -90,7 +94,9 @@ class AutonomousRepairLoop:
                 warnings.append(f"Repair attempt {attempt_number} failed ({type(exc).__name__}); no unvalidated success is claimed.")
                 return RepairLoopResult("UNRESOLVED", validation, tuple(attempts), tuple(warnings))
             validation = validate_generated_project(root, self.language_id, image)
-        if any(item.status in {"FAILED", "TIMEOUT"} for item in validation.executions):
+        if any(item.status in {"FAILED", "TIMEOUT"} for item in validation.executions) or any(
+            value in {"FAILED", "TIMEOUT"} for value in validation.gates.values()
+        ):
             warnings.append(f"Validation failures remain after {self.max_attempts} repair attempts.")
             return RepairLoopResult("UNRESOLVED", validation, tuple(attempts), tuple(warnings))
         if any(value == "BLOCKED" for value in validation.gates.values()):
