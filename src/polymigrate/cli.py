@@ -188,7 +188,7 @@ def _candidate_test_imports(root: Path, target_language: str) -> set[str]:
                 ):
                     imports.add(item)
                 for block in re.findall(r"(?s)\bimport\s*\((.*?)\)", source):
-                    imports.update(re.findall(r'''(?m)^\s*(?:[A-Za-z_][A-Za-z0-9_]*\s+)?["']([^"']+)["']''', block))
+                    imports.update(re.findall(r'''["']([^"']+)["']''', block))
             elif target_language == "ruby":
                 imports.update(re.findall(r"""(?m)^\s*require(?:_relative)?\s*\(?\s*['"]([^'"]+)['"]""", source))
     return imports
