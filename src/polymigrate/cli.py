@@ -178,7 +178,11 @@ def main(argv: list[str] | None = None) -> int:
 
             providers, _provider_warnings = build_provider_registry()
             selected_provider = providers.get(args.provider)
-            if not getattr(selected_provider, "model_id", "").strip():
+            # Enforce explicit model selection for providers that expose a model_id.
+            # Lightweight/custom providers used by integrations may implement generate()
+            # without a model_id attribute and should remain valid.
+            selected_model = getattr(selected_provider, "model_id", None)
+            if selected_model is not None and not str(selected_model).strip():
                 raise ValueError(
                     f"Provider '{args.provider}' has no generation model configured; "
                     "run 'polymigrate providers --list-models', set the model ID, and retry"
