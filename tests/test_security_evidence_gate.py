@@ -86,6 +86,29 @@ class SecurityEvidenceGateTests(unittest.TestCase):
         self.assertTrue(any("Duplicate" in error for error in result.errors))
         self.assertTrue(any("unconfigured" in error for error in result.errors))
 
+
+    def test_malformed_evidence_item_does_not_crash_or_pass(self):
+        result = evaluate_security_evidence(
+            [None, evidence()], required_scanners={"bandit"}
+        )
+        self.assertEqual(result.status, "INCOMPLETE")
+        self.assertTrue(any("not an object" in error for error in result.errors))
+
+    def test_boolean_exit_code_is_not_accepted_as_integer_zero(self):
+        result = evaluate_security_evidence(
+            [evidence(exit_code=False)], required_scanners={"bandit"}
+        )
+        self.assertEqual(result.status, "INCOMPLETE")
+
+    def test_malformed_required_scanner_and_rule_id_fail_closed(self):
+        result = evaluate_security_evidence(
+            [evidence(findings=[{"severity": "LOW", "rule_id": "secret value"}])],
+            required_scanners={"bandit", None},
+        )
+        self.assertEqual(result.status, "INCOMPLETE")
+        self.assertNotIn("secret value", str(result.to_dict()))
+        self.assertTrue(any("Required scanner entry" in error for error in result.errors))
+
     def test_empty_required_scanner_set_is_incomplete(self):
         result = evaluate_security_evidence([], required_scanners=set())
         self.assertEqual(result.status, "INCOMPLETE")

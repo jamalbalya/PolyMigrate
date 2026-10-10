@@ -31,7 +31,7 @@ class MigrationKnowledgeStore:
     """SQLite store; cross-project reuse is opt-in and verified records only."""
     REQUIRED_VERIFICATION_GATES = frozenset({
         "target_build", "unit_tests", "integration_tests", "e2e_tests",
-        "behavior_comparison", "security_review",
+        "behavior_comparison", "security_review", "dependency_wiring",
     })
 
     @classmethod

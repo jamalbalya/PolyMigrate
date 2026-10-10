@@ -30,6 +30,7 @@ from polymigrate.validation.suite import validate_generated_project
 from polymigrate.validation.behavior import compare_behavior
 from polymigrate.validation.dependency_wiring import review_dependency_wiring
 from polymigrate.security.static_review import review_generated_output
+from polymigrate.security.evidence_gate import evaluate_security_evidence
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -55,7 +56,25 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Explicitly allow source code to be sent to the configured external AI provider")
     migrate.add_argument("--context-json", type=Path, help="Optional JSON object with non-secret migration constraints")
     migrate.add_argument("--behavior-spec", type=Path, help="JSON behavior contract for isolated source-vs-target output comparison")
+    migrate.add_argument("--security-evidence", type=Path, help="Optional JSON report containing required_scanners and evidence from external scanners; provenance is not verified")
     return parser
+
+
+
+def _load_security_evidence(path: Path | None):
+    """Load externally produced scanner evidence without trusting its provenance."""
+    if path is None:
+        return evaluate_security_evidence((), required_scanners=())
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("security evidence JSON must contain an object")
+    required = payload.get("required_scanners")
+    evidence = payload.get("evidence")
+    if not isinstance(required, list) or not all(isinstance(item, str) for item in required):
+        raise ValueError("security evidence required_scanners must be a list of scanner IDs")
+    if not isinstance(evidence, list) or not all(isinstance(item, dict) for item in evidence):
+        raise ValueError("security evidence evidence must be a list of scanner report objects")
+    return evaluate_security_evidence(evidence, required_scanners=required)
 
 
 def _library_resolution_summary(result) -> dict[str, object]:
@@ -250,7 +269,9 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             warnings.append("Go formatting failed; build and vet were not run.")
 
     security_result = review_generated_output(result.output_root)
+    security_evidence_result = _load_security_evidence(args.security_evidence)
     dependency_result = review_dependency_wiring(result.output_root, "go")
+    gates["dependency_wiring"] = dependency_result.status
 
     warnings.extend(security_result.warnings)
     warnings.extend(dependency_result.warnings)
@@ -334,6 +355,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             "warnings": ["AI repair is disabled for deterministic strategy."],
         },
         "static_security_scan": security_result.to_dict(),
+        "external_security_evidence": security_evidence_result.to_dict(),
         "dependency_wiring_review": dependency_result.to_dict(),
         "behavior_comparison": behavior,
         "validation_gates": gates,
@@ -611,7 +633,9 @@ def main(argv: list[str] | None = None) -> int:
             ).run(result.output_root, validation_image, context, initial_validation=initial_validation)
             validation = repair_result.validation
             static_security_result = review_generated_output(result.output_root)
+            security_evidence_result = _load_security_evidence(args.security_evidence)
             dependency_wiring_result = review_dependency_wiring(result.output_root, target_language.id)
+            validation.gates["dependency_wiring"] = dependency_wiring_result.status
             behavior_result = None
             if args.behavior_spec is not None:
                 source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
@@ -670,6 +694,7 @@ def main(argv: list[str] | None = None) -> int:
                 "warnings": all_warnings, "validation_image": validation_image,
                 "repair": repair_result.to_dict(),
                 "static_security_scan": static_security_result.to_dict(),
+                "external_security_evidence": security_evidence_result.to_dict(),
                 "dependency_wiring_review": dependency_wiring_result.to_dict(),
                 "behavior_comparison": behavior_result.to_dict() if behavior_result is not None else {
                     "status": "NOT_RUN", "cases_checked": 0,
