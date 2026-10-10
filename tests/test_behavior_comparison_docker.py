@@ -17,13 +17,13 @@ class DockerBehaviorComparisonTests(unittest.TestCase):
             target = root / "target"
             source.mkdir()
             target.mkdir()
-            (source / "main.py").write_text("print(42)\\n", encoding="utf-8")
-            (target / "main.js").write_text("console.log(42);\\n", encoding="utf-8")
+            (source / "main.py").write_text("print(42)\n", encoding="utf-8")
+            (target / "main.js").write_text("console.log(42);\n", encoding="utf-8")
             spec = root / "behavior.json"
             spec.write_text(json.dumps({
                 "source_command": ["python", "main.py"],
                 "target_command": ["node", "main.js"],
-                "cases": [{"name": "basic", "expected_stdout": "42\\n"}],
+                "cases": [{"name": "basic", "expected_stdout": "42\n"}],
             }), encoding="utf-8")
             result = compare_behavior(
                 spec, source, target, "python:3.12-slim", "node:22-alpine",
