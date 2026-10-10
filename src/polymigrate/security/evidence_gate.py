@@ -25,6 +25,7 @@ class SecurityEvidenceResult:
     errors: tuple[str, ...]
     findings: tuple[dict[str, Any], ...]
     scanner_provenance_verified: bool = False
+    scanner_execution_recorded: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -36,7 +37,8 @@ class SecurityEvidenceResult:
             "errors": list(self.errors),
             "findings": list(self.findings),
             "not_a_comprehensive_audit": True,
-            "scanner_provenance_verified": self.scanner_provenance_verified,
+            "scanner_provenance_verified": False,
+            "scanner_execution_recorded": self.scanner_execution_recorded,
         }
 
 
@@ -44,7 +46,7 @@ def evaluate_security_evidence(
     evidence: Iterable[Mapping[str, Any]],
     *,
     required_scanners: Iterable[str],
-    provenance_verified: bool = False,
+    execution_provenance_recorded: bool = False,
 ) -> SecurityEvidenceResult:
     """Aggregate scanner evidence without converting missing evidence to PASS.
 
@@ -102,14 +104,14 @@ def evaluate_security_evidence(
         if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
             errors.append(f"Scanner '{scanner}' has no valid report SHA-256.")
             continue
-        if provenance_verified:
+        if execution_provenance_recorded:
             binary_digest = item.get("scanner_binary_sha256")
             runner_id = item.get("runner_id")
             tool_exit_code = item.get("tool_exit_code")
             if not isinstance(binary_digest, str) or not _SHA256.fullmatch(binary_digest):
                 errors.append(f"Scanner '{scanner}' has no valid executable SHA-256.")
                 continue
-            if runner_id != "polymigrate_trusted_scanner_runner_v1":
+            if runner_id != "polymigrate_local_scanner_runner_v1":
                 errors.append(f"Scanner '{scanner}' has no trusted runner identity.")
                 continue
             if isinstance(tool_exit_code, bool) or not isinstance(tool_exit_code, int):
@@ -157,5 +159,6 @@ def evaluate_security_evidence(
         missing_scanners=tuple(sorted(missing)),
         errors=tuple(errors),
         findings=tuple(findings_out),
-        scanner_provenance_verified=(provenance_verified and not errors and not missing and accepted == set(required)),
+        scanner_provenance_verified=False,
+        scanner_execution_recorded=(execution_provenance_recorded and not errors and not missing and accepted == set(required)),
     )

@@ -1,4 +1,4 @@
-"""Execute a small allowlist of local security scanners without shell interpolation.
+"""Execute a small allowlist of locally discovered scanners without shell interpolation.
 
 Scanner availability is environment-dependent. Missing tools or incomplete reports
 remain INCOMPLETE; this module never treats an absent scanner as a clean scan.
@@ -15,7 +15,7 @@ from typing import Any
 
 from polymigrate.security.evidence_gate import SecurityEvidenceResult, evaluate_security_evidence
 
-_RUNNER_ID = "polymigrate_trusted_scanner_runner_v1"
+_RUNNER_ID = "polymigrate_local_scanner_runner_v1"
 _RULES_PATH = Path(__file__).with_name("semgrep_rules.yml")
 _PROFILES: dict[str, tuple[str, ...]] = {
     "python": ("semgrep", "bandit"),
@@ -80,7 +80,7 @@ def _parse_report(scanner_id: str, payload: Any) -> tuple[list[dict[str, str]], 
     if not isinstance(payload, dict):
         return [], False
     if scanner_id == "semgrep":
-        if payload.get("errors") not in ([], None):
+        if not isinstance(payload.get("errors"), list) or payload["errors"]:
             return [], False
         raw = payload.get("results")
         if not isinstance(raw, list):
@@ -96,7 +96,7 @@ def _parse_report(scanner_id: str, payload: Any) -> tuple[list[dict[str, str]], 
             findings.append({"severity": severity, "rule_id": item["check_id"]})
         return findings, True
     if scanner_id == "bandit":
-        if payload.get("errors") not in ([], None):
+        if not isinstance(payload.get("errors"), list) or payload["errors"]:
             return [], False
         raw = payload.get("results")
         if not isinstance(raw, list):
@@ -111,9 +111,10 @@ def _parse_report(scanner_id: str, payload: Any) -> tuple[list[dict[str, str]], 
             findings.append({"severity": severity, "rule_id": item["test_id"]})
         return findings, True
     if scanner_id == "gosec":
-        if payload.get("Errors") not in ([], None) or payload.get("GolangErrors") not in ([], None):
+        if (not isinstance(payload.get("Errors"), list) or payload["Errors"]
+                or not isinstance(payload.get("GolangErrors"), list) or payload["GolangErrors"]):
             return [], False
-        raw = payload.get("Issues") or []
+        raw = payload.get("Issues")
         if not isinstance(raw, list):
             return [], False
         findings = []
@@ -128,10 +129,12 @@ def _parse_report(scanner_id: str, payload: Any) -> tuple[list[dict[str, str]], 
     return [], False
 
 
-def run_trusted_security_scanners(root: Path, language: str) -> SecurityEvidenceResult:
-    """Run required locally installed scanners from an allowlist and verify provenance.
+def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceResult:
+    """Run required locally installed scanners and record execution evidence.
 
     Semgrep uses a repository-bundled rules file and does not request a remote ruleset.
+    Binary hashes and version output are recorded, but binaries are not authenticated
+    against a trusted distribution; scanner provenance is therefore NOT verified.
     Bandit and gosec are additional required scanners for Python and Go respectively.
     """
     if root.is_symlink() or not root.is_dir():
@@ -183,4 +186,4 @@ def run_trusted_security_scanners(root: Path, language: str) -> SecurityEvidence
             })
         except (OSError, ValueError, subprocess.TimeoutExpired):
             continue
-    return evaluate_security_evidence(evidence, required_scanners=required, provenance_verified=True)
+    return evaluate_security_evidence(evidence, required_scanners=required, execution_provenance_recorded=True)
