@@ -337,7 +337,7 @@ class PythonToGoTargetAdapter:
                 if not isinstance(node.target, ast.Name):
                     raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
                 name = node.target.id
-                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _GO_KEYWORDS or name == "_":
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _GO_KEYWORDS or name in {"_", "print", "fmt"}:
                     raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not supported in Go")
                 if name in assigned:
                     raise UnsupportedPythonSyntax("range() loop variables cannot shadow assigned variables")
