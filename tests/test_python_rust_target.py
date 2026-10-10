@@ -88,6 +88,41 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "positive\n")
 
+    def test_range_loop_is_translated(self):
+        files = self._translate("for i in range(3):\n    print(i)\n")
+        self.assertIn("for i in 0..3 {", files["src/main.rs"])
+        self.assertIn('println!("{}", i);', files["src/main.rs"])
+
+    def test_range_loop_uses_statically_known_bounds(self):
+        files = self._translate("start = 1\nstop = 4\nfor i in range(start, stop):\n    print(i)\n")
+        self.assertIn("for i in start..stop {", files["src/main.rs"])
+
+    def test_rejects_range_step_and_large_loop(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "explicit steps"):
+            self._translate("for i in range(0, 3, 2):\n    print(i)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000-iteration"):
+            self._translate("for i in range(10001):\n    print(i)\n")
+
+    def test_rejects_loop_variable_shadowing(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "cannot shadow"):
+            self._translate("i = 1\nfor i in range(3):\n    print(i)\n")
+
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_range_loop_generated_project_builds_and_runs(self):
+        files = self._translate("for i in range(3):\n    print(i)\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(
+                ["cargo", "run", "--offline", "--quiet"], cwd=root,
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "0\n1\n2\n")
+
     def test_rejects_integer_overflow(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "signed Rust i32 range"):
             self._translate("x = 2147483647\ny = x + 1\nprint(y)\n")
@@ -101,8 +136,8 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             self._translate("_ = 1\nprint(_)\n")
 
     def test_rejects_unsupported_control_flow(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "For"):
-            self._translate("for item in []:\n    print('yes')\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "While"):
+            self._translate("while True:\n    print('yes')\n")
 
     @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
     def test_generated_project_builds_and_runs_offline(self):
