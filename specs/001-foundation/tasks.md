@@ -19,7 +19,7 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 152 tests passed in the latest verified workflow on Python 3.11, 3.12, and 3.13; the wheel build also verified all six packaged skill assets.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 154 tests passed in the latest verified workflow on Python 3.11, 3.12, and 3.13; the wheel build also verified all six packaged skill assets.
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
@@ -49,3 +49,4 @@
 - [x] T046 Add an opt-in, source-free live provider connectivity check; live verification with real credentials remains unverified in this environment.
 - [x] T047 Add bounded allowlisted source-manifest inventory with secret redaction, traversal limits, and prompt-context regression tests.
 - [x] T048 Feed bounded, redacted source-manifest evidence into dependency-gap planning without trusting manifest contents as instructions.
+- [x] T049 Extract bounded Python AST symbols/imports and heuristic structure hints for other registered languages, then include those hints in translation prompts; production parsers remain open under T023.
