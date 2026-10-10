@@ -50,19 +50,19 @@ class CLILibraryCacheTests(unittest.TestCase):
             root=Path(tmp)
             source=root/"source"
             source.mkdir()
-            (source/"main.py").write_text("import requests\\nprint('hello')\\n",encoding="utf-8")
+            (source/"main.py").write_text("import requests\nprint('hello')\n",encoding="utf-8")
             manifest=source/"pyproject.toml"
-            manifest.write_text("[project]\\nname='demo'\\nversion='1.0'\\n",encoding="utf-8")
+            manifest.write_text("[project]\nname='demo'\nversion='1.0'\n",encoding="utf-8")
             db=root/"knowledge.sqlite"
             reports=[]
             for index, version in enumerate(("1.0", "2.0"), start=1):
-                manifest.write_text(f"[project]\\nname='demo'\\nversion='{version}'\\n",encoding="utf-8")
+                manifest.write_text(f"[project]\nname='demo'\nversion='{version}'\n",encoding="utf-8")
                 output=root/f"out-{index}"
                 stdout,stderr=StringIO(),StringIO()
                 with patch.dict(os.environ,{"POLYMIGRATE_KNOWLEDGE_DB":str(db),"POLYMIGRATE_CACHE_DRAFTS":"1"}), \
-                     patch("polymigrate.cli.build_provider_registry",return_value=(providers,())), \\
-                     patch("polymigrate.cli.DependencyGapPlanner",return_value=FakeGapPlanner()), \\
-                     patch("polymigrate.cli.LibraryResolutionWorkflow",return_value=workflow), \\
+                     patch("polymigrate.cli.build_provider_registry",return_value=(providers,())), \
+                     patch("polymigrate.cli.DependencyGapPlanner",return_value=FakeGapPlanner()), \
+                     patch("polymigrate.cli.LibraryResolutionWorkflow",return_value=workflow), \
                      redirect_stdout(stdout),redirect_stderr(stderr):
                     code=main(["migrate","--source",str(source),"--from","python","--to","go",
                                "--output",str(output),"--provider","fake","--allow-source-upload"])
