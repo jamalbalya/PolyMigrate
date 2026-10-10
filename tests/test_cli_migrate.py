@@ -126,8 +126,8 @@ class MigrateCLIE2ETests(unittest.TestCase):
         self.assertTrue(
             report["static_security_scan"]["not_a_comprehensive_audit"]
         )
-        self.assertEqual(report["trusted_security_scan"]["status"], "INCOMPLETE")
-        self.assertFalse(report["trusted_security_scan"]["scanner_provenance_verified"])
+        self.assertEqual(report["local_security_scan"]["status"], "INCOMPLETE")
+        self.assertFalse(report["local_security_scan"]["scanner_provenance_verified"])
         self.assertEqual(report["validation_gates"]["security_review"], "INCOMPLETE")
         self.assertEqual(report["status"], "BLOCKED")
 
