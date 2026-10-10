@@ -83,8 +83,8 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
             self._translate("print(missing)\n")
 
     def test_rejects_unsupported_control_flow(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "If"):
-            self._translate("if True:\n    print('yes')\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "For"):
+            self._translate("for item in []:\n    print('yes')\n")
 
     def test_rejects_console_shadowing_when_print_is_used(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "conflicts with the console.log"):
