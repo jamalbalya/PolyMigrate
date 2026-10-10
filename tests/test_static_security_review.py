@@ -11,7 +11,7 @@ class StaticSecurityReviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "main.py").write_text(
-                'import os\\nTOKEN = "sk-12345678901234567890"\\nos.system("echo unsafe")\\n',
+                'import os\nAPI_KEY = "sk-12345678901234567890"\nos.system("echo unsafe")\n',
                 encoding="utf-8",
             )
             result = review_generated_output(root)
@@ -25,7 +25,7 @@ class StaticSecurityReviewTests(unittest.TestCase):
     def test_medium_findings_require_review(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "client.py").write_text("requests.get(url, verify=False)\\n", encoding="utf-8")
+            (root / "client.py").write_text("requests.get(url, verify=False)\n", encoding="utf-8")
             result = review_generated_output(root)
         self.assertEqual(result.status, "REVIEW_REQUIRED")
         self.assertIn("TLS_VERIFY_DISABLED", {item.rule_id for item in result.findings})
@@ -33,7 +33,7 @@ class StaticSecurityReviewTests(unittest.TestCase):
     def test_clean_source_passes_heuristics_but_not_comprehensive_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "main.go").write_text("package main\\nfunc main() {}\\n", encoding="utf-8")
+            (root / "main.go").write_text("package main\nfunc main() {}\n", encoding="utf-8")
             result = review_generated_output(root)
         self.assertEqual(result.status, "PASSED")
         self.assertTrue(any("not a comprehensive security audit" in warning for warning in result.warnings))
