@@ -36,6 +36,7 @@ class DependencyWiringReview:
     declared_dependencies: tuple[str, ...]
     missing_declarations: tuple[str, ...]
     warnings: tuple[str, ...]
+    observed_imports: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -43,6 +44,7 @@ class DependencyWiringReview:
             "language": self.language,
             "imports_checked": self.imports_checked,
             "declared_dependencies": list(self.declared_dependencies),
+            "observed_imports": list(self.observed_imports),
             "missing_declarations": list(self.missing_declarations),
             "warnings": list(self.warnings),
             "scope": "static_manifest_import_consistency",
@@ -357,4 +359,4 @@ def review_dependency_wiring(root: Path, language: str) -> DependencyWiringRevie
     requires_real_proof = any("remains unverified" in item.lower() or "mapping is ambiguous" in item.lower() for item in warnings)
     status = "BLOCKED" if missing else "UNVERIFIED" if incomplete or requires_real_proof else "PASSED"
     warnings.append("Static import/manifest consistency does not prove package availability, API compatibility, successful compilation, or runtime behavior.")
-    return DependencyWiringReview(status, language, len(imports), tuple(sorted(declared)), missing, tuple(warnings))
+    return DependencyWiringReview(status, language, len(imports), tuple(sorted(declared)), missing, tuple(warnings), tuple(sorted(imports)))
