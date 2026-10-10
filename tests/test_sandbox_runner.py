@@ -117,6 +117,25 @@ class DockerSandboxTests(unittest.TestCase):
                     ValidationCommand("unit_tests-python", ("python", "-m", "unittest", "discover", "-s", "tests")))
         self.assertEqual(result.status, "PASSED")
 
+    def test_missing_pytest_dependency_blocks_test_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image_check = subprocess.CompletedProcess(["docker", "image", "inspect"], 0, "", "")
+            run_result = subprocess.CompletedProcess(["docker", "run"], 1, "", "ModuleNotFoundError: No module named 'pytest'")
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
+                result = DockerSandboxRunner().run(Path(tmp), "python:3.13",
+                    ValidationCommand("unit_tests-python", ("python", "-m", "pytest", "-q", "tests")))
+        self.assertEqual(result.status, "BLOCKED")
+        self.assertIn("pytest is not installed", result.details)
+
+    def test_pytest_zero_tests_is_not_reported_as_failure_or_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image_check = subprocess.CompletedProcess(["docker", "image", "inspect"], 0, "", "")
+            run_result = subprocess.CompletedProcess(["docker", "run"], 5, "", "no tests ran")
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
+                result = DockerSandboxRunner().run(Path(tmp), "python:3.13",
+                    ValidationCommand("unit_tests-python", ("python", "-m", "pytest", "-q", "tests")))
+        self.assertEqual(result.status, "NOT_RUN")
+
 
 if __name__ == "__main__":
     unittest.main()
