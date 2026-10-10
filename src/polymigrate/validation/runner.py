@@ -57,7 +57,7 @@ def _test_execution_evidence(command: ValidationCommand, stdout: str, stderr: st
         return any(value > 0 for value in counts) if counts else None
     if re.search(r"No tests?(?:\s+files?)?\s+(?:were\s+)?found|Tests:\s*0\s+total|Test Suites:\s*0\s+total", output, re.IGNORECASE):
         return False
-    if re.search(r"Test Suites:\s*[1-9]\d*|Tests:\s*[1-9]\d*\s|\d+\s+passed\b|[1-9]\d*\s+passing|(?m)^PASS\s|Passed!\s+-\s+Failed:\s*\d+,\s*Passed:\s*[1-9]\d*", output, re.IGNORECASE):
+    if re.search(r"Test Suites:\s*[1-9]\d*|Tests:\s*[1-9]\d*\s|\d+\s+passed\b|[1-9]\d*\s+passing|(?m:^PASS\s)|Passed!\s+-\s+Failed:\s*\d+,\s*Passed:\s*[1-9]\d*", output, re.IGNORECASE):
         return True
     return None
 
