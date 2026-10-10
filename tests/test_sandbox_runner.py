@@ -62,6 +62,15 @@ class DockerSandboxTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "environment"):
                 DockerSandboxRunner().run(Path(tmp), "python:3.13", command)
 
+    def test_invalid_image_reference_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ValueError, "image reference"):
+                DockerSandboxRunner().run(Path(tmp), "--privileged", ValidationCommand("check", ("python", "-V")))
+
+    def test_invalid_resource_limit_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "memory/CPU"):
+            DockerSandboxRunner(memory_limit="--privileged")
+
 
 if __name__ == "__main__":
     unittest.main()
