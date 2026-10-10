@@ -1,6 +1,7 @@
 """Language-aware validation command selection and sandbox result aggregation."""
 from __future__ import annotations
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,6 +27,18 @@ class ValidationSuiteResult:
         }
 
 
+
+def _python_test_command(workspace: Path, test_root: Path, gate: str) -> ValidationCommand:
+    test_files = [path for path in test_root.rglob("*.py") if path.is_file()
+                  and (path.name.startswith("test_") or path.name.endswith("_test.py"))]
+    sample = "\n".join(path.read_text(encoding="utf-8", errors="replace")[:20_000] for path in test_files[:20])
+    pytest_style = bool(re.search(r"^def\s+test_\w+|^\s*(?:import\s+pytest|from\s+pytest\s+import|@pytest\b)", sample, re.MULTILINE))
+    relative_root = test_root.relative_to(workspace).as_posix()
+    if pytest_style:
+        return ValidationCommand(f"{gate}-python", ("python", "-m", "pytest", "-q", relative_root))
+    return ValidationCommand(f"{gate}-python", ("python", "-m", "unittest", "discover", "-s", relative_root, "-v"))
+
+
 def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[ValidationCommand], list[str]]:
     commands: list[ValidationCommand] = []
     warnings: list[str] = []
@@ -40,13 +53,13 @@ def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[Valid
                           and (t.name.startswith("test_") or t.name.endswith("_test.py"))
                           and not any(part in {"integration", "e2e"} for part in t.relative_to(tests_dir).parts)]
             if unit_files:
-                commands.append(ValidationCommand("unit_tests-python", ("python", "-m", "unittest", "discover", "-s", unit_root.relative_to(workspace).as_posix(), "-v")))
+                commands.append(_python_test_command(workspace, unit_root, "unit_tests"))
             else:
                 warnings.append("Python unit tests were not run because no unit test files were found.")
             for folder, gate in (("integration", "integration_tests"), ("e2e", "e2e_tests")):
                 test_root = tests_dir / folder
                 if test_root.is_dir() and any(t.is_file() and (t.name.startswith("test_") or t.name.endswith("_test.py")) for t in test_root.rglob("*.py")):
-                    commands.append(ValidationCommand(f"{gate}-python", ("python", "-m", "unittest", "discover", "-s", test_root.relative_to(workspace).as_posix(), "-v")))
+                    commands.append(_python_test_command(workspace, test_root, gate))
         else:
             warnings.append("Python tests were not run because tests/ does not exist.")
     elif language_id == "go":
