@@ -4,10 +4,11 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from polymigrate.ai.protocols import ModelRequest, ModelResponse, ProviderCapabilities
 from polymigrate.ai.registry import ProviderRegistry
-from polymigrate.migration.adapters import InventorySourceAdapter
+from polymigrate.migration.adapters import InventorySourceAdapter, check_target_syntax
 from polymigrate.migration.llm_target import LLMTargetAdapter
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine, SourceProject, SourceUnit
 
@@ -74,6 +75,13 @@ class LLMTranslationTests(unittest.TestCase):
             self.assertEqual(result.status, "GENERATED_UNVERIFIED")
             self.assertTrue((output / "main.go").is_file())
             self.assertTrue(any("Tree-sitter reported syntax errors" in warning for warning in result.warnings))
+
+    def test_syntax_checker_reports_python_errors_and_unavailable_optional_parser(self):
+        self.assertIn("syntax errors", check_target_syntax("python", "def broken(:\n"))
+        with patch("polymigrate.migration.adapters._TREE_SITTER_REGISTRY", None), \
+             patch("polymigrate.migration.adapters._get_tree_sitter_parser", None):
+            warning = check_target_syntax("go", "package main")
+        self.assertIn("syntax was not checked", warning)
 
     def test_source_upload_requires_explicit_opt_in(self):
         provider = TranslationProvider(json.dumps({"content":"package main","assumptions":[],"unsupported_features":[]}))
