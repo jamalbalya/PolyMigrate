@@ -63,3 +63,7 @@
 - [x] T061 Add a static dependency-wiring review for Python, Go, and JavaScript/TypeScript imports versus target manifests; missing declarations block output, while build/API compatibility remains explicitly unverified.
 
 - [x] T062 Run `go vet ./...` in the restricted target-validation container for Go outputs and cover command selection in tests; this adds static analysis but does not replace build, integration, behavior, or security gates.
+
+- [x] T063 Add fail-closed local scanner evidence aggregation and record scanner execution details; keep the comprehensive security-review gate INCOMPLETE until scanner provenance is authenticated and the audit is comprehensive.
+- [x] T064 Add real offline candidate-dependency proof fixtures for Go, Python, JavaScript/TypeScript, and Ruby; public package equivalence and unsupported target languages remain open under T058.
+- [x] T065 Reduce false-positive Go import inventory and avoid heuristic symbol union when Tree-sitter parsing is available; production parser and generator coverage remains open under T023.
