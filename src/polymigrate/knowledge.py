@@ -82,6 +82,17 @@ class MigrationKnowledgeStore:
         if record.verified and not self._has_verified_evidence(record.validation_evidence):
             raise ValueError("verified knowledge requires PASSED evidence for all required validation gates")
         with self._connect() as connection:
+            existing = connection.execute(
+                "SELECT verified, shareable FROM migration_knowledge WHERE record_id = ?",
+                (record.record_id,),
+            ).fetchone()
+            # Trust is monotonic: a later unverified draft must never downgrade
+            # an already verified record or remove its cross-project shareability.
+            if existing is not None:
+                if bool(existing["verified"]) and not record.verified:
+                    raise ValueError("an unverified record cannot overwrite verified knowledge")
+                if bool(existing["shareable"]) and not record.shareable:
+                    raise ValueError("a non-shareable record cannot downgrade shareable knowledge")
             connection.execute("""
                 INSERT INTO migration_knowledge (
                     record_id, problem_fingerprint, source_language, target_language,
