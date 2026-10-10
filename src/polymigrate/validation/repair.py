@@ -174,6 +174,17 @@ class AutonomousRepairLoop:
         original_content = dict(source_files)
         return {path: content for path, content in changes.items() if content != original_content[path]}, rationale
 
+    @staticmethod
+    def _is_test_file(name: str) -> bool:
+        lower = name.lower()
+        return (
+            lower.startswith(("test_", "test-")) or
+            lower.endswith(("_test.py", "_test.go", "_test.rs", "_test.js", "_test.ts",
+                            ".test.js", ".test.jsx", ".test.ts", ".test.tsx",
+                            ".spec.js", ".spec.jsx", ".spec.ts", ".spec.tsx",
+                            "tests.java", "test.java", "tests.cs", "test.cs"))
+        )
+
     def _select_files(self, root: Path, failures: list[Any]) -> list[tuple[str, str]]:
         ignored = {".git", "node_modules", "vendor", "dist", "build", "target", ".build"}
         candidates = []
@@ -183,7 +194,7 @@ class AutonomousRepairLoop:
             relative = path.relative_to(root)
             if any(part in ignored or part.startswith(".") for part in relative.parts[:-1]):
                 continue
-            if path.suffix not in self.extensions:
+            if path.suffix not in self.extensions or self._is_test_file(path.name):
                 continue
             try:
                 resolved = path.resolve(strict=True)
