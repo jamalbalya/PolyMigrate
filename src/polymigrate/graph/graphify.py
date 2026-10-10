@@ -1,6 +1,7 @@
 """Optional Graphify artifact and CLI-query adapter."""
 from __future__ import annotations
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -46,6 +47,14 @@ class GraphifyAdapter:
             return GraphResult("degraded", warning="Graphify JSON root must be an object or array")
         return GraphResult("available", data=data)
 
+    @staticmethod
+    def _safe_environment() -> dict[str, str]:
+        allowed = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "VIRTUAL_ENV", "PYTHONPATH", "XDG_CACHE_HOME", "UV_CACHE_DIR")
+        environment = {key: os.environ[key] for key in allowed if key in os.environ}
+        # Prevent a project query from writing graph questions into the optional local query log.
+        environment["GRAPHIFY_QUERY_LOG_DISABLE"] = "1"
+        return environment
+
     def query(self, project_root: Path, question: str, artifact_path: Path | None = None) -> GraphResult:
         """Query an existing graph using an argument list (never a shell command)."""
         if not question.strip() or len(question) > 4_000:
@@ -67,7 +76,7 @@ class GraphifyAdapter:
         try:
             completed = subprocess.run(
                 command, cwd=str(root), capture_output=True, text=True,
-                timeout=self.timeout, check=False,
+                timeout=self.timeout, check=False, env=self._safe_environment(),
             )
         except subprocess.TimeoutExpired:
             return GraphResult("degraded", data=loaded.data, warning="Graphify query timed out")
