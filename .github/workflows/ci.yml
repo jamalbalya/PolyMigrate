@@ -68,5 +68,6 @@ jobs:
         run: |
           docker pull python:3.12-slim
           docker pull node:22-alpine
+          docker pull golang:1.23-alpine
       - name: Run real sandboxed behavior comparison
         run: python -m unittest discover -s tests -p "test_behavior_comparison_docker.py" -v
