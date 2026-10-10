@@ -15,6 +15,34 @@ class InventoryLimitTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "file count exceeds"):
                 adapter.analyze(root)
 
+    def test_python_ast_extracts_symbols_and_imports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.py").write_text(
+                "import requests\\nfrom project.helpers import parse\\n"
+                "class Client:\\n    pass\\n\\ndef fetch(url):\\n    return url\\n",
+                encoding="utf-8",
+            )
+            project = InventorySourceAdapter("python", (".py",)).analyze(root)
+            unit = project.units[0]
+            self.assertIn("Client", unit.symbols)
+            self.assertIn("fetch", unit.symbols)
+            self.assertIn("requests", unit.dependencies)
+            self.assertIn("project.helpers", unit.dependencies)
+
+    def test_go_structure_hints_include_types_functions_and_imports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.go").write_text(
+                'package main\\nimport "fmt"\\ntype Service struct {}\\nfunc Run() {}\\n',
+                encoding="utf-8",
+            )
+            project = InventorySourceAdapter("go", (".go",)).analyze(root)
+            unit = project.units[0]
+            self.assertIn("Service", unit.symbols)
+            self.assertIn("Run", unit.symbols)
+            self.assertIn("fmt", unit.dependencies)
+
     def test_total_size_limit_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
