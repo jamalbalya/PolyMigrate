@@ -71,6 +71,13 @@ class AgentSkillTests(unittest.TestCase):
             runtime.run("fake","test",{},skill_ids=("missing",))
         self.assertEqual(provider.requests,[])
 
+    def test_packaged_builtin_skills_load_from_installable_module_path(self):
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[1]/"src"/"polymigrate"/"skills"/"builtin"
+        loaded=SkillRegistry().load_directory(root)
+        self.assertGreaterEqual(len(loaded),3)
+        self.assertIn("library-replacement",{skill.id for skill in loaded})
+
 
 if __name__ == "__main__":
     unittest.main()
