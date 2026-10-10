@@ -314,7 +314,7 @@ def _derive_final_status(
     return "SUCCESS"
 
 def _run_deterministic_migration(args, source_language, target_language) -> int:
-    """Run the offline Python-to-Go subset translator and local Go checks."""
+    """Run an offline deterministic Python-to-target subset and local checks."""
     pair = (source_language.id, target_language.id)
     if pair not in {("python", "go"), ("python", "javascript"), ("python", "rust")}:
         raise ValueError(
