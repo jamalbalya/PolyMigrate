@@ -53,7 +53,7 @@ class LLMTranslationTests(unittest.TestCase):
             self.assertEqual(result.generated_files, ("main.go",))
             self.assertTrue((output / "main.go").is_file())
             self.assertEqual(source_file.read_text(encoding="utf-8"), "print('hello')")
-            self.assertTrue(any("not passed build" in warning for warning in result.warnings))
+            self.assertTrue(any("not yet passed build" in warning for warning in result.warnings))
 
     def test_source_upload_requires_explicit_opt_in(self):
         provider = TranslationProvider(json.dumps({"content":"package main","assumptions":[],"unsupported_features":[]}))
