@@ -60,6 +60,7 @@ class CLILibraryResolutionTests(unittest.TestCase):
         self.assertEqual(code,0,stderr.getvalue())
         self.assertEqual(report["dependency_inventory"],["requests"])
         self.assertEqual(report["library_resolution"][0]["strategy"],"custom_implementation")
+        self.assertEqual(report["library_resolution"][0]["implementation_status"],"CUSTOM_IMPLEMENTATION_RECOMMENDED")
         self.assertIn("library_resolution",provider.requests[0].prompt)
         self.assertIn("custom_implementation",provider.requests[0].prompt)
 
