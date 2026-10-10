@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from polymigrate.security.redaction import redact_payload
+
 @dataclass(frozen=True)
 class KnowledgeRecord:
     record_id: str
@@ -79,6 +81,10 @@ class MigrationKnowledgeStore:
             raise ValueError("problem and toolchain fingerprints are required")
         if record.shareable and not record.verified:
             raise ValueError("unverified knowledge cannot be shared across projects")
+        if not isinstance(record.solution, dict):
+            raise ValueError("knowledge solution must be an object")
+        if redact_payload(record.solution) != record.solution:
+            raise ValueError("knowledge solution contains recognizable secret material")
         if record.verified and not self._has_verified_evidence(record.validation_evidence):
             raise ValueError("verified knowledge requires PASSED evidence for all required validation gates")
         with self._connect() as connection:
