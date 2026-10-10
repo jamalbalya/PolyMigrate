@@ -19,7 +19,7 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 90 tests passed in the latest verified workflow on Python 3.11, 3.12, and 3.13.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 105 tests passed in the latest verified workflow on Python 3.11, 3.12, and 3.13.
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
@@ -31,3 +31,6 @@
 - [x] T029 Add restricted Docker validation runner with no network, no shell, resource limits, timeout cleanup, and no automatic image pulls.
 - [x] T030 Add language-aware validation command selection and integrate optional build/test results into the final migration review.
 - [x] T031 Add AI translation budgets for file count, total source context, and total generated output.
+- [x] T032 Add bounded package discovery for npm, crates.io, Maven Central, NuGet, RubyGems, Packagist, PyPI search, and GitHub repository fallback.
+- [x] T033 Add AI-guided library resolution that constrains package choices to discovered metadata or recommends custom reconstruction.
+- [x] T034 Register package search, Graphify inspection, and library resolution as allowlisted agent tools.
