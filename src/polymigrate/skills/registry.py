@@ -25,10 +25,12 @@ class SkillRegistry:
         self._allowed_tools = frozenset(allowed_tools if allowed_tools is not None else DEFAULT_ALLOWED_TOOLS)
 
     def register(self, skill: Skill) -> None:
-        if not skill.id or skill.id.strip().lower() != skill.id:
+        if not isinstance(skill.id, str) or not skill.id.strip() or skill.id.strip().lower() != skill.id:
             raise ValueError("Skill id must be non-empty lowercase canonical text")
-        if not skill.version.strip() or not skill.description.strip():
+        if not isinstance(skill.version, str) or not skill.version.strip() or not isinstance(skill.description, str) or not skill.description.strip():
             raise ValueError("Skill version and description are required")
+        if not isinstance(skill.instructions, str):
+            raise ValueError("Skill instructions must be text")
         if len(skill.id) > 100 or len(skill.version) > 50 or len(skill.description) > 500:
             raise ValueError("Skill metadata exceeds the configured size limits")
         if len(skill.instructions) > 20_000:
@@ -65,6 +67,9 @@ class SkillRegistry:
                 instructions = instructions_path.read_text(encoding="utf-8")
                 if not isinstance(metadata, dict):
                     raise ValueError("metadata root must be an object")
+                for key in ("id", "version", "description"):
+                    if not isinstance(metadata.get(key), str):
+                        raise ValueError(f"{key} must be a string")
                 for key in ("input_contract", "output_contract", "allowed_tools"):
                     value = metadata.get(key, [])
                     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
