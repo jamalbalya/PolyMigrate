@@ -71,7 +71,7 @@ import (
 
     def test_python_multiple_imports_on_one_line_are_all_detected(self):
         project=SourceProject(Path("."),"python",(
-            SourceUnit("main.py","import json, requests, pathlib\\n",""),
+            SourceUnit("main.py","import json, requests, pathlib\n",""),
         ))
         evidence,_=DependencyExtractor().extract(project)
         self.assertEqual([item.package_name for item in evidence],["requests"])
