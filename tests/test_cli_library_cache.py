@@ -73,6 +73,10 @@ class CLILibraryCacheTests(unittest.TestCase):
         self.assertEqual(reports[0]["library_resolution"][0]["cache_status"],"UNVERIFIED_CACHED")
         self.assertEqual(reports[1]["library_resolution"][0]["cache_status"],"UNVERIFIED_SAME_PROJECT_CACHE")
         self.assertEqual(reports[2]["library_resolution"][0]["cache_status"],"UNVERIFIED_CACHED")
+        # The same library gap in a different project must not reuse or overwrite the first
+        # project's draft record; record IDs are project-scoped even when problem fingerprints match.
+        self.assertNotEqual(reports[0]["library_resolution"][0]["knowledge_record_id"],
+                            reports[2]["library_resolution"][0]["knowledge_record_id"])
         self.assertTrue(any("package metadata may be stale" in warning for warning in reports[1]["warnings"]))
 
 
