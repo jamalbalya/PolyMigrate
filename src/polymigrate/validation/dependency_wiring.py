@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import re
 import sys
 import tomllib
@@ -52,7 +53,7 @@ def _files(root: Path, suffixes: set[str]) -> tuple[list[Path], list[str]]:
     found: list[Path] = []
     warnings: list[str] = []
     total = 0
-    for current, directories, filenames in __import__("os").walk(root, topdown=True, followlinks=False):
+    for current, directories, filenames in os.walk(root, topdown=True, followlinks=False):
         current_path = Path(current)
         directories[:] = sorted(
             name for name in directories
@@ -220,7 +221,7 @@ def review_dependency_wiring(root: Path, language: str) -> DependencyWiringRevie
             "UNVERIFIED", language, 0, (), (),
             (f"No dependency wiring analyzer is configured for {language}.",),
         )
-    missing = tuple(sorted(item for item in warnings if item.startswith("Missing ")))
+    missing = tuple(sorted(item.split(": ", 1)[1] for item in warnings if item.startswith("Missing ")))
     incomplete = any("could not" in item.lower() or "stopped at" in item.lower() or "could not read" in item.lower() for item in warnings)
     status = "BLOCKED" if missing else "UNVERIFIED" if incomplete else "PASSED"
     warnings.append("Static import/manifest consistency does not prove package availability, API compatibility, successful compilation, or runtime behavior.")
