@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/+-]{0,127}$")
 _SEVERITY = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
 
 
@@ -50,8 +51,14 @@ def evaluate_security_evidence(
     any additional message/path fields are deliberately omitted from the
     returned summary to avoid accidentally echoing secrets from scanner output.
     """
-    required = tuple(sorted({item.strip() for item in required_scanners if item.strip()}))
     errors: list[str] = []
+    required_values: set[str] = set()
+    for index, item in enumerate(required_scanners):
+        if not isinstance(item, str) or not item.strip() or not _IDENTIFIER.fullmatch(item.strip()):
+            errors.append(f"Required scanner entry {index} is malformed.")
+            continue
+        required_values.add(item.strip())
+    required = tuple(sorted(required_values))
     accepted: set[str] = set()
     missing = set(required)
     findings_out: list[dict[str, Any]] = []
@@ -60,11 +67,17 @@ def evaluate_security_evidence(
 
     seen: set[str] = set()
     for index, item in enumerate(evidence):
+        if not isinstance(item, Mapping):
+            errors.append(f"Evidence item {index} is not an object.")
+            continue
         scanner = item.get("scanner_id")
         if not isinstance(scanner, str) or not scanner.strip():
             errors.append(f"Evidence item {index} has no scanner_id.")
             continue
         scanner = scanner.strip()
+        if not _IDENTIFIER.fullmatch(scanner):
+            errors.append(f"Evidence item {index} has a malformed scanner_id.")
+            continue
         if scanner not in required:
             errors.append(f"Evidence from unconfigured scanner '{scanner}' was ignored.")
             continue
@@ -79,7 +92,8 @@ def evaluate_security_evidence(
         if item.get("complete") is not True:
             errors.append(f"Scanner '{scanner}' did not report a complete scan.")
             continue
-        if item.get("exit_code") != 0:
+        exit_code = item.get("exit_code")
+        if isinstance(exit_code, bool) or not isinstance(exit_code, int) or exit_code != 0:
             errors.append(f"Scanner '{scanner}' did not exit successfully.")
             continue
         digest = item.get("report_sha256")
@@ -101,7 +115,7 @@ def evaluate_security_evidence(
             if not isinstance(severity, str) or severity.upper() not in _SEVERITY:
                 malformed = True
                 break
-            if not isinstance(rule_id, str) or not rule_id.strip():
+            if not isinstance(rule_id, str) or not rule_id.strip() or not _IDENTIFIER.fullmatch(rule_id.strip()):
                 malformed = True
                 break
             scanner_findings.append({"scanner_id": scanner, "severity": severity.upper(), "rule_id": rule_id.strip()})
