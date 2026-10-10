@@ -24,7 +24,7 @@ class ValidationSuiteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = validate_generated_project(Path(tmp), "python", None)
         self.assertTrue(all(value == "NOT_RUN" for value in result.gates.values()))
-        self.assertIn("not configured", result.warnings[0])
+        self.assertIn("No local Docker validation image configured", result.warnings[0])
 
     def test_python_build_and_unit_tests_run_in_order(self):
         with tempfile.TemporaryDirectory() as tmp:
