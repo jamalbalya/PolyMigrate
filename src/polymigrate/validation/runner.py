@@ -66,6 +66,9 @@ class DockerSandboxRunner:
             raise ValueError("Validation command timeout must be positive")
         if any(not isinstance(arg, str) or not arg or "\x00" in arg for arg in command.argv):
             raise ValueError("Validation argv must contain non-empty strings without NUL characters")
+        for key, value in command.environment:
+            if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", key) or "\x00" in value or "\n" in value:
+                raise ValueError("Validation environment contains an invalid key or value")
         executable_name = Path(command.argv[0]).name.lower()
         if executable_name in _SHELLS:
             raise ValueError("Shell commands are not permitted; provide an explicit executable and arguments")
