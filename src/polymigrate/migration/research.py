@@ -27,11 +27,13 @@ class LibraryResolutionWorkflow:
 
     def resolve(self, provider_id: str, *, source_library: str, target_language: str,
                 required_capabilities: list[str], max_queries: int = 3, results_per_query: int = 5) -> LibraryResolutionResult:
-        if not source_library.strip() or not target_language.strip():
-            raise ValueError("source_library and target_language are required")
-        if not 1 <= max_queries <= 5 or not 1 <= results_per_query <= 20:
-            raise ValueError("search budgets are outside allowed limits")
-        if len(required_capabilities) > 50 or any(not isinstance(item, str) or not item.strip() or len(item) > 200 for item in required_capabilities):
+        if not isinstance(source_library, str) or not source_library.strip() or len(source_library) > 200:
+            raise ValueError("source_library must be a non-empty string of at most 200 characters")
+        if not isinstance(target_language, str) or not target_language.strip() or len(target_language) > 100:
+            raise ValueError("target_language must be a non-empty string of at most 100 characters")
+        if not 1 <= max_queries <= 3 or not 1 <= results_per_query <= 10:
+            raise ValueError("search budgets exceed the allowed limit (3 queries, 10 results each)")
+        if not isinstance(required_capabilities, list) or len(required_capabilities) > 50 or any(not isinstance(item, str) or not item.strip() or len(item) > 200 for item in required_capabilities):
             raise ValueError("required_capabilities must contain at most 50 non-empty strings of at most 200 characters")
         planning_prompt = (
             "Create concise search queries for public package registries to find target-language libraries "
