@@ -18,7 +18,9 @@ class LLMTargetAdapter:
 
     def __init__(self, language_id: str, source_language: str, target_extension: str,
                  providers: ProviderRegistry, provider_id: str, *, allow_source_upload: bool = False,
-                 max_source_chars: int = 100_000, target_extensions: tuple[str, ...] = (),
+                 max_source_chars: int = 100_000, max_files_per_run: int = 100,
+                 max_total_source_chars: int = 1_000_000, max_total_output_chars: int = 10_000_000,
+                 target_extensions: tuple[str, ...] = (),
                  knowledge_store: MigrationKnowledgeStore | None = None,
                  project_scope: str | None = None, cache_drafts: bool = False) -> None:
         if not language_id or language_id.strip().lower() != language_id:
@@ -27,8 +29,8 @@ class LLMTargetAdapter:
             raise ValueError("source_language must be canonical lowercase text")
         if not target_extension.startswith(".") or "/" in target_extension or "\\" in target_extension or ".." in target_extension:
             raise ValueError("target_extension must be a simple file suffix")
-        if max_source_chars < 1:
-            raise ValueError("max_source_chars must be positive")
+        if min(max_source_chars, max_files_per_run, max_total_source_chars, max_total_output_chars) < 1:
+            raise ValueError("translation resource limits must be positive")
         normalized_extensions = tuple(ext.lower() for ext in (target_extensions or (target_extension,)))
         if any(not ext.startswith(".") or "/" in ext or "\\" in ext or ".." in ext for ext in normalized_extensions):
             raise ValueError("target_extensions must contain only simple file suffixes")
@@ -44,6 +46,9 @@ class LLMTargetAdapter:
         self.provider_id = provider_id
         self.allow_source_upload = allow_source_upload
         self.max_source_chars = max_source_chars
+        self.max_files_per_run = max_files_per_run
+        self.max_total_source_chars = max_total_source_chars
+        self.max_total_output_chars = max_total_output_chars
         self.knowledge_store = knowledge_store
         self.project_scope = project_scope
         self.cache_drafts = cache_drafts
@@ -73,6 +78,11 @@ class LLMTargetAdapter:
         graph_warning = context.get("graphify_warning")
         if isinstance(graph_warning, str) and graph_warning:
             self.warnings.append(f"Graphify context warning: {graph_warning}")
+        if len(project.units) > self.max_files_per_run:
+            raise ValueError(f"Source project exceeds per-run file limit ({self.max_files_per_run})")
+        total_source_chars = sum(len(unit.source_text) for unit in project.units)
+        if total_source_chars > self.max_total_source_chars:
+            raise ValueError(f"Source project exceeds total translation context limit ({self.max_total_source_chars} characters)")
         safe_context = redact_payload(context)
         provider = self.providers.get(self.provider_id)
         model_id = getattr(provider, "model_id", "unknown")
@@ -82,6 +92,7 @@ class LLMTargetAdapter:
         })
         context_fingerprint = fingerprint_payload(safe_context)
         artifacts: list[GeneratedArtifact] = []
+        total_output_chars = 0
         for unit in project.units:
             if len(unit.source_text) > self.max_source_chars:
                 raise ValueError(f"Source file exceeds translation context limit: {unit.relative_path}")
@@ -169,6 +180,9 @@ class LLMTargetAdapter:
                 self.warnings.append(f"{unit.relative_path}: assumptions require verification: {'; '.join(assumptions[:5])}")
             if unsupported:
                 self.warnings.append(f"{unit.relative_path}: unsupported features reported: {'; '.join(unsupported[:5])}")
+            total_output_chars += len(content)
+            if total_output_chars > self.max_total_output_chars:
+                raise ValueError(f"Generated project exceeds total output limit ({self.max_total_output_chars} characters)")
             target_path = PurePosixPath(unit.relative_path).with_suffix(selected_suffix).as_posix()
             artifacts.append(GeneratedArtifact(target_path, content))
         return artifacts
