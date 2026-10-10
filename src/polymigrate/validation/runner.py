@@ -173,5 +173,13 @@ class DockerSandboxRunner:
             if evidence is True:
                 detail = "Command completed successfully and reported executed tests"
             return result("PASSED", 0, completed.stdout, completed.stderr, detail)
+        test_command = command.command_id.startswith(("unit_tests", "integration_tests", "e2e_tests"))
+        combined_output = (completed.stdout or "") + "\\n" + (completed.stderr or "")
+        if test_command and "No module named pytest" in combined_output:
+            return result("BLOCKED", completed.returncode, completed.stdout, completed.stderr,
+                          "pytest is not installed in the validation image; no package installation was attempted")
+        if test_command and completed.returncode == 5 and re.search(r"no tests ran|no tests found", combined_output, re.IGNORECASE):
+            return result("NOT_RUN", completed.returncode, completed.stdout, completed.stderr,
+                          "pytest did not discover any tests")
         return result("FAILED", completed.returncode, completed.stdout, completed.stderr,
                       "Command exited with a non-zero status")
