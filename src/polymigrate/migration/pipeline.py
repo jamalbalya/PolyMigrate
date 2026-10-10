@@ -121,9 +121,11 @@ class MigrationEngine:
             if len(artifact.content.encode("utf-8")) > self.max_artifact_bytes:
                 raise ValueError(f"Target artifact exceeds size limit: {artifact.relative_path}")
         output.mkdir(parents=True, exist_ok=True)
-        written: list[str] = []
         artifact_paths: set[str] = set()
+        validated_artifacts: list[tuple[str, Path, str]] = []
         root_resolved = output.resolve(strict=True)
+        # Preflight every path before writing any file, so a bad later artifact
+        # cannot leave a partially generated project behind.
         for artifact in artifacts:
             relative = PurePosixPath(artifact.relative_path)
             if (relative.is_absolute() or ".." in relative.parts or not relative.parts
@@ -135,7 +137,6 @@ class MigrationEngine:
                 raise ValueError(f"Target adapter returned duplicate output path: {normalized}")
             artifact_paths.add(normalized)
             destination = output.joinpath(*relative.parts)
-            # Reject existing symlink components and any path that resolves outside output.
             cursor = output
             for part in relative.parts[:-1]:
                 cursor = cursor / part
@@ -144,10 +145,13 @@ class MigrationEngine:
             resolved_destination = destination.resolve(strict=False)
             if root_resolved not in resolved_destination.parents:
                 raise ValueError(f"Output path escapes output directory: {normalized}")
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            if destination.exists():
+            if destination.exists() or destination.is_symlink():
                 raise ValueError(f"Target adapter would overwrite an existing file: {normalized}")
-            destination.write_text(artifact.content, encoding="utf-8")
+            validated_artifacts.append((normalized, destination, artifact.content))
+        written: list[str] = []
+        for normalized, destination, artifact_content in validated_artifacts:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(artifact_content, encoding="utf-8")
             written.append(normalized)
         return MigrationExecutionResult(
             status="GENERATED_UNVERIFIED", source_language=source_language,
