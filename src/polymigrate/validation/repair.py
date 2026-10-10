@@ -77,8 +77,8 @@ class AutonomousRepairLoop:
                 return RepairLoopResult("UNRESOLVED", validation, tuple(attempts), tuple(warnings))
             if not failures:
                 status = "NO_FAILURES_DETECTED" if not attempts else "REPAIRED_AND_RETESTED"
-                if any(value == "NOT_RUN" for value in validation.gates.values()):
-                    warnings.append("Some validation gates remain NOT_RUN; no-failure status is not proof of complete correctness.")
+                if any(value in {"NOT_RUN", "UNVERIFIED"} for value in validation.gates.values()):
+                    warnings.append("Some validation gates remain NOT_RUN or UNVERIFIED; no-failure status is not proof of complete correctness.")
                 return RepairLoopResult(status, validation, tuple(attempts), tuple(warnings))
             try:
                 changes, rationale = self._request_changes(root, validation, failures, context or {})
