@@ -121,7 +121,7 @@ class SecurityEvidenceGateTests(unittest.TestCase):
         item = evidence()
         item.update({
             "scanner_binary_sha256": "b" * 64,
-            "runner_id": "polymigrate_trusted_scanner_runner_v1",
+            "runner_id": "polymigrate_local_scanner_runner_v1",
             "tool_exit_code": 0,
         })
         result = evaluate_security_evidence(
