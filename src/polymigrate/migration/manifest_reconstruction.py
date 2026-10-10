@@ -135,5 +135,5 @@ def reconstruct_target_manifests(
     if not artifacts:
         warnings.append("No target manifest files passed validation; migration output remains without reconstructed manifests.")
     else:
-        warnings.append("Reconstructed target manifests are unverified; dependencies are not installed and build hooks are not executed.")
+        warnings.append("Reconstructed target manifests are unverified; dependencies are not installed automatically, and configured validation may execute build tooling inside the restricted sandbox.")
     return artifacts, warnings
