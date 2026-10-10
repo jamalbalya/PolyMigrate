@@ -137,7 +137,7 @@ class DependencyGapPlanner:
             + json.dumps({
                 "source_language": project.language_id, "target_language": target_language,
                 "imports": [item.__dict__ for item in evidence],
-                "graph_context": (graph_context or "")[:4_000],
+                "graph_context": redact_text(graph_context or "")[:4_000],
             }, sort_keys=True, ensure_ascii=False)
         )
         response = self.providers.generate(
