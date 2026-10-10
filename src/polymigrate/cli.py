@@ -137,6 +137,8 @@ def _candidate_dependency_integration_status(
             return re.sub(r"[-_.]+", "-", value).casefold()
         if target_language == "ruby":
             return re.sub(r"[^a-z0-9]", "", value.casefold())
+        if target_language in {"go", "javascript", "typescript"}:
+            return value
         return value.casefold()
 
     for candidate in candidates:
