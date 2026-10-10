@@ -40,7 +40,10 @@ def _request_json(url: str, headers: dict[str, str], payload: dict[str, Any], ti
     request = urllib.request.Request(url, data=body, headers={**headers, "Content-Type": "application/json"}, method="POST")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = json.loads(response.read().decode("utf-8"))
+            response_body = response.read(2_000_001)
+        if len(response_body) > 2_000_000:
+            raise ProviderRequestError("LLM provider response exceeded the 2 MB safety limit")
+        data = json.loads(response_body.decode("utf-8"))
     except urllib.error.HTTPError as exc:
         raise ProviderRequestError(f"LLM provider returned HTTP {exc.code}") from None
     except urllib.error.URLError as exc:
