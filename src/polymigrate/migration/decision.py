@@ -33,9 +33,19 @@ class LibraryDecisionEngine:
 
     def decide(self, provider_id: str, *, source_library: str, target_language: str,
                required_capabilities: list[str], candidates: list[LibraryCandidate]) -> LibraryDecision:
-        if not source_library.strip() or not target_language.strip():
-            raise ValueError("source_library and target_language are required")
+        if not isinstance(source_library, str) or not source_library.strip() or len(source_library) > 200:
+            raise ValueError("source_library must be a non-empty string of at most 200 characters")
+        if not isinstance(target_language, str) or not target_language.strip() or len(target_language) > 100:
+            raise ValueError("target_language must be a non-empty string of at most 100 characters")
+        if not isinstance(required_capabilities, list) or len(required_capabilities) > 50 or any(
+            not isinstance(item, str) or not item.strip() or len(item) > 200 for item in required_capabilities
+        ):
+            raise ValueError("required_capabilities must contain at most 50 strings of at most 200 characters")
+        if len(candidates) > 30:
+            raise ValueError("candidate count exceeds the 30-candidate decision budget")
         candidate_names = [candidate.name for candidate in candidates]
+        if any(not isinstance(name, str) or not name.strip() or len(name) > 200 for name in candidate_names):
+            raise ValueError("candidate names must be non-empty strings of at most 200 characters")
         if len(set(candidate_names)) != len(candidate_names):
             raise ValueError("candidate names must be unique")
         evidence = [{
@@ -43,9 +53,9 @@ class LibraryDecisionEngine:
             "capability_coverage": c.capability_coverage, "compatibility": c.compatibility,
             "maintenance_score": c.maintenance_score, "security_score": c.security_score,
             "implementation_cost": c.implementation_cost,
-            "evidence": [{"kind": e.kind, "description": e.description, "verified": e.verified}
-                         for e in c.evidence],
-            "notes": c.notes,
+            "evidence": [{"kind": e.kind[:100], "description": e.description[:1000], "verified": e.verified}
+                         for e in c.evidence[:10]],
+            "notes": c.notes[:1000],
         } for c in candidates]
         safe_evidence = redact_payload(evidence)
         prompt = (
@@ -83,14 +93,16 @@ class LibraryDecisionEngine:
         validation_tests = raw.get("validation_tests")
         if decision_type not in {"candidate", "custom_implementation", "architectural_alternative"}:
             raise LibraryDecisionError("Unsupported decision_type")
-        if not isinstance(rationale, str) or not rationale.strip():
-            raise LibraryDecisionError("Decision rationale is required")
-        if not isinstance(assumptions, list) or not all(isinstance(x, str) for x in assumptions):
-            raise LibraryDecisionError("assumptions must be a list of strings")
-        if not isinstance(validation_tests, list) or not validation_tests or not all(
-            isinstance(x, str) and x.strip() for x in validation_tests
+        if not isinstance(rationale, str) or not rationale.strip() or len(rationale) > 2_000:
+            raise LibraryDecisionError("Decision rationale must be non-empty and at most 2000 characters")
+        if not isinstance(assumptions, list) or len(assumptions) > 20 or not all(
+            isinstance(x, str) and len(x) <= 500 for x in assumptions
         ):
-            raise LibraryDecisionError("validation_tests must be a non-empty list of strings")
+            raise LibraryDecisionError("assumptions must contain at most 20 strings of at most 500 characters")
+        if not isinstance(validation_tests, list) or not validation_tests or len(validation_tests) > 20 or not all(
+            isinstance(x, str) and x.strip() and len(x) <= 500 for x in validation_tests
+        ):
+            raise LibraryDecisionError("validation_tests must contain 1-20 non-empty strings of at most 500 characters")
         if decision_type == "candidate":
             if not isinstance(candidate_name, str) or candidate_name not in candidate_names:
                 raise LibraryDecisionError("Model selected a candidate not present in supplied evidence")
