@@ -9,7 +9,7 @@ from polymigrate.ai.protocols import ModelRequest
 
 class FakeHTTPResponse:
     def __init__(self, payload):
-        self.payload = json.dumps(payload).encode("utf-8")
+        self.payload = payload if isinstance(payload, bytes) else json.dumps(payload).encode("utf-8")
     def __enter__(self): return self
     def __exit__(self, *args): return False
     def read(self, limit=-1): return self.payload if limit < 0 else self.payload[:limit]
