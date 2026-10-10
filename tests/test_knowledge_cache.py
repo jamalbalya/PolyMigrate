@@ -140,6 +140,22 @@ class KnowledgeCacheTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "all required validation gates"):
                 store.save(record)
 
+
+    def test_verified_knowledge_requires_candidate_specific_integration_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
+            gates = ("target_build", "unit_tests", "integration_tests", "e2e_tests",
+                     "behavior_comparison", "security_review", "dependency_wiring")
+            record = KnowledgeRecord(
+                record_id="missing-candidate-integration-proof", problem_fingerprint="problem",
+                source_language="python", target_language="go", toolchain_fingerprint="toolchain",
+                project_scope="project-a", solution={"kind": "library_resolution"},
+                validation_evidence=tuple({"gate": gate, "status": "PASSED"} for gate in gates),
+                verified=True, shareable=True,
+            )
+            with self.assertRaisesRegex(ValueError, "all required validation gates"):
+                store.save(record)
+
     def test_verified_shareable_knowledge_cannot_be_downgraded_by_draft(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
