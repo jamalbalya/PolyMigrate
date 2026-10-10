@@ -46,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     migrate.add_argument("--allow-source-upload", action="store_true",
                          help="Explicitly allow source code to be sent to the configured external AI provider")
     migrate.add_argument("--context-json", type=Path, help="Optional JSON object with non-secret migration constraints")
+    migrate.add_argument("--behavior-spec", type=Path, help="JSON behavior contract for isolated source-vs-target output comparison")
     return parser
 
 
