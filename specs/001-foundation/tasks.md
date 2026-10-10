@@ -67,3 +67,6 @@
 - [x] T063 Add fail-closed local scanner evidence aggregation and record scanner execution details; keep the comprehensive security-review gate INCOMPLETE until scanner provenance is authenticated and the audit is comprehensive.
 - [x] T064 Add real offline candidate-dependency proof fixtures for Go, Python, JavaScript/TypeScript, and Ruby; public package equivalence and unsupported target languages remain open under T058.
 - [x] T065 Reduce false-positive Go import inventory and avoid heuristic symbol union when Tree-sitter parsing is available; production parser and generator coverage remains open under T023.
+
+- [x] T066 Use bounded offline Tree-sitter import nodes for available Go/JavaScript/TypeScript/Rust/Java/Kotlin/C#/C/C++/Ruby/PHP/Swift grammars to reduce comment/string false positives; heuristic fallback and production target-generator coverage remain open under T023.
+- [x] T067 Add mocked HTTP contract regressions for OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini generateContent request/response shapes; live credential verification remains open under T022.
