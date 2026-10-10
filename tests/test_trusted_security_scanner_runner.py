@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from polymigrate.security.scanner_runner import run_local_security_scanners
+from polymigrate.security.scanner_runner import _parse_report, run_local_security_scanners
 
 
 class LocalScannerRunnerTests(unittest.TestCase):
@@ -70,6 +70,15 @@ class LocalScannerRunnerTests(unittest.TestCase):
         self.assertFalse(result.scanner_provenance_verified)
         self.assertTrue(result.scanner_execution_recorded)
         self.assertEqual(result.findings[0]["rule_id"], "B307")
+
+
+    def test_missing_report_fields_cannot_be_interpreted_as_clean_scan(self):
+        self.assertEqual(_parse_report("semgrep", {"results": []}), ([], False))
+        self.assertEqual(_parse_report("bandit", {"results": []}), ([], False))
+        self.assertEqual(_parse_report("gosec", {"Errors": [], "GolangErrors": []}), ([], False))
+        self.assertEqual(_parse_report("gosec", {
+            "Errors": [], "GolangErrors": [], "Issues": []
+        }), ([], True))
 
     def test_untrusted_or_malformed_scanner_output_cannot_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
