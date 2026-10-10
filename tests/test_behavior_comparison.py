@@ -2,9 +2,15 @@
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
-from polymigrate.validation.behavior import compare_behavior
+from polymigrate.ai.protocols import ModelRequest, ModelResponse, ProviderCapabilities
+from polymigrate.ai.registry import ProviderRegistry
+from polymigrate.cli import main
+from polymigrate.validation.behavior import BehaviorComparisonResult, compare_behavior
 from polymigrate.validation.runner import SandboxExecution
 
 
@@ -72,6 +78,43 @@ class BehaviorComparisonTests(unittest.TestCase):
             spec.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "non-allowlisted executable"):
                 compare_behavior(spec, source, target, "python:3.12-slim", "golang:1.23", FakeBehaviorRunner())
+
+    def test_cli_records_behavior_comparison_gate(self):
+        class TranslationProvider:
+            provider_id = "fixture"
+            model_id = "fixture-model"
+            def get_capabilities(self):
+                return ProviderCapabilities()
+            def generate(self, request: ModelRequest):
+                return ModelResponse(json.dumps({
+                    "content": "package main\\nfunc main() {}\\n",
+                    "assumptions": [], "unsupported_features": [],
+                }), self.provider_id, self.model_id)
+
+        providers = ProviderRegistry()
+        providers.register(TranslationProvider())
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.py").write_text("print(42)\\n", encoding="utf-8")
+            spec = root / "behavior.json"
+            spec.write_text("{}", encoding="utf-8")
+            output = root / "out"
+            stdout, stderr = StringIO(), StringIO()
+            behavior = BehaviorComparisonResult("PASSED", (), (), 1)
+            with patch("polymigrate.cli.build_provider_registry", return_value=(providers, ())), \\
+                 patch("polymigrate.cli.compare_behavior", return_value=behavior), \\
+                 redirect_stdout(stdout), redirect_stderr(stderr):
+                code = main([
+                    "migrate", "--source", str(source), "--from", "python", "--to", "go",
+                    "--output", str(output), "--provider", "fixture", "--allow-source-upload",
+                    "--behavior-spec", str(spec),
+                ])
+            self.assertEqual(code, 0, stderr.getvalue())
+            review = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))
+            self.assertEqual(review["behavior_comparison"]["status"], "PASSED")
+            self.assertEqual(review["validation_gates"]["behavior_comparison"], "PASSED")
 
     def test_missing_images_block_comparison_without_running_code(self):
         with tempfile.TemporaryDirectory() as tmp:
