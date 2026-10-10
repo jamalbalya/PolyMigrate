@@ -2,7 +2,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from polymigrate.migration.adapters import InventorySourceAdapter
+from polymigrate.migration.adapters import InventorySourceAdapter, _tree_sitter_imports
 
 
 class InventoryLimitTests(unittest.TestCase):
@@ -61,6 +61,39 @@ class InventoryLimitTests(unittest.TestCase):
             self.assertIn("Run", unit.symbols)
             self.assertIn("fmt", unit.dependencies)
 
+
+    def test_tree_sitter_go_imports_ignore_comments_and_raw_string_literals(self):
+        source = '''package main
+// import "fake/comment"
+import (
+    "fmt"
+    "example.com/real"
+)
+var text = `import "fake/raw"`
+'''
+        imports = _tree_sitter_imports("go", source)
+        if imports is None:
+            self.skipTest("offline Go Tree-sitter grammar is unavailable")
+        self.assertIn("fmt", imports)
+        self.assertIn("example.com/real", imports)
+        self.assertNotIn("fake/comment", imports)
+        self.assertNotIn("fake/raw", imports)
+
+    def test_tree_sitter_javascript_imports_ignore_comments_and_strings(self):
+        source = '''// import fake from "fake/comment";
+const text = 'require("fake/string")';
+import { value } from "real-package";
+export { value } from "other-package";
+const cjs = require("real-cjs");
+'''
+        imports = _tree_sitter_imports("javascript", source)
+        if imports is None:
+            self.skipTest("offline JavaScript Tree-sitter grammar is unavailable")
+        self.assertIn("real-package", imports)
+        self.assertIn("other-package", imports)
+        self.assertIn("real-cjs", imports)
+        self.assertNotIn("fake/comment", imports)
+        self.assertNotIn("fake/string", imports)
 
     def test_go_import_inventory_ignores_comments_and_string_literals(self):
         with tempfile.TemporaryDirectory() as tmp:
