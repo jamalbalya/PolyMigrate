@@ -82,7 +82,7 @@ class KnowledgeCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
             gates = ("target_build", "unit_tests", "integration_tests", "e2e_tests",
-                     "behavior_comparison", "security_review")
+                     "behavior_comparison", "security_review", "dependency_wiring")
             verified = KnowledgeRecord(
                 record_id="library-shared-record", problem_fingerprint="problem",
                 source_language="python", target_language="go", toolchain_fingerprint="toolchain",
