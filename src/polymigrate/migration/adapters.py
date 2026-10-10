@@ -118,20 +118,20 @@ class InventorySourceAdapter:
                         warnings.append(f"Skipped oversized source file: {relative.as_posix()}")
                         continue
                     text = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeError):
-                warnings.append(f"Skipped unreadable or non-UTF-8 source file: {relative.as_posix()}")
-                continue
-            symbols, dependencies, structure_warning = _extract_structure(self.language_id, text)
-            if structure_warning:
-                warnings.append(f"{relative.as_posix()}: {structure_warning}")
-            units.append(SourceUnit(
-                relative_path=relative.as_posix(),
-                source_text=text,
-                content_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                symbols=symbols,
-                dependencies=dependencies,
-            ))
-            total_bytes += size
+                except (OSError, UnicodeError):
+                    warnings.append(f"Skipped unreadable or non-UTF-8 source file: {relative.as_posix()}")
+                    continue
+                symbols, dependencies, structure_warning = _extract_structure(self.language_id, text)
+                if structure_warning:
+                    warnings.append(f"{relative.as_posix()}: {structure_warning}")
+                units.append(SourceUnit(
+                    relative_path=relative.as_posix(),
+                    source_text=text,
+                    content_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                    symbols=symbols,
+                    dependencies=dependencies,
+                ))
+                total_bytes += size
         if not units:
             raise ValueError(f"No readable {self.language_id} source files found in {root}")
         warnings.append("Inventory mode detects files by extension; it does not fully parse semantics, frameworks, or dependencies.")
