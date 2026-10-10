@@ -30,6 +30,15 @@ class InventoryLimitTests(unittest.TestCase):
             self.assertIn("requests", unit.dependencies)
             self.assertIn("project.helpers", unit.dependencies)
 
+    def test_python_parse_failure_keeps_source_with_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "broken.py").write_text("def broken(:\\n", encoding="utf-8")
+            project = InventorySourceAdapter("python", (".py",)).analyze(root)
+            self.assertEqual(len(project.units), 1)
+            self.assertEqual(project.units[0].symbols, ())
+            self.assertTrue(any("could not be parsed safely" in warning for warning in project.metadata["warnings"]))
+
     def test_go_structure_hints_include_types_functions_and_imports(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
