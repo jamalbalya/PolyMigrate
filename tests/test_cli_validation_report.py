@@ -95,6 +95,8 @@ class ValidationReportCLITests(unittest.TestCase):
         self.assertEqual(report["validation_gates"]["target_build"],"FAILED")
         self.assertIn(report["static_security_scan"]["status"], {"PASSED", "REVIEW_REQUIRED"})
         self.assertTrue(report["static_security_scan"]["not_a_comprehensive_audit"])
+        self.assertIn("dependency_wiring_review", report)
+        self.assertTrue(report["dependency_wiring_review"]["does_not_prove_build_or_api_compatibility"])
         self.assertEqual(report["validation_gates"]["security_review"], "NOT_RUN")
 
 
