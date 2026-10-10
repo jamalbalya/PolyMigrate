@@ -52,8 +52,7 @@ class DockerSandboxTests(unittest.TestCase):
             timeout = subprocess.TimeoutExpired("docker run", 1, output=b"password=secret")
             cleanup_kill = subprocess.CompletedProcess(["docker", "kill"], 0, "", "")
             cleanup_remove = subprocess.CompletedProcess(["docker", "rm"], 0, "", "")
-            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), \
-                 patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, timeout, cleanup_kill, cleanup_remove]) as run:
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, timeout, cleanup_kill, cleanup_remove]) as run:
                 result = DockerSandboxRunner(max_output_chars=20).run(
                     Path(tmp), "python:3.13", ValidationCommand("tests", ("python", "-m", "unittest"), 1))
             self.assertEqual(result.status, "TIMEOUT")
@@ -81,8 +80,7 @@ class DockerSandboxTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result_from_inspect = subprocess.CompletedProcess(
                 ["docker", "image", "inspect"], 1, "", "Cannot connect to the Docker daemon")
-            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), \
-                 patch("polymigrate.validation.runner.subprocess.run", return_value=result_from_inspect):
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), patch("polymigrate.validation.runner.subprocess.run", return_value=result_from_inspect):
                 result = DockerSandboxRunner().run(Path(tmp), "python:3.13", ValidationCommand("compile", ("python", "-V")))
         self.assertEqual(result.status, "BLOCKED")
         self.assertIn("daemon or permissions", result.details)
@@ -91,8 +89,7 @@ class DockerSandboxTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             image_check = subprocess.CompletedProcess(["docker", "image", "inspect"], 0, "", "")
             run_result = subprocess.CompletedProcess(["docker", "run"], 0, "", "Ran 0 tests in 0.000s\\nOK")
-            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), \\
-                 patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
                 result = DockerSandboxRunner().run(
                     Path(tmp), "python:3.13",
                     ValidationCommand("unit_tests-python", ("python", "-m", "unittest", "discover", "-s", "tests")))
@@ -103,8 +100,7 @@ class DockerSandboxTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             image_check = subprocess.CompletedProcess(["docker", "image", "inspect"], 0, "", "")
             run_result = subprocess.CompletedProcess(["docker", "run"], 0, "custom runner completed", "")
-            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), \\
-                 patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
                 result = DockerSandboxRunner().run(
                     Path(tmp), "node:22",
                     ValidationCommand("unit_tests-node", ("npm", "test")))
@@ -115,8 +111,7 @@ class DockerSandboxTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             image_check = subprocess.CompletedProcess(["docker", "image", "inspect"], 0, "", "")
             run_result = subprocess.CompletedProcess(["docker", "run"], 0, "", "Ran 2 tests in 0.001s\\nOK")
-            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), \\
-                 patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
                 result = DockerSandboxRunner().run(
                     Path(tmp), "python:3.13",
                     ValidationCommand("unit_tests-python", ("python", "-m", "unittest", "discover", "-s", "tests")))
