@@ -73,7 +73,7 @@ Graphify CLI reference: https://github.com/Graphify-Labs/graphify
     python -m compileall -q src tests
     PYTHONPATH=src python -m unittest discover -s tests -v
 
-The CI workflow runs compilation and unit/integration/E2E contract tests across Python 3.11, 3.12, and 3.13.
+The CI workflow runs compilation and unit/integration/E2E contract tests across Python 3.11, 3.12, and 3.13. It also exercises bidirectional migration orchestration fixtures across representative language pairs and runs executable Python↔Go arithmetic fixtures to compare source and generated output. These deterministic fixtures validate only their covered examples; they do not establish general semantic equivalence for arbitrary projects.
 
 ## Architecture
 
