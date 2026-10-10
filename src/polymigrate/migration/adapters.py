@@ -48,8 +48,8 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
     if language_id == "python":
         try:
             tree = ast.parse(source_text)
-        except SyntaxError:
-            return (), (), "Python syntax could not be parsed; source text was retained without AST hints."
+        except (SyntaxError, RecursionError):
+            return (), (), "Python syntax could not be parsed safely; source text was retained without AST hints."
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 symbols.add(node.name)
