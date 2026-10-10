@@ -40,6 +40,10 @@ def scan_project_manifests(
             name for name in directories
             if name not in _IGNORED_DIRS and not (current_path / name).is_symlink()
         )
+        scanned_entries += len(directories)
+        if scanned_entries > max_scan_entries:
+            warnings.append(f"Project manifest scan reached its {max_scan_entries}-entry traversal limit.")
+            return manifests, warnings
         for filename in sorted(filenames):
             scanned_entries += 1
             if scanned_entries > max_scan_entries:
