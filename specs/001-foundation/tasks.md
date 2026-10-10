@@ -19,7 +19,7 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 133 tests passed in the latest verified workflow on Python 3.11, 3.12, and 3.13; the wheel build also verified all six packaged skill assets.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 140 tests passed in the latest verified workflow on Python 3.11, 3.12, and 3.13; the wheel build also verified all six packaged skill assets.
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
@@ -41,3 +41,6 @@
 - [x] T039 Add configurable provider output-token budgets and a 2 MB response-body limit.
 - [x] T040 Distinguish passing test evidence from zero-test and unconfirmed test runs.
 - [x] T041 Add bounded post-validation repair attempts that cannot modify test files or write outside the generated project.
+
+- [x] T042 Prevent cross-project draft record collisions and prevent unverified records from downgrading verified/shareable knowledge; regression-tested.
+- [x] T043 Add bidirectional migration orchestration contract fixtures for representative language pairs; these tests do not claim semantic equivalence.
