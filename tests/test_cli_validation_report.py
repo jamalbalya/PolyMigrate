@@ -47,6 +47,9 @@ class ValidationReportCLITests(unittest.TestCase):
         self.assertEqual(code,3)
         self.assertEqual(report["status"],"BLOCKED")
         self.assertEqual(report["validation_gates"]["target_build"],"FAILED")
+        self.assertIn(report["static_security_scan"]["status"], {"PASSED", "REVIEW_REQUIRED"})
+        self.assertTrue(report["static_security_scan"]["not_a_comprehensive_audit"])
+        self.assertEqual(report["validation_gates"]["security_review"], "NOT_RUN")
 
 
 if __name__ == "__main__":
