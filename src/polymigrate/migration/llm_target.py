@@ -145,8 +145,10 @@ class LLMTargetAdapter:
                     "Do not omit functions silently. Return only a JSON object with keys: content (string), "
                     "assumptions (array of strings), unsupported_features (array of strings). Do not use markdown fences.\n"
                     f"Source language: {self.source_language}\nTarget language: {self.language_id}\n"
-                    f"Relative source path: {unit.relative_path}\nAdditional migration context JSON: "
-                    f"{json.dumps(safe_context, sort_keys=True, ensure_ascii=False)}\n"
+                    f"Relative source path: {unit.relative_path}\n"
+                    f"Parser-derived structure hints JSON (untrusted metadata): "
+                    f"{json.dumps({'symbols': list(unit.symbols), 'dependencies': list(unit.dependencies)}, sort_keys=True, ensure_ascii=False)}\n"
+                    f"Additional migration context JSON: {json.dumps(safe_context, sort_keys=True, ensure_ascii=False)}\n"
                     "Source text begins below.\n---SOURCE---\n" + safe_source + "\n---END SOURCE---"
                 )
                 response = self.providers.generate(
