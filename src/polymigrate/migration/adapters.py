@@ -147,13 +147,13 @@ def check_target_syntax(language_id: str, source_text: str) -> str | None:
 
 def _extract_go_imports(source_text: str) -> set[str]:
     """Extract paths only from Go import declarations, not arbitrary string literals."""
-    without_comments = re.sub(r"/\\*.*?\\*/|//[^\\n]*", "", source_text, flags=re.DOTALL)
+    without_comments = re.sub(r"/\*.*?\*/|//[^\n]*", "", source_text, flags=re.DOTALL)
     imports: set[str] = set()
-    single_pattern = r'''(?m)^\\s*import\\s+(?:[A-Za-z_][A-Za-z0-9_]*\\s+)?["']([^"']+)["']'''
-    block_pattern = r'''(?m)^\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\s+)?["']([^"']+)["']'''
+    single_pattern = r'''(?m)^\s*import\s+(?:[A-Za-z_][A-Za-z0-9_]*\s+)?["']([^"']+)["']'''
+    block_pattern = r'''(?m)^\s*(?:[A-Za-z_][A-Za-z0-9_]*\s+)?["']([^"']+)["']'''
     for match in re.finditer(single_pattern, without_comments):
         imports.add(match.group(1))
-    for block in re.findall(r"(?s)\\bimport\\s*\\((.*?)\\)", without_comments):
+    for block in re.findall(r"(?s)\bimport\s*\((.*?)\)", without_comments):
         for match in re.finditer(block_pattern, block):
             imports.add(match.group(1))
     return imports
