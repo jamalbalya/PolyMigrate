@@ -10,6 +10,8 @@ import ast
 import json
 import re
 
+from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject
+
 _JS_KEYWORDS = {
     "await", "break", "case", "catch", "class", "const", "continue", "debugger",
     "default", "delete", "do", "else", "enum", "export", "extends", "false",
@@ -95,7 +97,7 @@ class PythonToJavaScriptTargetAdapter:
             return sign + value, "int"
         raise UnsupportedPythonSyntax(f"Unsupported expression syntax: {type(node).__name__}")
 
-    def generate(self, project, context: dict[str, object]):
+    def generate(self, project: SourceProject, context: dict[str, object]) -> list[GeneratedArtifact]:
         del context
         if project.language_id != "python":
             raise ValueError("PythonToJavaScriptTargetAdapter requires a Python source project")
