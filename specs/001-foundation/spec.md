@@ -54,7 +54,7 @@ Cross-language migration requires more than syntax translation. The platform mus
 - Reports distinguish facts, inferred decisions, and unverified assumptions.
 
 ## Functional requirements
-- FR-001: Initial CLI supports `plan --source --from --to --output`; migration execution is a later milestone.
+- FR-001: CLI supports deterministic planning and an explicitly experimental per-file AI translation command. The translation command requires an explicit source-upload opt-in and must report all unrun validation gates as NOT_RUN.
 - FR-002: Language registry is extensible and validates canonical IDs.
 - FR-003: Provider registry checks structured-output and tool-calling capabilities.
 - FR-004: Skill registry validates metadata and tool permissions.
