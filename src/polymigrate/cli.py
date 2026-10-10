@@ -271,6 +271,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
     security_result = review_generated_output(result.output_root)
     security_evidence_result = _load_security_evidence(args.security_evidence)
     dependency_result = review_dependency_wiring(result.output_root, "go")
+    gates["dependency_wiring"] = dependency_result.status
 
     warnings.extend(security_result.warnings)
     warnings.extend(dependency_result.warnings)
@@ -634,6 +635,7 @@ def main(argv: list[str] | None = None) -> int:
             static_security_result = review_generated_output(result.output_root)
             security_evidence_result = _load_security_evidence(args.security_evidence)
             dependency_wiring_result = review_dependency_wiring(result.output_root, target_language.id)
+            validation.gates["dependency_wiring"] = dependency_wiring_result.status
             behavior_result = None
             if args.behavior_spec is not None:
                 source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
