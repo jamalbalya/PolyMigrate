@@ -61,12 +61,69 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
         self.assertIn("integration_tests=PASSED", warnings[0])
 
 
-    def test_python_candidate_stays_unverified_without_dependency_install_build(self):
+    def test_python_candidate_without_matching_declaration_stays_unverified(self):
+        candidate = {
+            "decision_type": "candidate",
+            "selected_package": {"name": "requests", "registry": "pypi"},
+        }
         status, warnings = _candidate_dependency_integration_status(
-            [self.candidate], self.review, self.gates, "python"
+            [candidate], self.review, self.gates, "python"
         )
         self.assertEqual(status, "NOT_RUN")
-        self.assertIn("not implemented for target language python", warnings[0])
+        self.assertIn("not proven present", warnings[0])
+
+    def test_python_candidate_is_proven_by_real_local_package_build_and_integration_test(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            package = root / "localdep"
+            package.mkdir()
+            (package / "__init__.py").write_text(
+                'def value(): return "verified"\\n', encoding="utf-8"
+            )
+            (root / "requirements.txt").write_text(
+                "localdep==0.1.0\\n", encoding="utf-8"
+            )
+            (root / "main.py").write_text(
+                "import localdep\\nprint(localdep.value())\\n", encoding="utf-8"
+            )
+            tests = root / "tests" / "integration"
+            tests.mkdir(parents=True)
+            (tests / "test_dependency.py").write_text(
+                "import unittest\\nimport localdep\\n"
+                "class DependencyIntegrationTest(unittest.TestCase):\\n"
+                "    def test_dependency_api(self):\\n"
+                "        self.assertEqual(localdep.value(), 'verified')\\n",
+                encoding="utf-8",
+            )
+            compile_result = subprocess.run(
+                ("python", "-m", "compileall", "-q", "."),
+                cwd=root, capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(compile_result.returncode, 0, compile_result.stderr)
+            integration = subprocess.run(
+                ("python", "-m", "unittest", "discover", "-s", "tests/integration", "-v"),
+                cwd=root, capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(integration.returncode, 0, integration.stderr)
+            behavior = subprocess.run(
+                ("python", "main.py"), cwd=root, capture_output=True, text=True,
+                timeout=30, check=False,
+            )
+            self.assertEqual(behavior.returncode, 0, behavior.stderr)
+            self.assertEqual(behavior.stdout, "verified\\n")
+            review = review_dependency_wiring(root, "python")
+            self.assertEqual(review.status, "PASSED")
+            candidate = [{
+                "decision_type": "candidate",
+                "selected_package": {"name": "localdep", "registry": "pypi"},
+            }]
+            status, _ = _candidate_dependency_integration_status(
+                candidate, review,
+                {"target_build": "PASSED", "integration_tests": "PASSED",
+                 "behavior_comparison": "PASSED"},
+                "python",
+            )
+            self.assertEqual(status, "PASSED")
 
 
     def test_go_dependency_candidate_is_proven_by_real_local_module_build_and_integration_test(self):
