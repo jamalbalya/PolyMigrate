@@ -96,7 +96,7 @@ def _parse_report(scanner_id: str, payload: Any) -> tuple[list[dict[str, str]], 
             findings.append({"severity": severity, "rule_id": item["check_id"]})
         return findings, True
     if scanner_id == "bandit":
-        if payload.get("errors") not in ([], None):
+        if not isinstance(payload.get("errors"), list) or payload["errors"]:
             return [], False
         raw = payload.get("results")
         if not isinstance(raw, list):
