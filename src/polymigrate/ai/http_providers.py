@@ -21,10 +21,20 @@ class ProviderRequestError(RuntimeError):
 
 
 def _validate_base_url(base_url: str) -> None:
-    parsed = urlparse(base_url)
-    if parsed.scheme == "https" and parsed.hostname:
+    try:
+        parsed = urlparse(base_url)
+        hostname = parsed.hostname
+        # Accessing .port forces urllib's otherwise-lazy port validation.
+        parsed.port
+    except (TypeError, ValueError):
+        raise ValueError("base_url must be a valid URL with a valid port") from None
+    if not hostname or parsed.username is not None or parsed.password is not None:
+        raise ValueError("base_url must include a hostname and must not embed credentials")
+    if parsed.query or parsed.fragment:
+        raise ValueError("base_url must not include a query string or fragment")
+    if parsed.scheme == "https":
         return
-    if parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
+    if parsed.scheme == "http" and hostname.lower() in {"localhost", "127.0.0.1", "::1"}:
         return
     raise ValueError("base_url must use HTTPS; HTTP is permitted only for loopback test/local endpoints")
 
