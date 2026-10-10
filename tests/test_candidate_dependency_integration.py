@@ -77,27 +77,27 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
             dep = root / "third_party" / "dep"
             dep.mkdir(parents=True)
             (dep / "go.mod").write_text(
-                "module github.com/acme/dep\\n\\ngo 1.23\\n", encoding="utf-8"
+                "module github.com/acme/dep\n\ngo 1.23\n", encoding="utf-8"
             )
             (dep / "dep.go").write_text(
-                'package dep\\nfunc Value() string { return "verified" }\\n',
+                'package dep\nfunc Value() string { return "verified" }\n',
                 encoding="utf-8",
             )
             (root / "go.mod").write_text(
-                "module example.com/app\\n\\ngo 1.23\\n"
-                "require github.com/acme/dep v0.0.0\\n"
-                "replace github.com/acme/dep => ./third_party/dep\\n",
+                "module example.com/app\n\ngo 1.23\n"
+                "require github.com/acme/dep v0.0.0\n"
+                "replace github.com/acme/dep => ./third_party/dep\n",
                 encoding="utf-8",
             )
             (root / "main.go").write_text(
-                'package main\\nimport ("fmt"; "github.com/acme/dep")\\n'
-                'func main() { fmt.Println(dep.Value()) }\\n',
+                'package main\nimport ("fmt"; "github.com/acme/dep")\n'
+                'func main() { fmt.Println(dep.Value()) }\n',
                 encoding="utf-8",
             )
             (root / "main_test.go").write_text(
-                'package main\\nimport ("testing"; "github.com/acme/dep")\\n'
+                'package main\nimport ("testing"; "github.com/acme/dep")\n'
                 'func TestDependencyIntegration(t *testing.T) { '
-                'if dep.Value() != "verified" { t.Fatal("unexpected dependency behavior") } }\\n',
+                'if dep.Value() != "verified" { t.Fatal("unexpected dependency behavior") } }\n',
                 encoding="utf-8",
             )
             env = {**os.environ, "GOTOOLCHAIN": "local", "GOPROXY": "off"}
@@ -112,7 +112,7 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
                 text=True, timeout=60, check=False,
             )
             self.assertEqual(behavior.returncode, 0, behavior.stderr[-4000:])
-            self.assertEqual(behavior.stdout, "verified\\n")
+            self.assertEqual(behavior.stdout, "verified\n")
             review = review_dependency_wiring(root, "go")
             self.assertEqual(review.status, "PASSED")
             gates = {**self.gates, "behavior_comparison": "PASSED"}
