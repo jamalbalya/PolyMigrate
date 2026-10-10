@@ -146,6 +146,57 @@ def main(argv: list[str] | None = None) -> int:
                 dependency_warnings.extend(gap_plan.warnings)
                 resolution_workflow = LibraryResolutionWorkflow(providers)
                 for gap in gap_plan.gaps:
+                    problem_fingerprint = fingerprint_payload({
+                        "kind": "library_resolution", "source_language": source_language.id,
+                        "source_library": gap.source_library, "target_language": target_language.id,
+                        "required_capabilities": list(gap.required_capabilities),
+                    })
+                    toolchain_fingerprint = fingerprint_payload({
+                        "library_resolution_schema": 1, "target_language": target_language.id,
+                    })
+                    cached_summary = None
+                    cached_record = None
+                    if knowledge_store:
+                        try:
+                            verified_records = knowledge_store.find_reusable(
+                                problem_fingerprint=problem_fingerprint, source_language=source_language.id,
+                                target_language=target_language.id, toolchain_fingerprint=toolchain_fingerprint,
+                                project_scope=project_scope or "",
+                            )
+                            for record in verified_records:
+                                if record.solution.get("kind") == "library_resolution" and isinstance(record.solution.get("summary"), dict):
+                                    cached_summary, cached_record = dict(record.solution["summary"]), record
+                                    cached_summary["cache_status"] = "VERIFIED_REUSE"
+                                    break
+                            if cached_summary is None and cache_drafts and project_scope:
+                                drafts = knowledge_store.find_cached_draft(
+                                    problem_fingerprint=problem_fingerprint, source_language=source_language.id,
+                                    target_language=target_language.id, toolchain_fingerprint=toolchain_fingerprint,
+                                    project_scope=project_scope,
+                                )
+                                for record in drafts:
+                                    solution = record.solution
+                                    cached_at = solution.get("cached_at")
+                                    summary_value = solution.get("summary")
+                                    if (solution.get("kind") == "library_resolution" and isinstance(summary_value, dict)
+                                            and isinstance(cached_at, (int, float)) and 0 <= time.time() - cached_at <= 7 * 86400):
+                                        cached_summary, cached_record = dict(summary_value), record
+                                        cached_summary["cache_status"] = "UNVERIFIED_SAME_PROJECT_CACHE"
+                                        break
+                        except Exception as cache_exc:
+                            resolution_warnings.append(f"Library knowledge lookup failed ({type(cache_exc).__name__}); fresh research will be used.")
+                    if cached_summary is not None and cached_record is not None:
+                        cached_summary["source_library"] = gap.source_library
+                        cached_summary["required_capabilities"] = list(gap.required_capabilities)
+                        cached_summary["reason"] = gap.reason
+                        cached_summary["evidence_files"] = list(gap.evidence_files)
+                        cached_summary["knowledge_record_id"] = cached_record.record_id
+                        cached_summary["problem_fingerprint"] = problem_fingerprint
+                        cached_summary["toolchain_fingerprint"] = toolchain_fingerprint
+                        if cached_summary.get("cache_status") != "VERIFIED_REUSE":
+                            resolution_warnings.append(f"Reused an unverified library decision for {gap.source_library} from this project's cache; package metadata may be stale.")
+                        library_resolutions.append(cached_summary)
+                        continue
                     try:
                         resolution = resolution_workflow.resolve(
                             args.provider, source_library=gap.source_library,
@@ -158,6 +209,22 @@ def main(argv: list[str] | None = None) -> int:
                         summary["required_capabilities"] = list(gap.required_capabilities)
                         summary["reason"] = gap.reason
                         summary["evidence_files"] = list(gap.evidence_files)
+                        summary["problem_fingerprint"] = problem_fingerprint
+                        summary["toolchain_fingerprint"] = toolchain_fingerprint
+                        if knowledge_store and cache_drafts and project_scope:
+                            record_id = "library-" + problem_fingerprint[:24]
+                            summary["knowledge_record_id"] = record_id
+                            summary["cache_status"] = "UNVERIFIED_CACHED"
+                            try:
+                                knowledge_store.save(KnowledgeRecord(
+                                    record_id=record_id, problem_fingerprint=problem_fingerprint,
+                                    source_language=source_language.id, target_language=target_language.id,
+                                    toolchain_fingerprint=toolchain_fingerprint, project_scope=project_scope,
+                                    solution={"kind": "library_resolution", "cached_at": time.time(), "summary": summary},
+                                    validation_evidence=(), verified=False, shareable=False,
+                                ))
+                            except Exception as cache_exc:
+                                resolution_warnings.append(f"Library decision cache write failed ({type(cache_exc).__name__}); migration will continue.")
                         library_resolutions.append(summary)
                         resolution_warnings.extend(resolution.warnings)
                     except (ValueError, RuntimeError, OSError) as exc:
