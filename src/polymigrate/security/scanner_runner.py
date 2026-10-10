@@ -15,7 +15,7 @@ from typing import Any
 
 from polymigrate.security.evidence_gate import SecurityEvidenceResult, evaluate_security_evidence
 
-_RUNNER_ID = "polymigrate_trusted_scanner_runner_v1"
+_RUNNER_ID = "polymigrate_local_scanner_runner_v1"
 _RULES_PATH = Path(__file__).with_name("semgrep_rules.yml")
 _PROFILES: dict[str, tuple[str, ...]] = {
     "python": ("semgrep", "bandit"),
