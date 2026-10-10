@@ -52,9 +52,15 @@ def _library_resolution_summary(result) -> dict[str, object]:
             "name": selected.name, "registry": selected.registry, "version": selected.version,
             "url": selected.url, "license": selected.license, "description": selected.description,
         }
+    implementation_status = {
+        "candidate": "CANDIDATE_IDENTIFIED_NOT_WIRED",
+        "custom_implementation": "CUSTOM_IMPLEMENTATION_RECOMMENDED",
+        "architectural_alternative": "ARCHITECTURE_CHANGE_RECOMMENDED",
+    }.get(decision.decision_type, "UNRESOLVED")
     return {
         "source_library": decision.candidate_name if decision.decision_type == "candidate" else None,
-        "decision_type": decision.decision_type, "candidate_name": decision.candidate_name,
+        "decision_type": decision.decision_type, "implementation_status": implementation_status,
+        "candidate_name": decision.candidate_name,
         "strategy": decision.strategy, "rationale": decision.rationale,
         "assumptions": list(decision.assumptions), "validation_tests": list(decision.validation_tests),
         "selected_package": selected_package, "warnings": list(result.warnings),
