@@ -196,6 +196,7 @@ def compare_behavior(
                     if cache_dir.exists() and not cache_dir.is_dir():
                         raise ValueError("Behavior workspace conflicts with a reserved build-cache path")
                     cache_dir.mkdir(exist_ok=True)
+                    cache_dir.chmod(0o777)
         except (OSError, ValueError) as exc:
             return BehaviorComparisonResult(
                 "BLOCKED", (), (redact_text(f"Behavior comparison snapshot failed ({type(exc).__name__})."),)
