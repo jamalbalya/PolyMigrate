@@ -35,9 +35,10 @@ def _prompt(request: ModelRequest) -> str:
     return f"{prefix}Task: {request.task}\nContext JSON:\n{context}\n\nInstructions:\n{request.prompt}"
 
 
-def _request_json(url: str, headers: dict[str, str], payload: dict[str, Any], timeout: float) -> dict[str, Any]:
-    body = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(url, data=body, headers={**headers, "Content-Type": "application/json"}, method="POST")
+def _request_json(url: str, headers: dict[str, str], payload: dict[str, Any] | None, timeout: float) -> dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request_headers = {**headers, **({"Content-Type": "application/json"} if body is not None else {})}
+    request = urllib.request.Request(url, data=body, headers=request_headers, method="POST" if body is not None else "GET")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             response_body = response.read(2_000_001)
@@ -79,8 +80,8 @@ class OpenAICompatibleProvider:
         self.provider_id = self.provider_id.strip().lower()
         self.base_url = self.base_url.rstrip("/")
         _validate_base_url(self.base_url)
-        if not self.provider_id or not self.api_key or not self.model_id:
-            raise ValueError("provider_id, api_key, and model_id are required")
+        if not self.provider_id or not self.api_key:
+            raise ValueError("provider_id and api_key are required")
         if self.timeout <= 0:
             raise ValueError("timeout must be positive")
         if not 1 <= self.max_output_tokens <= 16_384:
@@ -89,7 +90,22 @@ class OpenAICompatibleProvider:
     def get_capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(structured_output=True, tool_calling=False, streaming=False)
 
+    def list_models(self) -> tuple[str, ...]:
+        """Return model IDs exposed by the OpenAI-compatible endpoint without logging credentials."""
+        data = _request_json(f"{self.base_url}/models", {"Authorization": f"Bearer {self.api_key}"}, None, self.timeout)
+        entries = data.get("data")
+        if not isinstance(entries, list):
+            raise ProviderRequestError("LLM provider model catalogue is missing data list")
+        model_ids = sorted({item["id"] for item in entries if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"]})
+        if not model_ids:
+            raise ProviderRequestError("LLM provider model catalogue contained no model IDs")
+        return tuple(model_ids)
+
     def generate(self, request: ModelRequest) -> ModelResponse:
+        if not self.model_id.strip():
+            raise ProviderRequestError(
+                f"{self.provider_id} model is not configured; run 'polymigrate providers --list-models' and set the model ID"
+            )
         token_limit_key = "max_completion_tokens" if self.provider_id == "openai" else "max_tokens"
         payload: dict[str, Any] = {"model": self.model_id, "messages": [{"role": "user", "content": _prompt(request)}],
                                    token_limit_key: self.max_output_tokens}

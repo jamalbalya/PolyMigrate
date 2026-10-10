@@ -65,22 +65,40 @@ class ValidationSuiteTests(unittest.TestCase):
             root = Path(tmp)
             (root / "main.go").write_text("package main", encoding="utf-8")
             (root / "main_test.go").write_text("package main", encoding="utf-8")
-            runner = FakeRunner(["PASSED", "PASSED"])
+            runner = FakeRunner(["PASSED", "PASSED", "PASSED"])
             result = validate_generated_project(root, "go", "golang:latest", runner)
         self.assertEqual(result.gates["target_build"], "PASSED")
         self.assertEqual(result.gates["unit_tests"], "PASSED")
         self.assertEqual(runner.commands[0].argv, ("go", "build", "./..."))
+        self.assertEqual(runner.commands[1].argv, ("go", "vet", "./..."))
         self.assertEqual(runner.commands[0].environment, (("GO111MODULE", "off"),))
+        self.assertEqual(runner.commands[1].environment, (("GO111MODULE", "off"),))
+
+    def test_go_vet_failure_blocks_unit_tests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "go.mod").write_text("module example.test/app", encoding="utf-8")
+            (root / "main.go").write_text("package main", encoding="utf-8")
+            (root / "main_test.go").write_text("package main", encoding="utf-8")
+            runner = FakeRunner(["PASSED", "FAILED"])
+            result = validate_generated_project(root, "go", "golang:latest", runner)
+        self.assertEqual(result.gates["target_build"], "FAILED")
+        self.assertEqual(result.gates["unit_tests"], "NOT_RUN")
+        self.assertEqual([command.command_id for command in runner.commands], ["build-go", "build-go-vet"])
+        self.assertTrue(any("Skipped unit_tests-go" in warning for warning in result.warnings))
 
     def test_go_module_project_keeps_module_mode(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "go.mod").write_text("module example.test/app", encoding="utf-8")
             (root / "main.go").write_text("package main", encoding="utf-8")
-            runner = FakeRunner(["PASSED"])
+            runner = FakeRunner(["PASSED", "PASSED"])
             result = validate_generated_project(root, "go", "golang:latest", runner)
         self.assertEqual(result.gates["target_build"], "PASSED")
+        self.assertEqual(runner.commands[0].argv, ("go", "build", "./..."))
+        self.assertEqual(runner.commands[1].argv, ("go", "vet", "./..."))
         self.assertEqual(runner.commands[0].environment, ())
+        self.assertEqual(runner.commands[1].environment, ())
 
     def test_pytest_function_style_is_not_silently_run_with_unittest(self):
         with tempfile.TemporaryDirectory() as tmp:

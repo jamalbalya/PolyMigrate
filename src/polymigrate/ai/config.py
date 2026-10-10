@@ -25,7 +25,9 @@ def build_provider_registry(environ: Mapping[str, str] | None = None) -> tuple[P
     """Build a registry from environment variables and return non-secret configuration warnings.
 
     Model IDs are explicit environment settings so defaults do not silently become stale.
-    Providers are only registered when both the API key and model ID are present.
+    Providers normally require an API key and model ID. The 9Router adapter is
+    also registered with an empty model ID when only its API key is configured,
+    allowing model discovery before the user selects a generation model.
     """
     env = environ if environ is not None else os.environ
     registry = ProviderRegistry()
@@ -37,6 +39,25 @@ def build_provider_registry(environ: Mapping[str, str] | None = None) -> tuple[P
         ("ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "anthropic"),
         ("GEMINI_API_KEY", "GEMINI_MODEL", "gemini"),
     )
+    router_key = env.get("POLYMIGRATE_9ROUTER_API_KEY", "").strip()
+    router_model = env.get("POLYMIGRATE_9ROUTER_MODEL", "").strip()
+    if router_key or router_model:
+        if not router_key:
+            warnings.append("9router: POLYMIGRATE_9ROUTER_API_KEY is not configured")
+        elif not router_model:
+            warnings.append("9router: POLYMIGRATE_9ROUTER_MODEL is not configured; model discovery is available, generation is disabled")
+            registry.register(OpenAICompatibleProvider(
+                provider_id="9router", api_key=router_key, model_id="",
+                base_url=env.get("POLYMIGRATE_9ROUTER_BASE_URL", "http://localhost:20128/v1"),
+                max_output_tokens=_max_output_tokens(env, "POLYMIGRATE_9ROUTER_MAX_OUTPUT_TOKENS", warnings),
+            ))
+        else:
+            registry.register(OpenAICompatibleProvider(
+                provider_id="9router", api_key=router_key, model_id=router_model,
+                base_url=env.get("POLYMIGRATE_9ROUTER_BASE_URL", "http://localhost:20128/v1"),
+                max_output_tokens=_max_output_tokens(env, "POLYMIGRATE_9ROUTER_MAX_OUTPUT_TOKENS", warnings),
+            ))
+
     for key_name, model_name, provider_id in definitions:
         api_key = env.get(key_name, "").strip()
         model_id = env.get(model_name, "").strip()

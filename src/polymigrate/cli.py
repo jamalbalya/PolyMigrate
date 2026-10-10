@@ -39,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--json", dest="json_path", type=Path, help="Optional path for a copy of the plan JSON")
     providers = subparsers.add_parser("providers", help="Show configured AI providers without making network requests")
     providers.add_argument("--check", action="store_true", help="Send a minimal, source-free live request to each configured provider")
+    providers.add_argument("--list-models", action="store_true", help="Query model IDs from configured OpenAI-compatible providers")
     migrate = subparsers.add_parser("migrate", help="Experimental AI file translation; output remains unverified")
     migrate.add_argument("--source", required=True, type=Path, help="Source project directory")
     migrate.add_argument("--from", dest="source_language", required=True, help="Source language ID")
@@ -99,6 +100,22 @@ def main(argv: list[str] | None = None) -> int:
             print("No AI providers configured. Set a provider API key and model ID in environment variables.")
         for warning in warnings:
             print(f"warning: {warning}", file=sys.stderr)
+        if args.list_models:
+            compatible = [provider for provider in configured if callable(getattr(provider, "list_models", None))]
+            if not compatible:
+                print("Model discovery could not run: no configured OpenAI-compatible providers are available.", file=sys.stderr)
+                return 1
+            failed = False
+            for provider in compatible:
+                try:
+                    model_ids = provider.list_models()
+                    print(f"Models ({provider.provider_id}):")
+                    for model_id in model_ids:
+                        print(f"- {model_id}")
+                except Exception as exc:
+                    failed = True
+                    print(f"Model discovery: FAIL ({provider.provider_id}; {type(exc).__name__})", file=sys.stderr)
+            return 1 if failed else 0
         if not args.check:
             return 0
         if not configured:
@@ -160,6 +177,16 @@ def main(argv: list[str] | None = None) -> int:
                 context["graphify_warning"] = graph.warning
 
             providers, _provider_warnings = build_provider_registry()
+            selected_provider = providers.get(args.provider)
+            # Enforce explicit model selection for providers that expose a model_id.
+            # Lightweight/custom providers used by integrations may implement generate()
+            # without a model_id attribute and should remain valid.
+            selected_model = getattr(selected_provider, "model_id", None)
+            if selected_model is not None and not str(selected_model).strip():
+                raise ValueError(
+                    f"Provider '{args.provider}' has no generation model configured; "
+                    "run 'polymigrate providers --list-models', set the model ID, and retry"
+                )
             source_adapter = InventorySourceAdapter(source_language.id, source_language.extensions)
             source_project = source_adapter.analyze(args.source)
             source_manifests, manifest_scan_warnings = scan_project_manifests(args.source)
