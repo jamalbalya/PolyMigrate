@@ -100,6 +100,11 @@ def main(argv: list[str] | None = None) -> int:
             language_registry = LanguageRegistry()
             source_language = language_registry.get(args.source_language)
             target_language = language_registry.get(args.target_language)
+            knowledge_db = os.environ.get("POLYMIGRATE_KNOWLEDGE_DB", "").strip()
+            cache_drafts = os.environ.get("POLYMIGRATE_CACHE_DRAFTS", "").strip().lower() in {"1", "true", "yes"}
+            if cache_drafts and not knowledge_db:
+                raise ValueError("POLYMIGRATE_CACHE_DRAFTS requires POLYMIGRATE_KNOWLEDGE_DB")
+            knowledge_store = MigrationKnowledgeStore(Path(knowledge_db).expanduser()) if knowledge_db else None
             context = {}
             if args.context_json:
                 context = json.loads(args.context_json.read_text(encoding="utf-8"))
@@ -171,12 +176,6 @@ def main(argv: list[str] | None = None) -> int:
             context["dependency_planning_warnings"] = dependency_warnings
             context["library_resolution_warnings"] = resolution_warnings
 
-            knowledge_db = os.environ.get("POLYMIGRATE_KNOWLEDGE_DB", "").strip()
-            cache_drafts = os.environ.get("POLYMIGRATE_CACHE_DRAFTS", "").strip().lower() in {"1", "true", "yes"}
-            if cache_drafts and not knowledge_db:
-                raise ValueError("POLYMIGRATE_CACHE_DRAFTS requires POLYMIGRATE_KNOWLEDGE_DB")
-            knowledge_store = MigrationKnowledgeStore(Path(knowledge_db).expanduser()) if knowledge_db else None
-            project_scope = fingerprint_payload({"project_root": str(args.source.expanduser().resolve())}) if knowledge_store else None
             adapters = AdapterRegistry()
             adapters.register_source(source_adapter)
             target_adapter = LLMTargetAdapter(
