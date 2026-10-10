@@ -111,7 +111,7 @@ def evaluate_security_evidence(
             if not isinstance(binary_digest, str) or not _SHA256.fullmatch(binary_digest):
                 errors.append(f"Scanner '{scanner}' has no valid executable SHA-256.")
                 continue
-            if runner_id != "polymigrate_trusted_scanner_runner_v1":
+            if runner_id != "polymigrate_local_scanner_runner_v1":
                 errors.append(f"Scanner '{scanner}' has no trusted runner identity.")
                 continue
             if isinstance(tool_exit_code, bool) or not isinstance(tool_exit_code, int):
