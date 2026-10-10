@@ -49,6 +49,45 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Lone Unicode surrogates"):
             self._translate('print("\\ud800")\n')
 
+    def test_if_else_comparison_is_translated(self):
+        files = self._translate(
+            'x = 6\nif x > 0:\n    print("positive")\nelse:\n    print("non-positive")\n'
+        )
+        self.assertIn("if (x > 0) {", files["src/main.rs"])
+        self.assertIn("} else {", files["src/main.rs"])
+        self.assertIn('println!("{}", "positive");', files["src/main.rs"])
+
+    def test_compound_conditions_and_truthiness_are_translated(self):
+        files = self._translate('x = 6\nif x and x < 10:\n    print("in range")\n')
+        self.assertIn("&&", files["src/main.rs"])
+        self.assertIn("(x != 0)", files["src/main.rs"])
+
+    def test_rejects_chained_comparisons(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Chained comparisons"):
+            self._translate('x = 6\nif 0 < x < 10:\n    print("in range")\n')
+
+    def test_rejects_assignment_inside_conditional(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "only print"):
+            self._translate("x = 1\nif x > 0:\n    y = 2\nprint(x)\n")
+
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_if_else_generated_project_builds_and_runs(self):
+        files = self._translate(
+            'x = 6\nif x > 0:\n    print("positive")\nelse:\n    print("non-positive")\n'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(
+                ["cargo", "run", "--offline", "--quiet"], cwd=root,
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "positive\n")
+
     def test_rejects_integer_overflow(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "signed Rust i32 range"):
             self._translate("x = 2147483647\ny = x + 1\nprint(y)\n")
@@ -62,8 +101,8 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             self._translate("_ = 1\nprint(_)\n")
 
     def test_rejects_unsupported_control_flow(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "If"):
-            self._translate("if True:\n    print('yes')\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "For"):
+            self._translate("for item in []:\n    print('yes')\n")
 
     @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
     def test_generated_project_builds_and_runs_offline(self):
