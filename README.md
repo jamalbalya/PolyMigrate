@@ -50,7 +50,7 @@ This can incur a small provider charge and verifies connectivity/response shape 
 
 ### Experimental AI file translation
 
-The current experimental migrate command translates supported source files one file at a time. It scans a bounded allowlist of source manifests for context, but does not yet reconstruct or rewrite project manifests, dependencies, frameworks, tests, deployment configuration, or database schemas. It does not yet run full-project target builds or regression tests automatically. Its output status is GENERATED_UNVERIFIED.
+The current experimental migrate command translates supported source files one file at a time. It scans a bounded allowlist of source manifests and can attempt constrained AI reconstruction of allowlisted target manifests when source manifests exist; these outputs remain unverified and dependencies are never installed automatically. Dependency wiring, frameworks, tests, deployment configuration, and database schemas are not yet migrated end-to-end, and full-project target builds/regression tests are not yet run automatically for every project. Its output status is GENERATED_UNVERIFIED.
 
 Configure a provider key and explicit model ID, then opt in to sending source code to that external provider:
 
@@ -116,7 +116,7 @@ MIT. See LICENSE.
 
 ### Library replacement research
 
-The package discovery module queries fixed public endpoints for npm, crates.io, Maven Central, NuGet, RubyGems, Packagist, PyPI search, and GitHub repository fallback for selected languages. With --allow-source-upload, the CLI builds a bounded import inventory, asks the selected AI provider to identify possible gaps grounded in observed imports, searches for alternatives, and records a decision or custom-reconstruction recommendation. Registry descriptions are untrusted metadata, not proof of semantic equivalence; package installation is never automatic. In this experimental milestone, dependency manifests are not migrated, so a selected package is reported as CANDIDATE_IDENTIFIED_NOT_WIRED and the translator is instructed not to introduce an unresolved external import. These tools can also be registered with an agent through the package and Graphify tooling helpers.
+The package discovery module queries fixed public endpoints for npm, crates.io, Maven Central, NuGet, RubyGems, Packagist, PyPI search, and GitHub repository fallback for selected languages. With --allow-source-upload, the CLI builds a bounded import inventory, asks the selected AI provider to identify possible gaps grounded in observed imports, searches for alternatives, and records a decision or custom-reconstruction recommendation. Registry descriptions are untrusted metadata, not proof of semantic equivalence; package installation is never automatic. In this experimental milestone, a constrained target manifest reconstruction step may run when source manifests are found, but it is unverified and does not install dependencies. A selected package is reported as CANDIDATE_IDENTIFIED_NOT_WIRED unless its integration is actually proven, and the translator is instructed not to introduce an unresolved external import. These tools can also be registered with an agent through the package and Graphify tooling helpers.
 
 ### Autonomous repair and validation evidence
 
