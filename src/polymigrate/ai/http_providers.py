@@ -90,7 +90,9 @@ class OpenAICompatibleProvider:
         return ProviderCapabilities(structured_output=True, tool_calling=False, streaming=False)
 
     def generate(self, request: ModelRequest) -> ModelResponse:
-        payload: dict[str, Any] = {"model": self.model_id, "messages": [{"role": "user", "content": _prompt(request)}], "max_tokens": self.max_output_tokens}
+        token_limit_key = "max_completion_tokens" if self.provider_id == "openai" else "max_tokens"
+        payload: dict[str, Any] = {"model": self.model_id, "messages": [{"role": "user", "content": _prompt(request)}],
+                                   token_limit_key: self.max_output_tokens}
         if request.require_structured_output:
             payload["response_format"] = {"type": "json_object"}
         data = _request_json(f"{self.base_url}/chat/completions",
