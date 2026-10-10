@@ -126,9 +126,11 @@ def validate_generated_project(workspace: Path, language_id: str, image: str | N
         execution = runner.run(workspace, image, command)
         executions.append(execution)
         if command.command_id.startswith("build"):
-            gates["target_build"] = execution.status
             if execution.status != "PASSED":
+                gates["target_build"] = execution.status
                 build_failed = True
+            elif gates["target_build"] == "NOT_RUN":
+                gates["target_build"] = "PASSED"
         elif command.command_id.startswith("unit_tests"):
             gates["unit_tests"] = execution.status
     return ValidationSuiteResult(gates, tuple(executions), tuple(warnings))
