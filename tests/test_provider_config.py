@@ -37,6 +37,25 @@ class ProviderConfigTests(unittest.TestCase):
         provider = registry.get("openrouter")
         self.assertEqual(provider.base_url, "https://openrouter.ai/api/v1")
 
+    def test_output_token_budget_is_configurable_and_bounded(self):
+        registry, warnings = build_provider_registry({
+            "OPENAI_API_KEY": "not-a-real-secret",
+            "OPENAI_MODEL": "test-model",
+            "OPENAI_MAX_OUTPUT_TOKENS": "2048",
+        })
+        self.assertEqual(registry.get("openai").max_output_tokens, 2048)
+        self.assertEqual(warnings, ())
+
+    def test_invalid_output_token_budget_uses_safe_default_without_secret_logging(self):
+        registry, warnings = build_provider_registry({
+            "OPENAI_API_KEY": "not-a-real-secret",
+            "OPENAI_MODEL": "test-model",
+            "OPENAI_MAX_OUTPUT_TOKENS": "999999",
+        })
+        self.assertEqual(registry.get("openai").max_output_tokens, 8192)
+        self.assertTrue(any("OPENAI_MAX_OUTPUT_TOKENS" in warning for warning in warnings))
+        self.assertNotIn("not-a-real-secret", " ".join(warnings))
+
 
 if __name__ == "__main__":
     unittest.main()
