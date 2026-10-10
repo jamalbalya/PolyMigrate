@@ -206,6 +206,73 @@ assert.equal(value(), "verified");
             )
             self.assertEqual(status, "PASSED")
 
+    def test_ruby_candidate_is_proven_by_real_local_gem_build_and_integration_test(self):
+        if shutil.which("ruby") is None:
+            self.skipTest("Ruby is unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Gemfile").write_text(
+                """source "https://rubygems.org"
+gem "localdep", "0.1.0"
+""",
+                encoding="utf-8",
+            )
+            lib = root / "lib"
+            lib.mkdir()
+            (lib / "localdep.rb").write_text(
+                """module Localdep
+  def self.value
+    "verified"
+  end
+end
+""",
+                encoding="utf-8",
+            )
+            (root / "main.rb").write_text(
+                """require "localdep"
+puts Localdep.value
+""",
+                encoding="utf-8",
+            )
+            tests = root / "tests" / "integration"
+            tests.mkdir(parents=True)
+            (tests / "test_dependency.rb").write_text(
+                """require "localdep"
+raise "unexpected dependency behavior" unless Localdep.value == "verified"
+""",
+                encoding="utf-8",
+            )
+            for source in ("main.rb", "lib/localdep.rb"):
+                build = subprocess.run(
+                    ("ruby", "-c", source), cwd=root, capture_output=True,
+                    text=True, timeout=30, check=False,
+                )
+                self.assertEqual(build.returncode, 0, build.stderr)
+            integration = subprocess.run(
+                ("ruby", "-Ilib", "tests/integration/test_dependency.rb"),
+                cwd=root, capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(integration.returncode, 0, integration.stderr)
+            behavior = subprocess.run(
+                ("ruby", "-Ilib", "main.rb"), cwd=root, capture_output=True,
+                text=True, timeout=30, check=False,
+            )
+            self.assertEqual(behavior.returncode, 0, behavior.stderr)
+            self.assertEqual(behavior.stdout, "verified\n")
+            review = review_dependency_wiring(root, "ruby")
+            self.assertEqual(review.status, "PASSED")
+            candidate = [{
+                "decision_type": "candidate",
+                "selected_package": {"name": "localdep", "registry": "rubygems"},
+            }]
+            status, _ = _candidate_dependency_integration_status(
+                candidate, review,
+                {"target_build": "PASSED", "integration_tests": "PASSED",
+                 "behavior_comparison": "PASSED"},
+                "ruby",
+            )
+            self.assertEqual(status, "PASSED")
+
     def test_go_dependency_candidate_is_proven_by_real_local_module_build_and_integration_test(self):
         if shutil.which("go") is None:
             self.skipTest("Go toolchain is unavailable")
