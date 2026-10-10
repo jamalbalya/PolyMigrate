@@ -191,7 +191,7 @@ assert.equal(value(), "verified");
                 timeout=30, check=False,
             )
             self.assertEqual(behavior.returncode, 0, behavior.stderr)
-            self.assertEqual(behavior.stdout, "verified\\n")
+            self.assertEqual(behavior.stdout, "verified\n")
             review = review_dependency_wiring(root, "javascript")
             self.assertEqual(review.status, "PASSED")
             candidate = [{
