@@ -6,6 +6,7 @@ must not assume that text generation alone can execute tools safely.
 from __future__ import annotations
 
 import json
+import math
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -37,6 +38,14 @@ def _validate_base_url(base_url: str) -> None:
     if parsed.scheme == "http" and hostname.lower() in {"localhost", "127.0.0.1", "::1"}:
         return
     raise ValueError("base_url must use HTTPS; HTTP is permitted only for loopback test/local endpoints")
+
+
+
+def _validate_provider_limits(timeout: float, max_output_tokens: int) -> None:
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("timeout must be a finite positive number")
+    if isinstance(max_output_tokens, bool) or not isinstance(max_output_tokens, int) or not 1 <= max_output_tokens <= 16_384:
+        raise ValueError("max_output_tokens must be an integer between 1 and 16384")
 
 
 def _prompt(request: ModelRequest) -> str:
@@ -92,10 +101,7 @@ class OpenAICompatibleProvider:
         _validate_base_url(self.base_url)
         if not self.provider_id or not self.api_key:
             raise ValueError("provider_id and api_key are required")
-        if self.timeout <= 0:
-            raise ValueError("timeout must be positive")
-        if not 1 <= self.max_output_tokens <= 16_384:
-            raise ValueError("max_output_tokens must be between 1 and 16384")
+        _validate_provider_limits(self.timeout, self.max_output_tokens)
 
     def get_capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(structured_output=True, tool_calling=False, streaming=False)
@@ -148,7 +154,7 @@ class AnthropicProvider:
     max_output_tokens: int = 8192
 
     def __post_init__(self) -> None:
-        if not self.api_key or not self.model_id:
+        if not self.api_key or not isinstance(self.model_id, str) or not self.model_id.strip():
             raise ValueError("api_key and model_id are required")
         self.base_url = self.base_url.rstrip("/")
         _validate_base_url(self.base_url)
