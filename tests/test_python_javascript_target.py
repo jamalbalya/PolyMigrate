@@ -74,6 +74,36 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "positive\n")
 
+    def test_range_loop_is_translated(self):
+        code = self._translate("for i in range(3):\n    print(i)\n")
+        self.assertIn("for (let i = 0; i < 3; i++) {", code)
+        self.assertIn("console.log(i);", code)
+
+    def test_range_loop_uses_statically_known_bounds(self):
+        code = self._translate("start = 1\nstop = 4\nfor i in range(start, stop):\n    print(i)\n")
+        self.assertIn("for (let i = start; i < stop; i++) {", code)
+
+    def test_rejects_range_step_and_large_loop(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "explicit steps"):
+            self._translate("for i in range(0, 3, 2):\n    print(i)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000-iteration"):
+            self._translate("for i in range(10001):\n    print(i)\n")
+
+    def test_rejects_loop_variable_shadowing(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "cannot shadow"):
+            self._translate("i = 1\nfor i in range(3):\n    print(i)\n")
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required")
+    def test_range_loop_generated_program_matches_python_output(self):
+        code = self._translate("for i in range(3):\n    print(i)\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.js"
+            path.write_text(code, encoding="utf-8")
+            run = subprocess.run(["node", str(path)], capture_output=True, text=True,
+                                 timeout=10, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "0\n1\n2\n")
+
     def test_rejects_unsafe_integer_arithmetic(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "safe integer range"):
             self._translate("x = 9007199254740991\ny = x + 1\nprint(y)\n")
@@ -83,8 +113,8 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
             self._translate("print(missing)\n")
 
     def test_rejects_unsupported_control_flow(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "For"):
-            self._translate("for item in []:\n    print('yes')\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "While"):
+            self._translate("while True:\n    print('yes')\n")
 
     def test_rejects_console_shadowing_when_print_is_used(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "conflicts with the console.log"):
