@@ -60,6 +60,41 @@ class ValidationSuiteTests(unittest.TestCase):
         self.assertTrue(all(value == "NOT_RUN" for value in result.gates.values()))
         self.assertTrue(any("No safe default validation commands" in warning for warning in result.warnings))
 
+
+    def test_kotlin_compiler_command_is_selected_without_running_build_scripts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Main.kt").write_text("fun main() = println(42)\n", encoding="utf-8")
+            runner = FakeRunner(["PASSED"])
+            result = validate_generated_project(root, "kotlin", "kotlin:latest", runner)
+        self.assertEqual(result.gates["target_build"], "PASSED")
+        self.assertEqual(runner.commands[0].argv, (
+            "kotlinc", "Main.kt", "-d", "/tmp/polymigrate-validation.jar"
+        ))
+        self.assertTrue(any("dependency resolution" in warning for warning in result.warnings))
+
+    def test_ruby_sources_receive_syntax_checks_but_no_test_claim(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.rb").write_text("puts 42\n", encoding="utf-8")
+            runner = FakeRunner(["PASSED"])
+            result = validate_generated_project(root, "ruby", "ruby:latest", runner)
+        self.assertEqual(result.gates["target_build"], "PASSED")
+        self.assertEqual(result.gates["unit_tests"], "NOT_RUN")
+        self.assertEqual(runner.commands[0].argv, ("ruby", "-c", "main.rb"))
+        self.assertTrue(any("syntax only" in warning for warning in result.warnings))
+
+    def test_php_sources_receive_lint_checks_but_no_test_claim(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "index.php").write_text("<?php echo 42;\n", encoding="utf-8")
+            runner = FakeRunner(["PASSED"])
+            result = validate_generated_project(root, "php", "php:latest", runner)
+        self.assertEqual(result.gates["target_build"], "PASSED")
+        self.assertEqual(result.gates["unit_tests"], "NOT_RUN")
+        self.assertEqual(runner.commands[0].argv, ("php", "-l", "index.php"))
+        self.assertTrue(any("Composer dependency resolution" in warning for warning in result.warnings))
+
     def test_go_without_module_uses_legacy_module_mode(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

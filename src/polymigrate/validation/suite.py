@@ -145,6 +145,26 @@ def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[Valid
         commands.extend(ValidationCommand(f"build-swift-typecheck-{i}", ("swiftc", "-typecheck", path)) for i, path in enumerate(files))
         if (workspace / "Package.swift").is_file():
             commands.append(ValidationCommand("unit_tests-swift", ("swift", "test")))
+    elif language_id == "kotlin":
+        files = sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*.kt")
+                       if not any(part in {".git", "build", ".gradle", "out"} for part in p.relative_to(workspace).parts))
+        if files:
+            commands.append(ValidationCommand(
+                "build-kotlin-compile", ("kotlinc", *files, "-d", "/tmp/polymigrate-validation.jar")
+            ))
+            warnings.append("Kotlin validation compiles discovered .kt files only; Gradle/Maven dependency resolution and project tests are not inferred.")
+    elif language_id == "ruby":
+        files = sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*.rb")
+                       if not any(part in {".git", "vendor", "tmp"} for part in p.relative_to(workspace).parts))
+        commands.extend(ValidationCommand(f"build-ruby-syntax-{i}", ("ruby", "-c", path)) for i, path in enumerate(files))
+        if files:
+            warnings.append("Ruby validation checks syntax only; gem resolution and test suites remain unverified.")
+    elif language_id == "php":
+        files = sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*.php")
+                       if not any(part in {".git", "vendor", "cache"} for part in p.relative_to(workspace).parts))
+        commands.extend(ValidationCommand(f"build-php-syntax-{i}", ("php", "-l", path)) for i, path in enumerate(files))
+        if files:
+            warnings.append("PHP validation checks syntax only; Composer dependency resolution and test suites remain unverified.")
     if not commands:
         warnings.append(f"No safe default validation commands are available for target language '{language_id}' and the generated project layout.")
     return commands, warnings
