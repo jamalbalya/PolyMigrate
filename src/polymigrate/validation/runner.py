@@ -44,9 +44,9 @@ def _test_execution_evidence(command: ValidationCommand, stdout: str, stderr: st
         match = re.search(r"Ran\s+(\d+)\s+tests?", output, re.IGNORECASE)
         return int(match.group(1)) > 0 if match else None
     if Path(command.argv[0]).name == "go" and "test" in command.argv:
-        if re.search(r"(?m)^ok\s", output):
+        if re.search(r"--- PASS:", output):
             return True
-        if "[no test files]" in output:
+        if "[no test files]" in output or "no tests to run" in output.lower():
             return False
         return None
     if Path(command.argv[0]).name == "cargo" and "test" in command.argv:
