@@ -1,0 +1,21 @@
+# Tasks: PolyMigrate Foundation
+
+- [x] T001 Write constitution and feature specification.
+- [x] T002 Define architecture and validation plan.
+- [x] T003 Implement typed migration models and final status rules.
+- [x] T004 Implement extensible language registry.
+- [x] T005 Implement provider-neutral protocol and capability registry.
+- [x] T006 Implement skill metadata registry and permission checks.
+- [x] T007 Implement library replacement strategy ranking.
+- [x] T008 Implement optional Graphify artifact adapter.
+- [x] T009 Implement deterministic migration planner and output-path validation.
+- [x] T010 Implement CLI plan command and JSON output.
+- [x] T011 Add unit, integration, and E2E tests.
+- [x] T012 Add CI workflow and development documentation.
+- [x] T013 Add persistent evidence-gated migration knowledge store.
+- [x] T014 Add bounded agent runtime and allowlisted tool execution.
+- [ ] T015 Validate provider adapters against current provider API contracts and live credentials.
+- [ ] T016 Implement actual language transformation adapters and migration execution.
+- [ ] T017 Add isolated build/test execution and automated repair loop.
+- [ ] T018 Verify Graphify CLI integration and incremental invalidation on the target environment.
+- [ ] T019 Add full migration E2E fixtures across multiple language pairs.
