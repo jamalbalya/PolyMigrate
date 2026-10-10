@@ -23,7 +23,7 @@ class FakeProvider:
     def generate(self,request:ModelRequest):
         self.requests.append(request)
         if request.task == "reconstruct_target_manifests":
-            payload = {"files":[{"path":"go.mod","content":"module example.com/migrated\\n\\ngo 1.23\\n"}],"warnings":[]}
+            payload = {"files":[{"path":"go.mod","content":"module example.com/migrated\n\ngo 1.23\n"}],"warnings":[]}
         else:
             payload = {"content":"package main","assumptions":[],"unsupported_features":[]}
         return ModelResponse(json.dumps(payload),"fake",self.model_id)
