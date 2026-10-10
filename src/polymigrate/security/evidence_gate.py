@@ -26,6 +26,7 @@ class SecurityEvidenceResult:
     findings: tuple[dict[str, Any], ...]
     scanner_provenance_verified: bool = False
     scanner_execution_recorded: bool = False
+    provenance_warnings: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -37,8 +38,9 @@ class SecurityEvidenceResult:
             "errors": list(self.errors),
             "findings": list(self.findings),
             "not_a_comprehensive_audit": True,
-            "scanner_provenance_verified": False,
+            "scanner_provenance_verified": self.scanner_provenance_verified,
             "scanner_execution_recorded": self.scanner_execution_recorded,
+            "provenance_warnings": list(self.provenance_warnings),
         }
 
 

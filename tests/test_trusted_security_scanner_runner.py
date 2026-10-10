@@ -1,4 +1,5 @@
 """Local scanner execution uses allowlisted commands and records evidence, not trust."""
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -55,6 +56,50 @@ class LocalScannerRunnerTests(unittest.TestCase):
         self.assertFalse(result.scanner_provenance_verified)
         self.assertTrue(result.scanner_execution_recorded)
         self.assertEqual(_security_review_gate_status(result), "INCOMPLETE")
+
+    def test_pinned_scanner_binary_hashes_allow_provenance_verification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "output"
+            root.mkdir()
+            tools_root = Path(tmp) / "tools"
+            tools_root.mkdir()
+            paths, fake_run = self._fake_tools(tools_root)
+            pins = {
+                "POLYMIGRATE_TRUSTED_SCANNER_SHA256_SEMGREP":
+                    hashlib.sha256(Path(paths["semgrep"]).read_bytes()).hexdigest(),
+                "POLYMIGRATE_TRUSTED_SCANNER_SHA256_BANDIT":
+                    hashlib.sha256(Path(paths["bandit"]).read_bytes()).hexdigest(),
+            }
+            with patch.dict("os.environ", pins), \
+                 patch("polymigrate.security.scanner_runner.shutil.which", side_effect=lambda name: paths.get(name)), \
+                 patch("polymigrate.security.scanner_runner.subprocess.run", side_effect=fake_run):
+                result = run_local_security_scanners(root, "python")
+        self.assertEqual(result.status, "PASSED")
+        self.assertTrue(result.scanner_execution_recorded)
+        self.assertTrue(result.scanner_provenance_verified)
+        self.assertEqual(_security_review_gate_status(result), "PASSED")
+        self.assertTrue(result.to_dict()["scanner_provenance_verified"])
+
+    def test_mismatched_scanner_pin_keeps_review_incomplete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "output"
+            root.mkdir()
+            tools_root = Path(tmp) / "tools"
+            tools_root.mkdir()
+            paths, fake_run = self._fake_tools(tools_root)
+            pins = {
+                "POLYMIGRATE_TRUSTED_SCANNER_SHA256_SEMGREP": "0" * 64,
+                "POLYMIGRATE_TRUSTED_SCANNER_SHA256_BANDIT":
+                    hashlib.sha256(Path(paths["bandit"]).read_bytes()).hexdigest(),
+            }
+            with patch.dict("os.environ", pins), \
+                 patch("polymigrate.security.scanner_runner.shutil.which", side_effect=lambda name: paths.get(name)), \
+                 patch("polymigrate.security.scanner_runner.subprocess.run", side_effect=fake_run):
+                result = run_local_security_scanners(root, "python")
+        self.assertEqual(result.status, "PASSED")
+        self.assertFalse(result.scanner_provenance_verified)
+        self.assertEqual(_security_review_gate_status(result), "INCOMPLETE")
+        self.assertTrue(any("does not match" in warning for warning in result.provenance_warnings))
 
     def test_high_bandit_finding_fails_the_security_gate(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -187,6 +187,16 @@ Migration work must use an isolated workspace, preserve source input, validate g
 5. Expand project-specific behavior specs and multi-language E2E fixtures.
 6. Expand skills and reusable migration patterns based on verified evidence.
 
+### Trusted local security-scanner binaries
+
+PolyMigrate records scanner execution and report hashes, but it does not trust a scanner binary merely because it is found on `PATH`. To verify local scanner provenance, configure an operator-managed SHA-256 pin for every scanner required by the language profile:
+
+- `POLYMIGRATE_TRUSTED_SCANNER_SHA256_SEMGREP`
+- `POLYMIGRATE_TRUSTED_SCANNER_SHA256_BANDIT` (Python profile)
+- `POLYMIGRATE_TRUSTED_SCANNER_SHA256_GOSEC` (Go profile)
+
+Each value must be the 64-character SHA-256 digest of the exact scanner executable. Obtain and review pins from a trusted distribution channel; do not blindly calculate a digest from the same untrusted machine and treat it as a trust anchor. Missing or mismatched pins keep `security_review` incomplete even when the scanner command itself reports a clean scan. Correct pins establish binary identity against the operator's configured trust values; they do **not** make the limited scanner set a comprehensive security audit or prove absence of vulnerabilities.
+
 ## License
 
 MIT. See LICENSE.
