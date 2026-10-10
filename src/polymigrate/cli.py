@@ -32,7 +32,7 @@ from polymigrate.validation.behavior import compare_behavior
 from polymigrate.validation.dependency_wiring import review_dependency_wiring
 from polymigrate.security.static_review import review_generated_output
 from polymigrate.security.evidence_gate import evaluate_security_evidence
-from polymigrate.security.scanner_runner import run_trusted_security_scanners
+from polymigrate.security.scanner_runner import run_local_security_scanners
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -324,7 +324,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             warnings.append("Go formatting failed; build and vet were not run.")
 
     security_result = review_generated_output(result.output_root)
-    trusted_security_result = run_trusted_security_scanners(result.output_root, "go")
+    trusted_security_result = run_local_security_scanners(result.output_root, "go")
     security_evidence_result = _load_security_evidence(args.security_evidence)
     dependency_result = review_dependency_wiring(result.output_root, "go")
     gates["dependency_wiring"] = dependency_result.status
@@ -417,7 +417,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         },
         "static_security_scan": security_result.to_dict(),
         "external_security_evidence": security_evidence_result.to_dict(),
-        "trusted_security_scan": trusted_security_result.to_dict(),
+        "local_security_scan": trusted_security_result.to_dict(),
         "dependency_wiring_review": dependency_result.to_dict(),
         "behavior_comparison": behavior,
         "validation_gates": gates,
