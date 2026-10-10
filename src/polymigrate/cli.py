@@ -23,6 +23,7 @@ from polymigrate.migration.llm_target import LLMTargetAdapter
 from polymigrate.migration.manifests import scan_project_manifests
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
 from polymigrate.migration.python_go_target import PythonToGoTargetAdapter
+from polymigrate.migration.python_javascript_target import PythonToJavaScriptTargetAdapter
 from polymigrate.migration.research import LibraryResolutionWorkflow
 from polymigrate.models import MigrationRequest
 from polymigrate.planner import PlanningError, create_plan
@@ -313,9 +314,11 @@ def _derive_final_status(
 
 def _run_deterministic_migration(args, source_language, target_language) -> int:
     """Run the offline Python-to-Go subset translator and local Go checks."""
-    if (source_language.id, target_language.id) != ("python", "go"):
+    pair = (source_language.id, target_language.id)
+    if pair not in {("python", "go"), ("python", "javascript")}:
         raise ValueError(
-            "The deterministic strategy currently supports only --from python --to go"
+            "The deterministic strategy currently supports --from python --to go "
+            "or --from python --to javascript"
         )
 
     context = {}
@@ -331,7 +334,10 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
 
     adapters = AdapterRegistry()
     adapters.register_source(source_adapter)
-    adapters.register_target(PythonToGoTargetAdapter())
+    if target_language.id == "go":
+        adapters.register_target(PythonToGoTargetAdapter())
+    else:
+        adapters.register_target(PythonToJavaScriptTargetAdapter())
     result = MigrationEngine(adapters).execute(
         args.source,
         source_language.id,
@@ -414,34 +420,35 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         executions.append(record)
         return status
 
-    go = shutil.which("go")
-    gofmt = shutil.which("gofmt")
-    main_go = result.output_root / "main.go"
-
-    if not go or not gofmt:
-        gates["target_build"] = "BLOCKED"
-        warnings.append(
-            "Go validation is blocked because both go and gofmt must be available."
-        )
-    else:
-        format_status = run_check("gofmt", [gofmt, "-w", str(main_go)])
-        if format_status == "PASSED":
-            # Keep the build artifact isolated and guarantee cleanup.
-            with tempfile.TemporaryDirectory(prefix="polymigrate-go-build-") as build_dir:
-                binary_path = str(Path(build_dir) / "program")
-                build_status = run_check(
-                    "target_build", [go, "build", "-o", binary_path, "main.go"]
-                )
-                gates["target_build"] = build_status
-                if build_status == "PASSED":
-                    gates["go_vet"] = run_check("go_vet", [go, "vet", "main.go"])
-                else:
-                    warnings.append(
-                        "go vet was not run because the Go build did not pass."
-                    )
+    main_source = result.output_root / ("main.go" if target_language.id == "go" else "main.js")
+    if target_language.id == "go":
+        go = shutil.which("go")
+        gofmt = shutil.which("gofmt")
+        if not go or not gofmt:
+            gates["target_build"] = "BLOCKED"
+            warnings.append("Go validation is blocked because both go and gofmt must be available.")
         else:
-            gates["target_build"] = format_status
-            warnings.append("Go formatting failed; build and vet were not run.")
+            format_status = run_check("gofmt", [gofmt, "-w", str(main_source)])
+            if format_status == "PASSED":
+                with tempfile.TemporaryDirectory(prefix="polymigrate-go-build-") as build_dir:
+                    binary_path = str(Path(build_dir) / "program")
+                    build_status = run_check("target_build", [go, "build", "-o", binary_path, "main.go"])
+                    gates["target_build"] = build_status
+                    if build_status == "PASSED":
+                        gates["go_vet"] = run_check("go_vet", [go, "vet", "main.go"])
+                    else:
+                        warnings.append("go vet was not run because the Go build did not pass.")
+            else:
+                gates["target_build"] = format_status
+                warnings.append("Go formatting failed; build and vet were not run.")
+    else:
+        node = shutil.which("node")
+        if not node:
+            gates["target_build"] = "BLOCKED"
+            warnings.append("JavaScript validation is blocked because node is not available.")
+        else:
+            gates["target_build"] = run_check("target_build", [node, "--check", str(main_source)])
+            gates["go_vet"] = "NOT_APPLICABLE"
 
     security_result = review_generated_output(result.output_root)
     trusted_security_result = run_local_security_scanners(result.output_root, "go")
@@ -462,7 +469,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
 
     # Run target-language test suites only inside an explicitly configured,
     # already-available validation image. Never pull an image automatically.
-    validation_image = os.environ.get("POLYMIGRATE_DOCKER_IMAGE_GO", "").strip() or None
+    target_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{target_language.id.upper()}"
+    validation_image = os.environ.get(target_image_variable, "").strip() or None
     suite_result = validate_generated_project(
         result.output_root, target_language.id, validation_image
     )
@@ -491,7 +499,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         warnings.extend(behavior["warnings"])
     else:
         source_image = os.environ.get("POLYMIGRATE_DOCKER_IMAGE_PYTHON", "").strip() or None
-        target_image = os.environ.get("POLYMIGRATE_DOCKER_IMAGE_GO", "").strip() or None
+        target_image = os.environ.get(target_image_variable, "").strip() or None
         comparison = compare_behavior(
             args.behavior_spec, args.source, result.output_root,
             source_image, target_image,
@@ -504,16 +512,17 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         gates,
         security_status=security_result.status,
         dependency_status=dependency_result.status,
-        required_gates={
-            "target_build",
-            "go_vet",
-            "unit_tests",
-            "integration_tests",
-            "e2e_tests",
-            "behavior_comparison",
-            "dependency_integration",
-            "security_review",
-        },
+        required_gates=(
+            {
+                "target_build", "go_vet", "unit_tests", "integration_tests",
+                "e2e_tests", "behavior_comparison", "dependency_integration", "security_review",
+            }
+            if target_language.id == "go" else
+            {
+                "target_build", "unit_tests", "integration_tests", "e2e_tests",
+                "behavior_comparison", "dependency_integration", "security_review",
+            }
+        ),
     )
 
     summary = {
@@ -547,7 +556,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             "warnings": warnings,
         },
         "note": (
-            "Offline deterministic translation for a constrained Python-to-Go subset. "
+            "Offline deterministic translation for a constrained Python-to-target subset. "
             "No source code is sent to an AI provider. Unsupported syntax is rejected. "
             "Build/vet checks do not prove full behavior equivalence; unrun gates remain "
             "NOT_RUN. Static security scanning is heuristic, not a comprehensive audit."
