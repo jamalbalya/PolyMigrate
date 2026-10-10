@@ -58,6 +58,14 @@ class PackageSearchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             PackageRegistrySearcher().search("rust","query",limit=100)
 
+    def test_github_fallback_does_not_mislabel_stars_as_downloads(self):
+        body=json.dumps({"items":[{"full_name":"org/date-utils","description":"Date helpers",
+                                   "html_url":"https://github.com/org/date-utils","stargazers_count":123}]}).encode()
+        with patch("polymigrate.packages.search.urlopen",return_value=FakeResponse(body)):
+            result=PackageRegistrySearcher().search("go","date helpers")
+        self.assertEqual(result.candidates[0].downloads,None)
+        self.assertIn("GitHub stars: 123",result.candidates[0].description)
+
 
 if __name__ == "__main__":
     unittest.main()
