@@ -24,8 +24,11 @@ class LLMTargetAdapter:
             raise ValueError("max_source_chars must be positive")
         self.language_id = language_id
         self.source_language = source_language
+        normalized_extensions = tuple(ext.lower() for ext in (target_extensions or (target_extension,)))
+        if any(not ext.startswith(".") or "/" in ext or "\\" in ext or ".." in ext for ext in normalized_extensions):
+            raise ValueError("target_extensions must contain only simple file suffixes")
         self.target_extension = target_extension
-        self.target_extensions = frozenset(ext.lower() for ext in (target_extensions or (target_extension,)))
+        self.target_extensions = frozenset(normalized_extensions)
         self.providers = providers
         self.provider_id = provider_id
         self.allow_source_upload = allow_source_upload
