@@ -172,7 +172,7 @@ def _derive_final_status(
     required_gates: set[str],
 ) -> str:
     """Derive the public final status from validation evidence."""
-    failed = {"FAILED", "BLOCKED", "TIMEOUT", "INCOMPLETE"}
+    failed = {"FAILED", "BLOCKED", "TIMEOUT", "INCOMPLETE", "REVIEW_REQUIRED"}
 
     if (
         security_status in {"FAILED", "BLOCKED", "INCOMPLETE", "REVIEW_REQUIRED"}
