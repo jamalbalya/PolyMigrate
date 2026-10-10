@@ -69,3 +69,5 @@
 - [x] T065 Reduce false-positive Go import inventory and avoid heuristic symbol union when Tree-sitter parsing is available; production parser and generator coverage remains open under T023.
 
 - [x] T066 Add an offline deterministic Python-to-JavaScript translator for a strict, tested syntax subset and wire it into the CLI; this expands one pair only and does not complete T023.
+
+- [x] T067 Verify locally executed scanner binary identity against operator-managed SHA-256 pins; missing or mismatched pins remain untrusted, and T059 stays open because authenticated binaries alone do not constitute a comprehensive audit.
