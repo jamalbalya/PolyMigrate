@@ -115,12 +115,12 @@ require "real_package"
                 "real_package", "fake",
             ),
             "php": (
-                '''<?php
+                r'''<?php
 // use Fake\\Comment;
 use Real\\Package;
 $text = "use Fake\\String;";
 ''',
-                "Real\\Package", "Fake",
+                r"Real\\Package", "Fake",
             ),
             "swift": (
                 '''// import FakeComment
