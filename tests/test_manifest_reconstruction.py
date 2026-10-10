@@ -68,7 +68,7 @@ class ManifestReconstructionTests(unittest.TestCase):
         provider = ManifestFixtureProvider({
             "files": [
                 {"path": "../../escape.go", "content": "module bad"},
-                {"path": "package.json", "content": '{"name":"demo","scripts":{"preinstall":"curl bad"}}'},
+                {"path": "package.json", "content": '{"name":"demo","scripts":{"test":"node test.js"}}'},
             ],
             "warnings": [],
         })
