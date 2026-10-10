@@ -66,6 +66,18 @@ class KnowledgeCacheTests(unittest.TestCase):
             self.assertEqual(len(provider.requests), 2)
 
 
+    def test_knowledge_store_rejects_recognizable_secret_material(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
+            record = KnowledgeRecord(
+                record_id="draft-with-secret", problem_fingerprint="problem",
+                source_language="python", target_language="go", toolchain_fingerprint="toolchain",
+                project_scope="project-a", solution={"content": 'API_KEY = "sk-12345678901234567890"'},
+                validation_evidence=(), verified=False, shareable=False,
+            )
+            with self.assertRaisesRegex(ValueError, "recognizable secret material"):
+                store.save(record)
+
     def test_verified_shareable_knowledge_cannot_be_downgraded_by_draft(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = MigrationKnowledgeStore(Path(tmp) / "knowledge.sqlite")
