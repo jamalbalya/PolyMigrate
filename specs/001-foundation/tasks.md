@@ -20,9 +20,10 @@
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
 - [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 47 tests passed at the last verified run.
-- [ ] T021 Verify provider adapters against current API contracts and live credentials.
-- [ ] T022 Implement production source parsers and target generators across language pairs.
-- [ ] T023 Implement full autonomous migration orchestration and library reconstruction.
-- [ ] T024 Add isolated build/test execution and bounded automated repair loop.
-- [ ] T025 Verify Graphify CLI integration and incremental graph invalidation on the target environment.
-- [ ] T026 Add full migration E2E fixtures across multiple language pairs and behavior-equivalence checks.
+- [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
+- [ ] T022 Verify provider adapters against current API contracts and live credentials.
+- [ ] T023 Implement production source parsers and target generators across language pairs.
+- [ ] T024 Implement full autonomous migration orchestration and library reconstruction.
+- [ ] T025 Add isolated build/test execution and bounded automated repair loop.
+- [ ] T026 Verify Graphify CLI integration and incremental graph invalidation on the target environment.
+- [ ] T027 Add full migration E2E fixtures across multiple language pairs and behavior-equivalence checks.
