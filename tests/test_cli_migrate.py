@@ -240,11 +240,11 @@ class MigrateCLIE2ETests(unittest.TestCase):
             with redirect_stderr(stderr):
                 code = main([
                     "migrate", "--source", str(source), "--from", "python",
-                    "--to", "javascript", "--output", str(output),
+                    "--to", "ruby", "--output", str(output),
                     "--strategy", "deterministic",
                 ])
             self.assertEqual(code, 2)
-            self.assertIn("supports only", stderr.getvalue().lower())
+            self.assertIn("supports --from python --to go", stderr.getvalue().lower())
             self.assertFalse(output.exists())
 
     def test_migrate_requires_source_upload_opt_in(self):
