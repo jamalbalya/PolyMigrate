@@ -87,6 +87,41 @@ class DockerSandboxTests(unittest.TestCase):
         self.assertEqual(result.status, "BLOCKED")
         self.assertIn("daemon or permissions", result.details)
 
+    def test_zero_test_count_is_not_reported_as_passed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image_check = subprocess.CompletedProcess(["docker", "image", "inspect"], 0, "", "")
+            run_result = subprocess.CompletedProcess(["docker", "run"], 0, "", "Ran 0 tests in 0.000s\\nOK")
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), \\
+                 patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
+                result = DockerSandboxRunner().run(
+                    Path(tmp), "python:3.13",
+                    ValidationCommand("unit_tests-python", ("python", "-m", "unittest", "discover", "-s", "tests")))
+        self.assertEqual(result.status, "NOT_RUN")
+        self.assertIn("zero executed tests", result.details)
+
+    def test_unknown_test_count_is_marked_unverified(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image_check = subprocess.CompletedProcess(["docker", "image", "inspect"], 0, "", "")
+            run_result = subprocess.CompletedProcess(["docker", "run"], 0, "custom runner completed", "")
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), \\
+                 patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
+                result = DockerSandboxRunner().run(
+                    Path(tmp), "node:22",
+                    ValidationCommand("unit_tests-node", ("npm", "test")))
+        self.assertEqual(result.status, "UNVERIFIED")
+        self.assertIn("count could not be independently confirmed", result.details)
+
+    def test_positive_unittest_count_is_passed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image_check = subprocess.CompletedProcess(["docker", "image", "inspect"], 0, "", "")
+            run_result = subprocess.CompletedProcess(["docker", "run"], 0, "", "Ran 2 tests in 0.001s\\nOK")
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), \\
+                 patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, run_result]):
+                result = DockerSandboxRunner().run(
+                    Path(tmp), "python:3.13",
+                    ValidationCommand("unit_tests-python", ("python", "-m", "unittest", "discover", "-s", "tests")))
+        self.assertEqual(result.status, "PASSED")
+
 
 if __name__ == "__main__":
     unittest.main()
