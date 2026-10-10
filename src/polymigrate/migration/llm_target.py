@@ -197,7 +197,7 @@ class LLMTargetAdapter:
             target_path = PurePosixPath(unit.relative_path).with_suffix(selected_suffix).as_posix()
             syntax_warning = check_target_syntax(self.language_id, content)
             if syntax_warning:
-                self.warnings.append(f"Generated target file {target_path} failed bounded syntax checking: {syntax_warning}")
+                self.warnings.append(f"Generated target file {target_path} has a bounded syntax-check warning: {syntax_warning}")
             artifacts.append(GeneratedArtifact(target_path, content))
         if context.get("reconstruct_manifests") is True:
             try:
