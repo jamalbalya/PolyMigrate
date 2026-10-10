@@ -1,11 +1,12 @@
 """Persistent, evidence-gated migration knowledge store."""
 from __future__ import annotations
 import hashlib
+from contextlib import contextmanager
 import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from polymigrate.security.redaction import redact_payload
 
@@ -52,7 +53,7 @@ class MigrationKnowledgeStore:
     def __init__(self, database_path: Path) -> None:
         self.database_path = database_path
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS migration_knowledge (
                     record_id TEXT PRIMARY KEY, problem_fingerprint TEXT NOT NULL,
@@ -74,6 +75,16 @@ class MigrationKnowledgeStore:
         connection.row_factory = sqlite3.Row
         return connection
 
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        """Commit/rollback transactions and always close the underlying handle."""
+        connection = self._connect()
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
     def save(self, record: KnowledgeRecord) -> None:
         if not record.record_id.strip() or not record.project_scope.strip():
             raise ValueError("record_id and project_scope are required")
@@ -87,7 +98,7 @@ class MigrationKnowledgeStore:
             raise ValueError("knowledge solution contains recognizable secret material")
         if record.verified and not self._has_verified_evidence(record.validation_evidence):
             raise ValueError("verified knowledge requires PASSED evidence for all required validation gates")
-        with self._connect() as connection:
+        with self._connection() as connection:
             existing = connection.execute(
                 "SELECT verified, shareable FROM migration_knowledge WHERE record_id = ?",
                 (record.record_id,),
@@ -115,7 +126,7 @@ class MigrationKnowledgeStore:
 
     def find_reusable(self, *, problem_fingerprint: str, source_language: str, target_language: str,
                       toolchain_fingerprint: str, project_scope: str) -> list[KnowledgeRecord]:
-        with self._connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute("""
                 SELECT * FROM migration_knowledge
                 WHERE problem_fingerprint = ? AND source_language = ? AND target_language = ?
@@ -137,7 +148,7 @@ class MigrationKnowledgeStore:
                           target_language: str, toolchain_fingerprint: str,
                           project_scope: str) -> list[KnowledgeRecord]:
         """Find unverified drafts only within the exact same project scope."""
-        with self._connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute("""
                 SELECT * FROM migration_knowledge
                 WHERE problem_fingerprint = ? AND source_language = ? AND target_language = ?
@@ -162,7 +173,7 @@ class MigrationKnowledgeStore:
     def promote_verified(self, record_id: str, validation_evidence: tuple[dict[str, Any], ...],
                          *, shareable: bool = False) -> KnowledgeRecord:
         """Promote a draft only when every required gate has explicit PASSED evidence."""
-        with self._connect() as connection:
+        with self._connection() as connection:
             row = connection.execute("SELECT * FROM migration_knowledge WHERE record_id = ?", (record_id,)).fetchone()
         if row is None:
             raise ValueError("knowledge record was not found")
@@ -177,5 +188,5 @@ class MigrationKnowledgeStore:
         return record
 
     def count(self) -> int:
-        with self._connect() as connection:
+        with self._connection() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM migration_knowledge").fetchone()[0])
