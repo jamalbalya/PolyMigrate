@@ -1,8 +1,9 @@
 """Deterministic translator for a deliberately small Python-to-JavaScript subset.
 
 Supported: integer/string literals, simple assignments, print(expr), + - *,
-and unary +/- on integers. Python integers are restricted to JavaScript's safe
-integer range. Unsupported syntax is rejected rather than guessed.
+unary +/- on integers, and simple if/else conditions using safe comparisons.
+Python integers are restricted to JavaScript's safe integer range. Unsupported
+syntax is rejected rather than guessed.
 """
 from __future__ import annotations
 
@@ -100,6 +101,48 @@ class PythonToJavaScriptTargetAdapter:
             return sign + value, "int"
         raise UnsupportedPythonSyntax(f"Unsupported expression syntax: {type(node).__name__}")
 
+    def _condition(self, node: ast.expr, assigned: set[str]) -> str:
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return f"!({self._condition(node.operand, assigned)})"
+        if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
+            operator = "&&" if isinstance(node.op, ast.And) else "||"
+            return "(" + f" {operator} ".join(self._condition(item, assigned) for item in node.values) + ")"
+        if isinstance(node, ast.Compare):
+            if len(node.ops) != 1 or len(node.comparators) != 1:
+                raise UnsupportedPythonSyntax("Chained comparisons are not supported in conditions")
+            left, left_type = self._expr(node.left, assigned)
+            right, right_type = self._expr(node.comparators[0], assigned)
+            if left_type != right_type:
+                raise UnsupportedPythonSyntax("Comparisons require operands of the same known type")
+            operator_types = {
+                ast.Eq: "===", ast.NotEq: "!==", ast.Lt: "<",
+                ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=",
+            }
+            operator = operator_types.get(type(node.ops[0]))
+            if operator is None:
+                raise UnsupportedPythonSyntax("Only ==, !=, <, <=, >, and >= comparisons are supported")
+            if left_type == "string" and operator not in {"===", "!=="}:
+                raise UnsupportedPythonSyntax("String ordering comparisons are not supported because runtimes differ")
+            return f"({left} {operator} {right})"
+        if isinstance(node, ast.Name):
+            value, value_type = self._expr(node, assigned)
+            if value_type in {"int", "string"}:
+                return value
+        if isinstance(node, ast.Constant) and type(node.value) is bool:
+            return "true" if node.value else "false"
+        raise UnsupportedPythonSyntax(f"Unsupported condition syntax: {type(node).__name__}")
+
+    def _print_statement(self, node: ast.stmt, assigned: set[str]) -> str:
+        if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+            raise UnsupportedPythonSyntax("Conditional bodies may contain only print() statements")
+        call = node.value
+        if not isinstance(call.func, ast.Name) or call.func.id != "print":
+            raise UnsupportedPythonSyntax("Only calls to print() are supported in conditional bodies")
+        if len(call.args) != 1 or call.keywords:
+            raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
+        expression, _ = self._expr(call.args[0], assigned)
+        return f"console.log({expression});"
+
     def generate(self, project: SourceProject, context: dict[str, object]) -> list[GeneratedArtifact]:
         del context
         if project.language_id != "python":
@@ -152,6 +195,20 @@ class PythonToJavaScriptTargetAdapter:
                     raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
                 expr, _ = self._expr(call.args[0], assigned)
                 statements.append(f"console.log({expr});")
+            elif isinstance(node, ast.If):
+                condition = self._condition(node.test, assigned)
+                if not node.body:
+                    raise UnsupportedPythonSyntax("Empty conditional bodies are not supported")
+                body = [self._print_statement(statement, assigned) for statement in node.body]
+                alternative: list[str] = []
+                if node.orelse:
+                    if any(isinstance(statement, ast.If) for statement in node.orelse):
+                        raise UnsupportedPythonSyntax("elif chains are not supported")
+                    alternative = [self._print_statement(statement, assigned) for statement in node.orelse]
+                rendered = [f"if ({condition}) {{", *("    " + line for line in body), "}"]
+                if alternative:
+                    rendered.extend(["else {", *("    " + line for line in alternative), "}"])
+                statements.append("\n".join(rendered))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
             else:
