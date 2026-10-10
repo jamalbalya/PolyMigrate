@@ -26,8 +26,9 @@ _ALLOWED_MANIFESTS = {
     "swift": ("Package.swift",),
 }
 _FORBIDDEN_BUILD_HOOKS = re.compile(
-    r"(?i)(?:preinstall|postinstall|prepare\s*[:=]|build\.rs|<plugin\b|<executions\b|"
-    r"\b(?:curl|wget|powershell|cmd\.exe)\b|\b(?:bash|sh)\s+-c\b)"
+    r"(?i)(?:preinstall|postinstall|prepare\s*[:=]|build\.rs|<plugin\b|<executions\b|<exec\b|<target\b|usingtask|"
+    r"\b(?:curl|wget|powershell|cmd\.exe|execute_process|add_custom_command)\b|"
+    r"file\s*\(\s*download|\b(?:bash|sh)\s+-c\b|\b(?:system|exec)\s*\()"
 )
 
 
@@ -103,6 +104,24 @@ def reconstruct_target_manifests(
             continue
         if _FORBIDDEN_BUILD_HOOKS.search(body):
             warnings.append(f"Rejected a target manifest containing a potentially executable build hook: {path}")
+            continue
+        if path in {"package.json", "composer.json", "tsconfig.json"}:
+            try:
+                parsed_manifest = json.loads(body)
+            except json.JSONDecodeError:
+                warnings.append(f"Rejected invalid JSON target manifest: {path}")
+                continue
+            if not isinstance(parsed_manifest, dict):
+                warnings.append(f"Rejected non-object JSON target manifest: {path}")
+                continue
+            if path in {"package.json", "composer.json"} and "scripts" in parsed_manifest:
+                warnings.append(f"Rejected target manifest with executable lifecycle scripts: {path}")
+                continue
+        if path == "pyproject.toml" and re.search(r"(?m)^\\s*\\[build-system\\]\\s*$", body):
+            warnings.append("Rejected pyproject.toml with an executable custom build backend.")
+            continue
+        if path == "Cargo.toml" and re.search(r"(?im)^\\s*(?:build\\s*=|\\[build-dependencies\\])", body):
+            warnings.append("Rejected Cargo.toml with a build script or build dependencies.")
             continue
         if redact_payload({"content": body})["content"] != body:
             warnings.append(f"Rejected a target manifest containing recognizable secret material: {path}")
