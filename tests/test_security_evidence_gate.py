@@ -117,7 +117,7 @@ class SecurityEvidenceGateTests(unittest.TestCase):
         self.assertEqual(result.status, "PASSED")
         self.assertFalse(result.to_dict()["scanner_provenance_verified"])
 
-    def test_trusted_provenance_requires_binary_digest_runner_and_real_exit_code(self):
+    def test_execution_record_requires_binary_digest_runner_and_real_exit_code(self):
         item = evidence()
         item.update({
             "scanner_binary_sha256": "b" * 64,
@@ -125,10 +125,11 @@ class SecurityEvidenceGateTests(unittest.TestCase):
             "tool_exit_code": 0,
         })
         result = evaluate_security_evidence(
-            [item], required_scanners={"bandit"}, provenance_verified=True
+            [item], required_scanners={"bandit"}, execution_provenance_recorded=True
         )
         self.assertEqual(result.status, "PASSED")
-        self.assertTrue(result.to_dict()["scanner_provenance_verified"])
+        self.assertFalse(result.to_dict()["scanner_provenance_verified"])
+        self.assertTrue(result.to_dict()["scanner_execution_recorded"])
 
     def test_empty_required_scanner_set_is_incomplete(self):
         result = evaluate_security_evidence([], required_scanners=set())
