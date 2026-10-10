@@ -1,4 +1,4 @@
-"""Execute a small allowlist of local security scanners without shell interpolation.
+"""Execute a small allowlist of locally discovered scanners without shell interpolation.
 
 Scanner availability is environment-dependent. Missing tools or incomplete reports
 remain INCOMPLETE; this module never treats an absent scanner as a clean scan.
@@ -128,10 +128,12 @@ def _parse_report(scanner_id: str, payload: Any) -> tuple[list[dict[str, str]], 
     return [], False
 
 
-def run_trusted_security_scanners(root: Path, language: str) -> SecurityEvidenceResult:
-    """Run required locally installed scanners from an allowlist and verify provenance.
+def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceResult:
+    """Run required locally installed scanners and record execution evidence.
 
     Semgrep uses a repository-bundled rules file and does not request a remote ruleset.
+    Binary hashes and version output are recorded, but binaries are not authenticated
+    against a trusted distribution; scanner provenance is therefore NOT verified.
     Bandit and gosec are additional required scanners for Python and Go respectively.
     """
     if root.is_symlink() or not root.is_dir():
@@ -183,4 +185,4 @@ def run_trusted_security_scanners(root: Path, language: str) -> SecurityEvidence
             })
         except (OSError, ValueError, subprocess.TimeoutExpired):
             continue
-    return evaluate_security_evidence(evidence, required_scanners=required, provenance_verified=True)
+    return evaluate_security_evidence(evidence, required_scanners=required, execution_provenance_recorded=True)
