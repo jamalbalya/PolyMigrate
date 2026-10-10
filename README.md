@@ -51,7 +51,7 @@ This can incur a small provider charge and verifies connectivity/response shape 
 
 ### Experimental AI file translation
 
-The current experimental migrate command translates supported source files one file at a time. It scans a bounded allowlist of source manifests and can attempt constrained AI reconstruction of allowlisted target manifests when source manifests exist; these outputs remain unverified and dependencies are never installed automatically. Dependency wiring, frameworks, tests, deployment configuration, and database schemas are not yet migrated end-to-end, and full-project target builds/regression tests are not yet run automatically for every project. Its output status is GENERATED_UNVERIFIED.
+The current experimental migrate command translates supported source files one file at a time. It scans a bounded allowlist of source manifests and can attempt constrained AI reconstruction of allowlisted target manifests when source manifests or resolved dependency-gap evidence exist; these outputs remain unverified and dependencies are never installed automatically. Dependency wiring, frameworks, tests, deployment configuration, and database schemas are not yet migrated end-to-end, and full-project target builds/regression tests are not yet run automatically for every project. Its output status is GENERATED_UNVERIFIED.
 
 Configure a provider key and explicit model ID, then opt in to sending source code to that external provider:
 
