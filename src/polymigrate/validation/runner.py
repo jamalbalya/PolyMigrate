@@ -140,7 +140,7 @@ class DockerSandboxRunner:
             f"--memory={self.memory_limit}", f"--cpus={self.cpus}",
             *[item for key, value in command.environment for item in ("--env", f"{key}={value}")],
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=256m",
-            "--mount", f"type=bind,src={resolved_workspace},dst=/workspace,rw",
+            "--mount", f"type=bind,src={resolved_workspace},dst=/workspace",
             "--workdir", "/workspace", image, *command.argv,
         ]
         try:
