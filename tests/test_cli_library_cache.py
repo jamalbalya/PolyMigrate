@@ -69,7 +69,7 @@ class CLILibraryCacheTests(unittest.TestCase):
                 self.assertEqual(code,0,stderr.getvalue())
                 reports.append(json.loads((output/"migration-review.json").read_text(encoding="utf-8")))
         self.assertEqual(workflow.calls,2)
-        self.assertEqual(len(provider.requests),2)
+        self.assertEqual(len(provider.requests),3)  # One translation request per run; library research is counted by workflow.calls.
         self.assertEqual(reports[0]["library_resolution"][0]["cache_status"],"UNVERIFIED_CACHED")
         self.assertEqual(reports[1]["library_resolution"][0]["cache_status"],"UNVERIFIED_SAME_PROJECT_CACHE")
         self.assertEqual(reports[2]["library_resolution"][0]["cache_status"],"UNVERIFIED_CACHED")
