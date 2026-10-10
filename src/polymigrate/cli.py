@@ -30,6 +30,7 @@ from polymigrate.validation.suite import validate_generated_project
 from polymigrate.validation.behavior import compare_behavior
 from polymigrate.validation.dependency_wiring import review_dependency_wiring
 from polymigrate.security.static_review import review_generated_output
+from polymigrate.security.evidence_gate import evaluate_security_evidence
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -252,6 +253,44 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
     security_result = review_generated_output(result.output_root)
     dependency_result = review_dependency_wiring(result.output_root, "go")
 
+    # External scanner evidence is an independent gate. Static heuristics alone
+    # must never be promoted to a comprehensive security review.
+    required_scanners = [
+        item.strip()
+        for item in os.environ.get("POLYMIGRATE_REQUIRED_SECURITY_SCANNERS", "").split(",")
+        if item.strip()
+    ]
+    evidence_items = []
+    evidence_path_value = os.environ.get("POLYMIGRATE_SECURITY_EVIDENCE_JSON", "").strip()
+    evidence_load_error = None
+    if evidence_path_value:
+        evidence_path = Path(evidence_path_value)
+        try:
+            loaded_evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+            if isinstance(loaded_evidence, dict):
+                loaded_evidence = loaded_evidence.get("scanners")
+            if not isinstance(loaded_evidence, list):
+                raise ValueError("evidence JSON must be a list or an object containing a scanners list")
+            evidence_items = loaded_evidence
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+            evidence_load_error = f"Could not load scanner evidence ({type(exc).__name__})."
+
+    security_evidence_result = evaluate_security_evidence(
+        evidence_items,
+        required_scanners=required_scanners,
+    )
+    security_evidence_report = security_evidence_result.to_dict()
+    if evidence_load_error:
+        security_evidence_report["status"] = "INCOMPLETE"
+        security_evidence_report["errors"].append(evidence_load_error)
+    static_security_status = security_result.status
+    combined_security_status = static_security_status
+    if security_evidence_report["status"] != "PASSED":
+        combined_security_status = security_evidence_report["status"]
+    if static_security_status in {"FAILED", "BLOCKED", "INCOMPLETE", "REVIEW_REQUIRED"}:
+        combined_security_status = static_security_status
+
+
     warnings.extend(security_result.warnings)
     warnings.extend(dependency_result.warnings)
     warnings.extend(
@@ -302,7 +341,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
 
     overall_status = _derive_final_status(
         gates,
-        security_status=security_result.status,
+        security_status=combined_security_status,
         dependency_status=dependency_result.status,
         required_gates={
             "target_build",
@@ -334,6 +373,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             "warnings": ["AI repair is disabled for deterministic strategy."],
         },
         "static_security_scan": security_result.to_dict(),
+        "external_security_evidence": security_evidence_report,
+        "security_review_status": combined_security_status,
         "dependency_wiring_review": dependency_result.to_dict(),
         "behavior_comparison": behavior,
         "validation_gates": gates,
@@ -346,7 +387,9 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             "Offline deterministic translation for a constrained Python-to-Go subset. "
             "No source code is sent to an AI provider. Unsupported syntax is rejected. "
             "Build/vet checks do not prove full behavior equivalence; unrun gates remain "
-            "NOT_RUN. Static security scanning is heuristic, not a comprehensive audit."
+            "NOT_RUN. Static security scanning is heuristic, not a comprehensive audit. "
+            "External security evidence must be supplied by trusted scanner execution; "
+            "the aggregator does not verify scanner provenance."
         ),
     }
     (result.output_root / "migration-review.json").write_text(
