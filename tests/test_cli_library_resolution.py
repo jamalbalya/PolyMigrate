@@ -22,7 +22,11 @@ class FakeProvider:
     def get_capabilities(self): return ProviderCapabilities()
     def generate(self,request:ModelRequest):
         self.requests.append(request)
-        return ModelResponse(json.dumps({"content":"package main","assumptions":[],"unsupported_features":[]}),"fake",self.model_id)
+        if request.task == "reconstruct_target_manifests":
+            payload = {"files":[{"path":"go.mod","content":"module example.com/migrated\\n\\ngo 1.23\\n"}],"warnings":[]}
+        else:
+            payload = {"content":"package main","assumptions":[],"unsupported_features":[]}
+        return ModelResponse(json.dumps(payload),"fake",self.model_id)
 
 
 class FakeGapPlanner:
@@ -57,8 +61,10 @@ class CLILibraryResolutionTests(unittest.TestCase):
                 code=main(["migrate","--source",str(source),"--from","python","--to","go",
                            "--output",str(output),"--provider","fake","--allow-source-upload"])
             report=json.loads((output/"migration-review.json").read_text(encoding="utf-8"))
+            generated_manifest=(output/"go.mod").read_text(encoding="utf-8")
         self.assertEqual(code,0,stderr.getvalue())
         self.assertEqual(report["dependency_inventory"],["requests"])
+        self.assertIn("module example.com/migrated", generated_manifest)
         self.assertEqual(report["library_resolution"][0]["strategy"],"custom_implementation")
         self.assertEqual(report["library_resolution"][0]["implementation_status"],"CUSTOM_IMPLEMENTATION_RECOMMENDED")
         self.assertIn("library_resolution",provider.requests[0].prompt)
