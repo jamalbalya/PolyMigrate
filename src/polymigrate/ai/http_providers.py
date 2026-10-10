@@ -73,6 +73,7 @@ class OpenAICompatibleProvider:
     model_id: str
     base_url: str = "https://api.openai.com/v1"
     timeout: float = 60.0
+    max_output_tokens: int = 8192
 
     def __post_init__(self) -> None:
         self.provider_id = self.provider_id.strip().lower()
@@ -82,12 +83,14 @@ class OpenAICompatibleProvider:
             raise ValueError("provider_id, api_key, and model_id are required")
         if self.timeout <= 0:
             raise ValueError("timeout must be positive")
+        if not 1 <= self.max_output_tokens <= 16_384:
+            raise ValueError("max_output_tokens must be between 1 and 16384")
 
     def get_capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(structured_output=True, tool_calling=False, streaming=False)
 
     def generate(self, request: ModelRequest) -> ModelResponse:
-        payload: dict[str, Any] = {"model": self.model_id, "messages": [{"role": "user", "content": _prompt(request)}]}
+        payload: dict[str, Any] = {"model": self.model_id, "messages": [{"role": "user", "content": _prompt(request)}], "max_tokens": self.max_output_tokens}
         if request.require_structured_output:
             payload["response_format"] = {"type": "json_object"}
         data = _request_json(f"{self.base_url}/chat/completions",
@@ -114,6 +117,7 @@ class AnthropicProvider:
     base_url: str = "https://api.anthropic.com/v1"
     timeout: float = 60.0
     provider_id: str = "anthropic"
+    max_output_tokens: int = 8192
 
     def __post_init__(self) -> None:
         if not self.api_key or not self.model_id:
@@ -122,6 +126,8 @@ class AnthropicProvider:
         _validate_base_url(self.base_url)
         if self.timeout <= 0:
             raise ValueError("timeout must be positive")
+        if not 1 <= self.max_output_tokens <= 16_384:
+            raise ValueError("max_output_tokens must be between 1 and 16384")
 
     def get_capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(structured_output=False, tool_calling=False, streaming=False)
@@ -132,7 +138,7 @@ class AnthropicProvider:
         data = _request_json(
             f"{self.base_url}/messages",
             {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"},
-            {"model": self.model_id, "max_tokens": 4096, "messages": [{"role": "user", "content": _prompt(request)}]},
+            {"model": self.model_id, "max_tokens": self.max_output_tokens, "messages": [{"role": "user", "content": _prompt(request)}]},
             self.timeout)
         try:
             content = "".join(item.get("text", "") for item in data["content"] if item.get("type") == "text")
@@ -151,6 +157,7 @@ class GeminiProvider:
     base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     timeout: float = 60.0
     provider_id: str = "gemini"
+    max_output_tokens: int = 8192
 
     def __post_init__(self) -> None:
         if not self.api_key or not self.model_id:
@@ -159,12 +166,14 @@ class GeminiProvider:
         _validate_base_url(self.base_url)
         if self.timeout <= 0:
             raise ValueError("timeout must be positive")
+        if not 1 <= self.max_output_tokens <= 16_384:
+            raise ValueError("max_output_tokens must be between 1 and 16384")
 
     def get_capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(structured_output=True, tool_calling=False, streaming=False)
 
     def generate(self, request: ModelRequest) -> ModelResponse:
-        generation_config: dict[str, Any] = {}
+        generation_config: dict[str, Any] = {"maxOutputTokens": self.max_output_tokens}
         if request.require_structured_output:
             generation_config["responseMimeType"] = "application/json"
         data = _request_json(
