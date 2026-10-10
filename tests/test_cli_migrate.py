@@ -166,6 +166,67 @@ class MigrateCLIE2ETests(unittest.TestCase):
             self.assertEqual(report["status"], "BLOCKED")
             self.assertIn("Dependency scan was incomplete.", report["warnings"])
 
+    def test_deterministic_report_records_behavior_and_configured_suite_gates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.py").write_text("print(42)\\n", encoding="utf-8")
+            spec = root / "behavior.json"
+            spec.write_text("{}", encoding="utf-8")
+            output = root / "out"
+            stdout, stderr = StringIO(), StringIO()
+
+            comparison = MagicMock()
+            comparison.status = "PASSED"
+            comparison.to_dict.return_value = {
+                "status": "PASSED",
+                "cases_checked": 1,
+                "executions": [],
+                "warnings": ["Only the supplied behavior case was checked."],
+            }
+            suite = MagicMock()
+            suite.gates = {
+                "target_build": "PASSED",
+                "unit_tests": "NOT_RUN",
+                "integration_tests": "NOT_RUN",
+                "e2e_tests": "NOT_RUN",
+            }
+            suite.executions = ()
+            suite.warnings = ("No Go test files were found.",)
+            suite.to_dict.return_value = {"executions": []}
+
+            fake_process = MagicMock(returncode=0, stdout="", stderr="")
+            with patch.dict("os.environ", {
+                "POLYMIGRATE_DOCKER_IMAGE_GO": "golang:1.23-alpine",
+                "POLYMIGRATE_DOCKER_IMAGE_PYTHON": "python:3.12-slim",
+            }), patch("polymigrate.cli.shutil.which", side_effect=lambda name: {
+                "go": "/fake/go", "gofmt": "/fake/gofmt"
+            }.get(name)), patch("polymigrate.cli.subprocess.run", return_value=fake_process), patch(
+                "polymigrate.cli.validate_generated_project", return_value=suite
+            ) as validate_suite, patch(
+                "polymigrate.cli.compare_behavior", return_value=comparison
+            ), redirect_stdout(stdout), redirect_stderr(stderr):
+                code = main([
+                    "migrate", "--source", str(source), "--from", "python",
+                    "--to", "go", "--output", str(output),
+                    "--strategy", "deterministic", "--behavior-spec", str(spec),
+                ])
+
+            self.assertEqual(code, 0, stderr.getvalue())
+            validate_suite.assert_called_once()
+            self.assertEqual(validate_suite.call_args.args[1:], ("go", "golang:1.23-alpine"))
+            report = json.loads(
+                (output / "migration-review.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(report["behavior_comparison"]["status"], "PASSED")
+            self.assertEqual(report["validation_gates"]["behavior_comparison"], "PASSED")
+            self.assertEqual(report["validation_gates"]["unit_tests"], "NOT_RUN")
+            self.assertEqual(report["validation_gates"]["integration_tests"], "NOT_RUN")
+            self.assertEqual(report["validation_gates"]["e2e_tests"], "NOT_RUN")
+            self.assertEqual(report["validation_image"], "golang:1.23-alpine")
+            self.assertEqual(report["status"], "PARTIAL")
+
     def test_deterministic_migration_rejects_unsupported_language_pair(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "source"
