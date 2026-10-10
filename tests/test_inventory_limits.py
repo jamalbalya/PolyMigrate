@@ -52,6 +52,16 @@ class InventoryLimitTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "traversal exceeds configured limit"):
                 adapter.analyze(root)
 
+    def test_ignored_dependency_directories_do_not_consume_traversal_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.py").write_text("print(1)", encoding="utf-8")
+            ignored = root / "node_modules" / "nested"
+            ignored.mkdir(parents=True)
+            (ignored / "vendor.py").write_text("print(2)", encoding="utf-8")
+            project = InventorySourceAdapter("python", (".py",), max_scan_entries=1).analyze(root)
+            self.assertEqual([unit.relative_path for unit in project.units], ["main.py"])
+
     def test_total_size_limit_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
