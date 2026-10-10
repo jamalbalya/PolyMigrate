@@ -126,6 +126,7 @@ def _candidate_test_imports(root: Path, target_language: str) -> set[str]:
         "javascript": {".js", ".jsx", ".mjs", ".cjs"},
         "typescript": {".ts", ".tsx"},
         "ruby": {".rb"},
+        "rust": {".rs"},
     }.get(target_language, set())
     imports: set[str] = set()
     try:
@@ -152,6 +153,7 @@ def _candidate_test_imports(root: Path, target_language: str) -> set[str]:
                 or lower_name.endswith("_test.py")
                 or lower_name.endswith("_test.go")
                 or lower_name.endswith("_test.rb")
+                or lower_name.endswith("_test.rs")
                 or ".test." in lower_name
                 or ".spec." in lower_name
             )
@@ -193,6 +195,16 @@ def _candidate_test_imports(root: Path, target_language: str) -> set[str]:
                     imports.update(re.findall(r'''["']([^"']+)["']''', block))
             elif target_language == "ruby":
                 imports.update(re.findall(r"""(?m)^\s*require(?:_relative)?\s*\(?\s*['"]([^'"]+)['"]""", source))
+            elif target_language == "rust":
+                clean = re.sub(r"/\*.*?\*/|//[^\n]*", "", source, flags=re.DOTALL)
+                found = set(re.findall(
+                    r"(?m)^\s*(?:pub\s+)?use\s+([A-Za-z_][A-Za-z0-9_]*)(?:::|(?:\s+as\s+[A-Za-z_][A-Za-z0-9_]*)?\s*;)",
+                    clean,
+                ))
+                found.update(re.findall(
+                    r"(?m)^\s*extern\s+crate\s+([A-Za-z_][A-Za-z0-9_]*)\s*;", clean
+                ))
+                imports.update(item for item in found if item not in {"std", "core", "alloc", "crate", "self", "super"})
     return imports
 
 
@@ -211,7 +223,7 @@ def _candidate_dependency_integration_status(
         ]
     if dependency_review.status != "PASSED":
         return "NOT_RUN", ["Candidate dependency integration proof requires a PASSED dependency wiring review."]
-    if target_language not in {"go", "python", "javascript", "typescript", "ruby"}:
+    if target_language not in {"go", "python", "javascript", "typescript", "ruby", "rust"}:
         return "NOT_RUN", [f"Candidate dependency resolution/build proof is not implemented for target language {target_language}; this gate remains unverified."]
     for gate in ("target_build", "integration_tests", "behavior_comparison"):
         if gates.get(gate) != "PASSED":
@@ -225,6 +237,8 @@ def _candidate_dependency_integration_status(
             return re.sub(r"[-_.]+", "-", value).casefold()
         if target_language == "ruby":
             return re.sub(r"[^a-z0-9]", "", value.casefold())
+        if target_language == "rust":
+            return value.replace("-", "_").casefold()
         if target_language in {"go", "javascript", "typescript"}:
             return value
         return value.casefold()
@@ -249,6 +263,8 @@ def _candidate_dependency_integration_status(
             )
         elif target_language == "ruby":
             import_match = any(normalize(item.split("/", 1)[0]) == normalize(package_name) for item in observed_imports)
+        elif target_language == "rust":
+            import_match = any(normalize(item.split("::", 1)[0]) == normalize(package_name) for item in observed_imports)
         else:
             import_match = any(
                 normalize(item) == normalize(package_name)
@@ -269,6 +285,8 @@ def _candidate_dependency_integration_status(
             )
         elif target_language == "ruby":
             test_match = any(normalize(item.split("/", 1)[0]) == normalize(package_name) for item in candidate_test_imports)
+        elif target_language == "rust":
+            test_match = any(normalize(item.split("::", 1)[0]) == normalize(package_name) for item in candidate_test_imports)
         else:
             test_match = any(
                 normalize(item) == normalize(package_name) or item.startswith(package_name + "/")
