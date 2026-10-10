@@ -38,6 +38,28 @@ Create a virtual environment, install the project, then run:
 
 The command creates migration-plan.json in the output directory. It does not modify source files and does not claim that code has been migrated.
 
+Inspect provider configuration without making network requests:
+
+    polymigrate providers
+
+### Experimental AI file translation
+
+The current experimental migrate command translates supported source files one file at a time. It does not yet migrate project manifests, dependencies, frameworks, tests, deployment configuration, or database schemas, and it does not run target builds or regression tests. Its output status is GENERATED_UNVERIFIED.
+
+Configure a provider key and explicit model ID, then opt in to sending source code to that external provider:
+
+    export OPENAI_API_KEY=...
+    export OPENAI_MODEL=...
+    polymigrate migrate --source ./my-project --from python --to go --output ./migration-output --provider openai --allow-source-upload
+
+Provider configuration variables:
+- OpenAI-compatible API: OPENAI_API_KEY, OPENAI_MODEL, optional OPENAI_BASE_URL.
+- OpenRouter: OPENROUTER_API_KEY, OPENROUTER_MODEL, optional OPENROUTER_BASE_URL.
+- Anthropic: ANTHROPIC_API_KEY, ANTHROPIC_MODEL, optional ANTHROPIC_BASE_URL.
+- Gemini: GEMINI_API_KEY, GEMINI_MODEL, optional GEMINI_BASE_URL.
+
+The source-upload flag is required to transmit source text to an external model. Recognizable secrets are redacted on a best-effort basis, but redaction is not guaranteed to find every secret and may alter source semantics. Do not send confidential code to an external provider unless your data-handling policy permits it. Review the generated migration-review.json; all build, test, security, and behavior gates are explicitly marked NOT_RUN in this experimental mode.
+
 ## Development and tests
 
     python -m compileall -q src tests
