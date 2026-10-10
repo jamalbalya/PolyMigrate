@@ -264,7 +264,23 @@ def main(argv: list[str] | None = None) -> int:
             ).run(result.output_root, validation_image, context, initial_validation=initial_validation)
             validation = repair_result.validation
             gates = validation.gates
-            all_warnings = list(result.warnings) + list(validation.warnings) + list(repair_result.warnings)
+            if knowledge_store and library_resolutions:
+                required_gates = MigrationKnowledgeStore.REQUIRED_VERIFICATION_GATES
+                if all(gates.get(gate) == "PASSED" for gate in required_gates):
+                    evidence = tuple({"gate": gate, "status": gates[gate], "source": "validation-suite"}
+                                    for gate in sorted(required_gates))
+                    for library_summary in library_resolutions:
+                        record_id = library_summary.get("knowledge_record_id")
+                        if not isinstance(record_id, str) or library_summary.get("cache_status") == "VERIFIED_REUSE":
+                            continue
+                        try:
+                            knowledge_store.promote_verified(record_id, evidence, shareable=True)
+                            library_summary["cache_status"] = "VERIFIED_SHARED"
+                        except (ValueError, OSError, RuntimeError) as exc:
+                            resolution_warnings.append(f"Library decision was not promoted to shared knowledge ({type(exc).__name__}).")
+                elif any(isinstance(item.get("knowledge_record_id"), str) for item in library_resolutions):
+                    resolution_warnings.append("Library decisions remain unverified and project-scoped because not all required validation gates passed.")
+            all_warnings = list(result.warnings) + list(validation.warnings) + list(repair_result.warnings) + list(resolution_warnings)
             failed_gates = {"FAILED", "BLOCKED", "TIMEOUT"}
             if any(value in failed_gates for value in gates.values()):
                 overall_status = "BLOCKED"
