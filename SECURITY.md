@@ -15,3 +15,7 @@ The current CLI does not deploy to production and does not claim behavior equiva
 ## Reporting a vulnerability
 
 Please use GitHub's private vulnerability reporting for this repository if it is enabled. Avoid posting credentials, exploit payloads, or sensitive project code in public issues.
+
+## Autonomous repair
+
+AI repair is attempted only after sandbox validation. It is limited to a small number of existing production source files in the generated output directory. Test files and manifests are excluded, path traversal and symlink paths are rejected, and each repair attempt is followed by a fresh validation run. The repair loop does not run if the sandbox or validation image is blocked.
