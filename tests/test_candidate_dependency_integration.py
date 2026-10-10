@@ -90,8 +90,8 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / "main.go").write_text(
-                'package main\\nimport "github.com/acme/dep"\\n'
-                'func main() { _ = dep.Value() }\\n',
+                'package main\\nimport ("fmt"; "github.com/acme/dep")\\n'
+                'func main() { fmt.Println(dep.Value()) }\\n',
                 encoding="utf-8",
             )
             (root / "main_test.go").write_text(
