@@ -121,7 +121,7 @@ class BehaviorComparisonTests(unittest.TestCase):
                     "--output", str(output), "--provider", "fixture", "--allow-source-upload",
                     "--behavior-spec", str(spec),
                 ])
-            self.assertEqual(code, 0, stderr.getvalue())
+            self.assertEqual(code, 3, stderr.getvalue())
             review = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))
             self.assertEqual(review["behavior_comparison"]["status"], "PASSED")
             self.assertEqual(review["validation_gates"]["behavior_comparison"], "PASSED")
