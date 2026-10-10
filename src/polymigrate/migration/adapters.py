@@ -113,7 +113,6 @@ def _tree_sitter_imports(language_id: str, source_text: str) -> set[str] | None:
     if tree is None:
         return set()
     node_types = {
-        "go": {"import_spec"},
         "javascript": {"import_statement", "export_statement", "call_expression"},
         "typescript": {"import_statement", "export_statement", "call_expression"},
         "rust": {"use_declaration", "extern_crate_declaration"},
@@ -278,12 +277,12 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
         # parser can misclassify declarations inside comments and string literals.
         if symbol_pattern and tree_sitter_result is None:
             symbols.update(match.group(1) for match in symbol_pattern.finditer(source_text))
-        if language_id in _IMPORT_PATTERNS:
+        if language_id == "go":
+            dependencies.update(_extract_go_imports(source_text))
+        elif language_id in _IMPORT_PATTERNS:
             parsed_imports = _tree_sitter_imports(language_id, source_text)
             if parsed_imports is not None:
                 dependencies.update(parsed_imports)
-            elif language_id == "go":
-                dependencies.update(_extract_go_imports(source_text))
             elif import_pattern:
                 dependencies.update(match.group(1) for match in import_pattern.finditer(source_text))
         elif import_pattern:
