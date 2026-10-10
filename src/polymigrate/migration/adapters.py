@@ -72,7 +72,8 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
 class InventorySourceAdapter:
     """Read supported UTF-8 source files into a hash-checked project inventory."""
     def __init__(self, language_id: str, extensions: Iterable[str], *, max_file_bytes: int = 1_000_000,
-                 max_files: int = 1_000, max_total_bytes: int = 20_000_000,\n                 max_scan_entries: int = 100_000) -> None:
+                 max_files: int = 1_000, max_total_bytes: int = 20_000_000,
+                 max_scan_entries: int = 100_000) -> None:
         if not language_id or language_id.strip().lower() != language_id:
             raise ValueError("language_id must be canonical lowercase text")
         if min(max_file_bytes, max_files, max_total_bytes, max_scan_entries) < 1:
