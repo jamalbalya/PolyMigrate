@@ -33,17 +33,34 @@ def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[Valid
         if list(workspace.rglob("*.py")):
             commands.append(ValidationCommand("build-python-compile", ("python", "-m", "compileall", "-q", ".")))
         tests_dir = workspace / "tests"
-        if tests_dir.is_dir() and any(t.is_file() and (t.name.startswith("test_") or t.name.endswith("_test.py")) for t in tests_dir.rglob("*.py")):
-            commands.append(ValidationCommand("unit_tests-python", ("python", "-m", "unittest", "discover", "-s", "tests", "-v")))
+        if tests_dir.is_dir():
+            unit_dir = tests_dir / "unit"
+            unit_root = unit_dir if unit_dir.is_dir() else tests_dir
+            unit_files = [t for t in unit_root.rglob("*.py") if t.is_file()
+                          and (t.name.startswith("test_") or t.name.endswith("_test.py"))
+                          and not any(part in {"integration", "e2e"} for part in t.relative_to(tests_dir).parts)]
+            if unit_files:
+                commands.append(ValidationCommand("unit_tests-python", ("python", "-m", "unittest", "discover", "-s", unit_root.relative_to(workspace).as_posix(), "-v")))
+            else:
+                warnings.append("Python unit tests were not run because no unit test files were found.")
+            for folder, gate in (("integration", "integration_tests"), ("e2e", "e2e_tests")):
+                test_root = tests_dir / folder
+                if test_root.is_dir() and any(t.is_file() and (t.name.startswith("test_") or t.name.endswith("_test.py")) for t in test_root.rglob("*.py")):
+                    commands.append(ValidationCommand(f"{gate}-python", ("python", "-m", "unittest", "discover", "-s", test_root.relative_to(workspace).as_posix(), "-v")))
         else:
-            warnings.append("Python unit tests were not run because no test files were found in tests/.")
+            warnings.append("Python tests were not run because tests/ does not exist.")
     elif language_id == "go":
         go_files = sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*.go") if not any(part in {".git", "vendor"} for part in p.relative_to(workspace).parts))
         module_mode = () if (workspace / "go.mod").is_file() else (("GO111MODULE", "off"),)
         if go_files:
             commands.append(ValidationCommand("build-go", ("go", "build", "./..."), environment=module_mode))
-        if any(path.endswith("_test.go") for path in go_files):
+        test_paths = [path for path in go_files if path.endswith("_test.go")]
+        if test_paths:
             commands.append(ValidationCommand("unit_tests-go", ("go", "test", "./..."), environment=module_mode))
+            if any("//go:build integration" in (workspace / path).read_text(encoding="utf-8", errors="replace")
+                   or "// +build integration" in (workspace / path).read_text(encoding="utf-8", errors="replace")
+                   for path in test_paths):
+                commands.append(ValidationCommand("integration_tests-go", ("go", "test", "-tags=integration", "./..."), environment=module_mode))
         else:
             warnings.append("Go unit tests were not run because no *_test.go files were found.")
     elif language_id in {"javascript", "typescript"}:
@@ -75,10 +92,22 @@ def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[Valid
             commands.append(ValidationCommand("unit_tests-node", ("npm", "test")))
         elif package_file.is_file():
             warnings.append("Node unit tests were not run because package.json has no test script.")
+        integration_script = next((name for name in ("test:integration", "integration", "integration:test") if name in package_scripts), None)
+        if integration_script:
+            commands.append(ValidationCommand("integration_tests-node", ("npm", "run", integration_script)))
+        e2e_script = next((name for name in ("test:e2e", "e2e", "test:e2e:ci") if name in package_scripts), None)
+        if e2e_script:
+            commands.append(ValidationCommand("e2e_tests-node", ("npm", "run", e2e_script)))
     elif language_id == "java":
         if (workspace / "pom.xml").is_file():
             commands.append(ValidationCommand("build-java", ("mvn", "-B", "-DskipTests", "package")))
             commands.append(ValidationCommand("unit_tests-java", ("mvn", "-B", "test")))
+            try:
+                pom_text = (workspace / "pom.xml").read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                pom_text = ""
+            if "maven-failsafe-plugin" in pom_text:
+                commands.append(ValidationCommand("integration_tests-java", ("mvn", "-B", "verify")))
         else:
             files = sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*.java") if not any(part in {".git", "target", "build"} for part in p.relative_to(workspace).parts))
             if files:
@@ -86,6 +115,8 @@ def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[Valid
     elif language_id == "rust" and (workspace / "Cargo.toml").is_file():
         commands.extend([ValidationCommand("build-rust", ("cargo", "check")),
                          ValidationCommand("unit_tests-rust", ("cargo", "test"))])
+        if (workspace / "tests").is_dir() and any((workspace / "tests").rglob("*.rs")):
+            commands.append(ValidationCommand("integration_tests-rust", ("cargo", "test", "--tests")))
     elif language_id == "csharp":
         if list(workspace.glob("*.sln")) or list(workspace.glob("*.csproj")):
             commands.extend([ValidationCommand("build-csharp", ("dotnet", "build")),
@@ -120,7 +151,7 @@ def validate_generated_project(workspace: Path, language_id: str, image: str | N
     executions: list[SandboxExecution] = []
     build_failed = False
     for command in commands:
-        if build_failed and command.command_id.startswith("unit_tests"):
+        if build_failed and command.command_id.startswith(("unit_tests", "integration_tests", "e2e_tests")):
             warnings.append(f"Skipped {command.command_id} because a build gate failed.")
             continue
         execution = runner.run(workspace, image, command)
@@ -133,4 +164,10 @@ def validate_generated_project(workspace: Path, language_id: str, image: str | N
                 gates["target_build"] = "PASSED"
         elif command.command_id.startswith("unit_tests"):
             gates["unit_tests"] = execution.status
+            if language_id == "rust" and (workspace / "tests").is_dir() and any((workspace / "tests").rglob("*.rs")):
+                gates["integration_tests"] = execution.status
+        elif command.command_id.startswith("integration_tests"):
+            gates["integration_tests"] = execution.status
+        elif command.command_id.startswith("e2e_tests"):
+            gates["e2e_tests"] = execution.status
     return ValidationSuiteResult(gates, tuple(executions), tuple(warnings))
