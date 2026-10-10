@@ -78,6 +78,16 @@ class BehaviorComparisonTests(unittest.TestCase):
             spec.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "non-allowlisted executable"):
                 compare_behavior(spec, source, target, "python:3.12-slim", "golang:1.23", FakeBehaviorRunner())
+            payload["source_command"] = ["python", "main.py"]
+            payload["cases"][0]["source_args"] = ["../secret"]
+            spec.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "parent traversal"):
+                compare_behavior(spec, source, target, "python:3.12-slim", "golang:1.23", FakeBehaviorRunner())
+            payload["cases"][0]["source_args"] = []
+            payload["source_command"] = ["python", "-c", "print(42)"]
+            spec.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "inline-code execution"):
+                compare_behavior(spec, source, target, "python:3.12-slim", "golang:1.23", FakeBehaviorRunner())
 
     def test_cli_records_behavior_comparison_gate(self):
         class TranslationProvider:
