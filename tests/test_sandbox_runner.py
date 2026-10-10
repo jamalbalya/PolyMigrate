@@ -50,11 +50,17 @@ class DockerSandboxTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             image_check = subprocess.CompletedProcess(["docker", "image", "inspect"], 0, "", "")
             timeout = subprocess.TimeoutExpired("docker run", 1, output=b"password=secret")
-            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"),                  patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, timeout]):
+            cleanup_kill = subprocess.CompletedProcess(["docker", "kill"], 0, "", "")
+            cleanup_remove = subprocess.CompletedProcess(["docker", "rm"], 0, "", "")
+            with patch("polymigrate.validation.runner.shutil.which", return_value="/usr/bin/docker"), \
+                 patch("polymigrate.validation.runner.subprocess.run", side_effect=[image_check, timeout, cleanup_kill, cleanup_remove]) as run:
                 result = DockerSandboxRunner(max_output_chars=20).run(
                     Path(tmp), "python:3.13", ValidationCommand("tests", ("python", "-m", "unittest"), 1))
             self.assertEqual(result.status, "TIMEOUT")
             self.assertNotIn("secret", result.stdout)
+            self.assertEqual(run.call_count, 4)
+            self.assertEqual(run.call_args_list[2].args[0][1], "kill")
+            self.assertEqual(run.call_args_list[3].args[0][1], "rm")
 
     def test_invalid_environment_key_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
