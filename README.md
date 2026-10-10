@@ -129,7 +129,7 @@ When `go` and `gofmt` are available, the strategy formats and builds the generat
 
 Without `--behavior-spec`, behavior comparison remains `NOT_RUN`. With a behavior spec, comparison requires Docker and the configured, already-pulled Python and Go images (`POLYMIGRATE_DOCKER_IMAGE_PYTHON` and `POLYMIGRATE_DOCKER_IMAGE_GO`). The strategy never pulls images automatically. Missing validation prerequisites must be reported as blocked or unverified, not as successful validation.
 
-The generated `migration-review.json` records the validation gates and overall status. Treat this feature as an experimental, subset-specific translator, not a general-purpose or production-ready project migrator.
+The generated `migration-review.json` records the validation gates and overall status. Pass `--security-evidence path/to/evidence.json` to include externally produced scanner evidence. The JSON object must contain `required_scanners` (a list of scanner IDs) and `evidence` (a list of objects with `scanner_id`, `scanner_version`, `complete`, `exit_code`, `report_sha256`, and `findings`). Each finding requires a `severity` (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`) and a `rule_id`. Missing or malformed evidence is `INCOMPLETE`, not a pass. The report explicitly marks scanner provenance as unverified; this input is evidence aggregation only, not trusted scanner execution or a comprehensive audit. Treat this feature as an experimental, subset-specific translator, not a general-purpose or production-ready project migrator.
 
 ### Optional local knowledge cache
 
