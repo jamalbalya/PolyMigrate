@@ -134,11 +134,11 @@ def run_trusted_security_scanners(root: Path, language: str) -> SecurityEvidence
     Semgrep uses a repository-bundled rules file and does not request a remote ruleset.
     Bandit and gosec are additional required scanners for Python and Go respectively.
     """
-    root = root.resolve()
     if root.is_symlink() or not root.is_dir():
         return evaluate_security_evidence(
             (), required_scanners=_PROFILES.get(language, ("semgrep",))
         )
+    root = root.resolve()
     required = _PROFILES.get(language, ("semgrep",))
     evidence: list[dict[str, Any]] = []
     for scanner_id in required:
