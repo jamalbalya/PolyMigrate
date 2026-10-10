@@ -18,6 +18,7 @@ from polymigrate.migration.research import LibraryResolutionWorkflow
 from polymigrate.models import MigrationRequest
 from polymigrate.planner import PlanningError, create_plan
 from polymigrate.skills.registry import SkillRegistry
+from polymigrate.validation.repair import AutonomousRepairLoop
 from polymigrate.validation.suite import validate_generated_project
 
 
@@ -186,9 +187,13 @@ def main(argv: list[str] | None = None) -> int:
             )
             image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{target_language.id.upper()}"
             validation_image = os.environ.get(image_variable, "").strip() or None
-            validation = validate_generated_project(result.output_root, target_language.id, validation_image)
+            initial_validation = validate_generated_project(result.output_root, target_language.id, validation_image)
+            repair_result = AutonomousRepairLoop(
+                providers, args.provider, target_language.id, target_language.extensions,
+            ).run(result.output_root, validation_image, context, initial_validation=initial_validation)
+            validation = repair_result.validation
             gates = validation.gates
-            all_warnings = list(result.warnings) + list(validation.warnings)
+            all_warnings = list(result.warnings) + list(validation.warnings) + list(repair_result.warnings)
             failed_gates = {"FAILED", "BLOCKED", "TIMEOUT"}
             if any(value in failed_gates for value in gates.values()):
                 overall_status = "BLOCKED"
@@ -203,8 +208,9 @@ def main(argv: list[str] | None = None) -> int:
                 "target_language": result.target_language, "generated_files": list(result.generated_files),
                 "dependency_inventory": dependency_inventory, "library_resolution": library_resolutions,
                 "warnings": all_warnings, "validation_image": validation_image,
+                "repair": repair_result.to_dict(),
                 "validation_gates": gates, "validation_results": validation.to_dict(),
-                "note": "Experimental per-file translation only; dependency manifests and full-project behavior are not guaranteed.",
+                "note": "Experimental per-file translation with bounded AI repair; dependency manifests and full-project behavior are not guaranteed.",
             }
             report_path = result.output_root / "migration-review.json"
             report_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
