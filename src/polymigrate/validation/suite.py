@@ -47,7 +47,12 @@ def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[Valid
             warnings.append("Go unit tests were not run because no *_test.go files were found.")
     elif language_id in {"javascript", "typescript"}:
         if language_id == "javascript":
-            files = sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*.js") if not any(part in {".git", "node_modules", "dist", "build"} for part in p.relative_to(workspace).parts))
+            files = sorted({
+                p.relative_to(workspace).as_posix()
+                for pattern in ("*.js", "*.mjs", "*.cjs")
+                for p in workspace.rglob(pattern)
+                if not any(part in {".git", "node_modules", "dist", "build"} for part in p.relative_to(workspace).parts)
+            })
             commands.extend(ValidationCommand(f"build-js-syntax-{i}", ("node", "--check", path)) for i, path in enumerate(files))
         elif (workspace / "tsconfig.json").is_file():
             commands.append(ValidationCommand("build-typescript", ("tsc", "--noEmit")))
