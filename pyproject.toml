@@ -22,3 +22,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.setuptools.package-data]
+polymigrate = ["skills/builtin/*/skill.json", "skills/builtin/*/SKILL.md"]
