@@ -7,15 +7,17 @@ import sys
 from pathlib import Path
 
 from polymigrate.ai.config import build_provider_registry
-from polymigrate.languages import LanguageRegistry
-from polymigrate.knowledge import MigrationKnowledgeStore, fingerprint_payload
 from polymigrate.graph.graphify import GraphifyAdapter
+from polymigrate.knowledge import MigrationKnowledgeStore, fingerprint_payload
+from polymigrate.languages import LanguageRegistry
 from polymigrate.migration.adapters import InventorySourceAdapter
+from polymigrate.migration.dependencies import DependencyGapPlanner
 from polymigrate.migration.llm_target import LLMTargetAdapter
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
-from polymigrate.validation.suite import validate_generated_project
+from polymigrate.migration.research import LibraryResolutionWorkflow
 from polymigrate.models import MigrationRequest
 from polymigrate.planner import PlanningError, create_plan
+from polymigrate.validation.suite import validate_generated_project
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,7 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--source", required=True, type=Path, help="Source project directory")
     plan.add_argument("--from", dest="source_language", required=True, help="Source language ID")
     plan.add_argument("--to", dest="target_language", required=True, help="Target language ID")
-    plan.add_argument("--output", required=True, type=Path, help="Output directory outside the source tree")
+    plan.add_argument("--output", required=True, type=Path, help="Output directory")
     plan.add_argument("--json", dest="json_path", type=Path, help="Optional path for a copy of the plan JSON")
     subparsers.add_parser("providers", help="Show configured AI providers without making network requests")
     migrate = subparsers.add_parser("migrate", help="Experimental AI file translation; output remains unverified")
@@ -38,6 +40,25 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Explicitly allow source code to be sent to the configured external AI provider")
     migrate.add_argument("--context-json", type=Path, help="Optional JSON object with non-secret migration constraints")
     return parser
+
+
+def _library_resolution_summary(result) -> dict[str, object]:
+    decision = result.decision
+    selected = next((candidate for candidate in result.candidates
+                     if f"{candidate.registry}:{candidate.name}" == decision.candidate_name), None)
+    selected_package = None
+    if selected is not None:
+        selected_package = {
+            "name": selected.name, "registry": selected.registry, "version": selected.version,
+            "url": selected.url, "license": selected.license, "description": selected.description,
+        }
+    return {
+        "source_library": decision.candidate_name if decision.decision_type == "candidate" else None,
+        "decision_type": decision.decision_type, "candidate_name": decision.candidate_name,
+        "strategy": decision.strategy, "rationale": decision.rationale,
+        "assumptions": list(decision.assumptions), "validation_tests": list(decision.validation_tests),
+        "selected_package": selected_package, "warnings": list(result.warnings),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -76,7 +97,52 @@ def main(argv: list[str] | None = None) -> int:
                 context["graphify_context"] = graph.output
             if graph.warning:
                 context["graphify_warning"] = graph.warning
-            providers, _warnings = build_provider_registry()
+
+            providers, _provider_warnings = build_provider_registry()
+            source_adapter = InventorySourceAdapter(source_language.id, source_language.extensions)
+            source_project = source_adapter.analyze(args.source)
+            dependency_warnings: list[str] = []
+            resolution_warnings: list[str] = []
+            dependency_inventory: list[str] = []
+            library_resolutions: list[dict[str, object]] = []
+            try:
+                gap_plan = DependencyGapPlanner(providers).plan(
+                    args.provider, source_project, target_language.id, graph.output, max_gaps=3,
+                )
+                dependency_inventory = list(gap_plan.observed_dependencies)
+                dependency_warnings.extend(gap_plan.warnings)
+                resolution_workflow = LibraryResolutionWorkflow(providers)
+                for gap in gap_plan.gaps:
+                    try:
+                        resolution = resolution_workflow.resolve(
+                            args.provider, source_library=gap.source_library,
+                            target_language=target_language.id,
+                            required_capabilities=list(gap.required_capabilities),
+                            max_queries=3, results_per_query=5,
+                        )
+                        summary = _library_resolution_summary(resolution)
+                        summary["source_library"] = gap.source_library
+                        summary["required_capabilities"] = list(gap.required_capabilities)
+                        summary["reason"] = gap.reason
+                        summary["evidence_files"] = list(gap.evidence_files)
+                        library_resolutions.append(summary)
+                        resolution_warnings.extend(resolution.warnings)
+                    except (ValueError, RuntimeError, OSError) as exc:
+                        warning = f"Library resolution failed for {gap.source_library} ({type(exc).__name__}); translation will proceed with an explicit warning."
+                        resolution_warnings.append(warning)
+                        library_resolutions.append({
+                            "source_library": gap.source_library, "decision_type": "unresolved",
+                            "strategy": "unresolved", "reason": gap.reason, "warnings": [warning],
+                        })
+            except (ValueError, RuntimeError, OSError) as exc:
+                dependency_warnings.append(
+                    f"Dependency gap planning failed ({type(exc).__name__}); translation will continue without verified library decisions."
+                )
+            context["dependency_inventory"] = dependency_inventory
+            context["library_resolution"] = library_resolutions
+            context["dependency_planning_warnings"] = dependency_warnings
+            context["library_resolution_warnings"] = resolution_warnings
+
             knowledge_db = os.environ.get("POLYMIGRATE_KNOWLEDGE_DB", "").strip()
             cache_drafts = os.environ.get("POLYMIGRATE_CACHE_DRAFTS", "").strip().lower() in {"1", "true", "yes"}
             if cache_drafts and not knowledge_db:
@@ -84,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
             knowledge_store = MigrationKnowledgeStore(Path(knowledge_db).expanduser()) if knowledge_db else None
             project_scope = fingerprint_payload({"project_root": str(args.source.expanduser().resolve())}) if knowledge_store else None
             adapters = AdapterRegistry()
-            adapters.register_source(InventorySourceAdapter(source_language.id, source_language.extensions))
+            adapters.register_source(source_adapter)
             target_adapter = LLMTargetAdapter(
                 target_language.id, source_language.id, target_language.extensions[0],
                 providers, args.provider, allow_source_upload=args.allow_source_upload,
@@ -94,12 +160,11 @@ def main(argv: list[str] | None = None) -> int:
             adapters.register_target(target_adapter)
             result = MigrationEngine(adapters).execute(
                 args.source, source_language.id, target_language.id, args.output, context,
+                source_project=source_project,
             )
             image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{target_language.id.upper()}"
             validation_image = os.environ.get(image_variable, "").strip() or None
-            validation = validate_generated_project(
-                result.output_root, target_language.id, validation_image,
-            )
+            validation = validate_generated_project(result.output_root, target_language.id, validation_image)
             gates = validation.gates
             all_warnings = list(result.warnings) + list(validation.warnings)
             failed_gates = {"FAILED", "BLOCKED", "TIMEOUT"}
@@ -112,15 +177,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 overall_status = "GENERATED_UNVERIFIED"
             summary = {
-                "status": overall_status,
-                "source_language": result.source_language,
-                "target_language": result.target_language,
-                "generated_files": list(result.generated_files),
-                "warnings": all_warnings,
-                "validation_image": validation_image,
-                "validation_gates": gates,
-                "validation_results": validation.to_dict(),
-                "note": "Experimental file translation only; this is not a verified full-project migration.",
+                "status": overall_status, "source_language": result.source_language,
+                "target_language": result.target_language, "generated_files": list(result.generated_files),
+                "dependency_inventory": dependency_inventory, "library_resolution": library_resolutions,
+                "warnings": all_warnings, "validation_image": validation_image,
+                "validation_gates": gates, "validation_results": validation.to_dict(),
+                "note": "Experimental per-file translation only; dependency manifests and full-project behavior are not guaranteed.",
             }
             report_path = result.output_root / "migration-review.json"
             report_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
