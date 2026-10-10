@@ -50,6 +50,22 @@ import (
         self.assertEqual(plan.gaps[0].source_library,"requests")
         self.assertEqual(plan.gaps[0].evidence_files,("main.py",))
 
+    def test_manifest_context_is_bounded_and_redacted_in_dependency_prompt(self):
+        project=SourceProject(Path("."),"python",(SourceUnit("main.py","import requests\\n",""),))
+        provider=FakeProvider({"gaps":[]})
+        registry=ProviderRegistry()
+        registry.register(provider)
+        manifest = '{"dependencies":{"requests":"^2"},"api_key":"sk-12345678901234567890"}'
+        DependencyGapPlanner(registry).plan(
+            "fake", project, "go",
+            manifest_context=[{"path":"package.json","content":manifest}],
+        )
+        prompt=provider.requests[0].prompt
+        self.assertIn("package.json", prompt)
+        self.assertIn("requests", prompt)
+        self.assertNotIn("sk-12345678901234567890", prompt)
+        self.assertIn("[REDACTED]", prompt)
+
     def test_planner_rejects_hallucinated_dependency(self):
         project=SourceProject(Path("."),"python",(SourceUnit("main.py","import requests\n",""),))
         provider=FakeProvider({"gaps":[{"source_library":"imaginary-package","required_capabilities":["do things"],
