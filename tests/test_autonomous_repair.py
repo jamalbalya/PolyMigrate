@@ -87,6 +87,19 @@ class AutonomousRepairTests(unittest.TestCase):
         self.assertEqual(result.status,"UNRESOLVED")
         self.assertEqual(result.attempts[0].status,"NO_CHANGES")
 
+    def test_repair_never_modifies_test_files(self):
+        provider=FakeProvider({"files":[{"path":"main_test.go","content":"package main"}],"rationale":"bad"})
+        providers=ProviderRegistry()
+        providers.register(provider)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/"main_test.go").write_text("package main\\n",encoding="utf-8")
+            result=AutonomousRepairLoop(providers,"fake","go",(".go",)).run(
+                root,"golang:test",initial_validation=validation("FAILED","FAILED","main_test.go: error"))
+            self.assertEqual((root/"main_test.go").read_text(encoding="utf-8"),"package main\\n")
+        self.assertEqual(result.status,"UNRESOLVED")
+        self.assertEqual(provider.requests,[])
+
 
 if __name__ == "__main__":
     unittest.main()
