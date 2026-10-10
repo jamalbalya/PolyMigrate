@@ -24,6 +24,7 @@ from polymigrate.skills.registry import SkillRegistry
 from polymigrate.validation.repair import AutonomousRepairLoop
 from polymigrate.validation.suite import validate_generated_project
 from polymigrate.validation.behavior import compare_behavior
+from polymigrate.validation.dependency_wiring import review_dependency_wiring
 from polymigrate.security.static_review import review_generated_output
 
 
@@ -306,6 +307,7 @@ def main(argv: list[str] | None = None) -> int:
             ).run(result.output_root, validation_image, context, initial_validation=initial_validation)
             validation = repair_result.validation
             static_security_result = review_generated_output(result.output_root)
+            dependency_wiring_result = review_dependency_wiring(result.output_root, target_language.id)
             behavior_result = None
             if args.behavior_spec is not None:
                 source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
@@ -334,6 +336,7 @@ def main(argv: list[str] | None = None) -> int:
                     resolution_warnings.append("Library decisions remain unverified and project-scoped because not all required validation gates passed.")
             all_warnings = list(result.warnings) + list(validation.warnings) + list(repair_result.warnings) + list(resolution_warnings)
             all_warnings.extend(static_security_result.warnings)
+            all_warnings.extend(dependency_wiring_result.warnings)
             all_warnings.extend(
                 f"Static security finding {finding.rule_id} ({finding.severity}) at {finding.path}:{finding.line}."
                 for finding in static_security_result.findings
@@ -341,7 +344,7 @@ def main(argv: list[str] | None = None) -> int:
             if behavior_result is not None:
                 all_warnings.extend(behavior_result.warnings)
             failed_gates = {"FAILED", "BLOCKED", "TIMEOUT", "INCOMPLETE"}
-            if static_security_result.status in {"FAILED", "BLOCKED", "INCOMPLETE", "REVIEW_REQUIRED"} or any(value in failed_gates for value in gates.values()):
+            if static_security_result.status in {"FAILED", "BLOCKED", "INCOMPLETE", "REVIEW_REQUIRED"} or dependency_wiring_result.status == "BLOCKED" or any(value in failed_gates for value in gates.values()):
                 overall_status = "BLOCKED"
             elif any(value == "PASSED" for value in gates.values()) and any(
                 value == "NOT_RUN" for value in gates.values()
@@ -360,6 +363,7 @@ def main(argv: list[str] | None = None) -> int:
                 "warnings": all_warnings, "validation_image": validation_image,
                 "repair": repair_result.to_dict(),
                 "static_security_scan": static_security_result.to_dict(),
+                "dependency_wiring_review": dependency_wiring_result.to_dict(),
                 "behavior_comparison": behavior_result.to_dict() if behavior_result is not None else {
                     "status": "NOT_RUN", "cases_checked": 0,
                     "warnings": ["No behavior spec was supplied; behavior equivalence was not tested."],
