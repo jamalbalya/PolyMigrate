@@ -90,9 +90,10 @@ To use a local 9Router instance, set its key and an exact model ID available in 
     . ./.env
     set +a
     polymigrate providers
+    polymigrate providers --list-models
     polymigrate providers --check
 
-The check sends a source-free health prompt and verifies a valid JSON response; it does not prove migration quality. The localhost URL works only from a machine/network namespace that can reach the running 9Router process. GitHub-hosted CI cannot reach a developer localhost automatically. After connectivity succeeds, test an actual migration with:
+The model-list command queries the OpenAI-compatible /models endpoint and prints model IDs without printing credentials. Select an exact ID for POLYMIGRATE_9ROUTER_MODEL, then run the connectivity check. The check sends a source-free health prompt and verifies a valid JSON response; it does not prove migration quality. The localhost URL works only from a machine/network namespace that can reach the running 9Router process. GitHub-hosted CI cannot reach a developer localhost automatically. After connectivity succeeds, test an actual migration with:
 
     polymigrate migrate --source ./sample-python-project --from python --to go --output ./migration-output --provider 9router --allow-source-upload
 
