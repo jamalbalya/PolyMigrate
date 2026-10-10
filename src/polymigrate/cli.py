@@ -658,6 +658,8 @@ def main(argv: list[str] | None = None) -> int:
                         try:
                             knowledge_store.promote_verified(record_id, evidence, shareable=True)
                             library_summary["cache_status"] = "VERIFIED_SHARED"
+                            if library_summary.get("decision_type") == "candidate":
+                                library_summary["implementation_status"] = "VERIFIED_INTEGRATION"
                         except (ValueError, OSError, RuntimeError) as exc:
                             resolution_warnings.append(f"Library decision was not promoted to shared knowledge ({type(exc).__name__}).")
                 elif any(isinstance(item.get("knowledge_record_id"), str) for item in library_resolutions):
