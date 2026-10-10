@@ -317,10 +317,8 @@ def _php_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
         namespace = item.strip("\\").lower()
         if any(namespace == prefix or namespace.startswith(prefix + "\\") for prefix in local_namespaces):
             continue
-        parts = namespace.split("\\")
-        package = "/".join(parts[:2]) if len(parts) >= 2 else ""
-        if package and package in declared:
-            continue
+        # Namespace names do not reliably identify Composer package names; do not
+        # turn a heuristic coordinate match into verified dependency evidence.
         unresolved.append(item)
     if unresolved and composer.is_file():
         warnings.append("PHP namespace-to-Composer package mapping is ambiguous; dependency wiring remains unverified until a real build/integration test proves it.")
