@@ -56,11 +56,11 @@ def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[Valid
             commands.append(ValidationCommand("build-go", ("go", "build", "./..."), environment=module_mode))
         test_paths = [path for path in go_files if path.endswith("_test.go")]
         if test_paths:
-            commands.append(ValidationCommand("unit_tests-go", ("go", "test", "./..."), environment=module_mode))
+            commands.append(ValidationCommand("unit_tests-go", ("go", "test", "-v", "./..."), environment=module_mode))
             if any("//go:build integration" in (workspace / path).read_text(encoding="utf-8", errors="replace")
                    or "// +build integration" in (workspace / path).read_text(encoding="utf-8", errors="replace")
                    for path in test_paths):
-                commands.append(ValidationCommand("integration_tests-go", ("go", "test", "-tags=integration", "./..."), environment=module_mode))
+                commands.append(ValidationCommand("integration_tests-go", ("go", "test", "-v", "-tags=integration", "./..."), environment=module_mode))
         else:
             warnings.append("Go unit tests were not run because no *_test.go files were found.")
     elif language_id in {"javascript", "typescript"}:
