@@ -210,7 +210,7 @@ def _kotlin_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
         if text is None:
             warnings.append(f"Could not read {path.relative_to(root).as_posix()}.")
             continue
-        imports.update(re.findall(r"(?m)^\s*import\s+([A-Za-z_][A-Za-z0-9_.]*)", text))
+        imports.update(re.findall(r"(?m)^\s*import\s+([A-Za-z_][A-Za-z0-9_.]*(?:\.\*)?)", text))
     manifests = [root / name for name in ("build.gradle", "build.gradle.kts", "pom.xml")]
     present = [path for path in manifests if path.is_file() and not path.is_symlink()]
     declared: set[str] = set()
@@ -315,7 +315,7 @@ def _php_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
     unresolved = []
     for item in imports:
         namespace = item.strip("\\").lower()
-        if any(namespace == prefix or namespace.startswith(prefix) for prefix in local_namespaces):
+        if any(namespace == prefix or namespace.startswith(prefix + "\\") for prefix in local_namespaces):
             continue
         parts = namespace.split("\\")
         package = "/".join(parts[:2]) if len(parts) >= 2 else ""
