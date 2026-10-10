@@ -19,14 +19,14 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 168 tests ran in the latest verified workflow on Python 3.11, 3.12, and 3.13; all non-skipped tests passed; the wheel build also verified all six packaged skill assets.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 169 tests ran in the latest verified workflow on Python 3.11, 3.12, and 3.13; all non-skipped tests passed; the dedicated Docker behavior E2E job passed for Python→Node and Python→Go; the wheel build verified all six packaged skill assets.
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
 - [ ] T024 Implement full autonomous migration orchestration and library reconstruction.
 - [x] T025 Add isolated build/test execution and bounded automated repair loop.
 - [x] T026 Add safe Graphify CLI query adapter and include graph context in experimental migration; live version compatibility and incremental graph invalidation remain unverified.
-- [ ] T027 Add full migration E2E fixtures across multiple language pairs and behavior-equivalence checks.
+- [x] T027 Add migration E2E fixtures across language pairs and behavior-equivalence checks; real sandboxed Python→Node and Python→Go output comparisons pass, while each result remains limited to explicitly declared cases.
 - [x] T028 Add opt-in same-project draft caching keyed by source, target, toolchain, and Graphify context fingerprints.
 - [x] T029 Add restricted Docker validation runner with no network, no shell, resource limits, timeout cleanup, and no automatic image pulls.
 - [x] T030 Add language-aware validation command selection and integrate optional build/test results into the final migration review.
@@ -44,7 +44,7 @@
 
 - [x] T042 Prevent cross-project draft record collisions and prevent unverified records from downgrading verified/shareable knowledge; regression-tested.
 - [x] T043 Add bidirectional migration orchestration contract fixtures for representative language pairs; these tests do not claim semantic equivalence.
-- [x] T044 Add executable Python↔Go arithmetic fixtures that compare source and generated output; broader behavior-harness integration remains open under T027.
+- [x] T044 Add executable Python↔Go arithmetic fixtures that compare source and generated output; the broader behavior harness and real Docker comparisons are covered by T056–T057.
 - [x] T045 Reject Graphify artifact paths and symlinks that resolve outside the selected project root.
 - [x] T046 Add an opt-in, source-free live provider connectivity check; live verification with real credentials remains unverified in this environment.
 - [x] T047 Add bounded allowlisted source-manifest inventory with secret redaction, traversal limits, and prompt-context regression tests.
