@@ -30,13 +30,17 @@ class GraphifyAdapter:
 
     def load_artifact(self, project_root: Path, artifact_path: Path | None = None) -> GraphResult:
         try:
-            resolved_root = project_root.resolve(strict=True)
+            resolved_root = project_root.expanduser().resolve(strict=True)
             candidate = artifact_path or (resolved_root / "graphify-out" / "graph.json")
             if artifact_path is not None and not artifact_path.is_absolute():
                 candidate = resolved_root / artifact_path
-            resolved_candidate = candidate.resolve(strict=True)
-        except OSError:
-            return GraphResult("unavailable", warning=f"Graphify artifact not found: {candidate}")
+            resolved_candidate = candidate.expanduser().resolve(strict=True)
+        except (OSError, RuntimeError):
+            return GraphResult("unavailable", warning="Graphify artifact could not be resolved")
+        # Explicit artifact paths must remain inside the selected project after symlink
+        # resolution; otherwise a caller could make the adapter read an unrelated file.
+        if resolved_root not in resolved_candidate.parents:
+            return GraphResult("degraded", warning="Graphify artifact must resolve inside the project root")
         if not resolved_candidate.is_file():
             return GraphResult("unavailable", warning=f"Graphify artifact is not a file: {candidate}")
         try:
