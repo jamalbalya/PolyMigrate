@@ -132,9 +132,13 @@ def _validate_spec(spec_path: Path) -> tuple[tuple[str, ...], tuple[str, ...], l
             raise ValueError(f"Behavior case {name} arguments must be arrays")
         source_argv = _command(list(source_command) + source_args, f"case {name} source argv")
         target_argv = _command(list(target_command) + target_args, f"case {name} target argv")
+        timeout_seconds = case.get("timeout_seconds", 20)
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not 1 <= timeout_seconds <= 60:
+            raise ValueError(f"Behavior case {name} timeout_seconds must be between 1 and 60")
         validated.append({
             "name": name, "source_argv": source_argv, "target_argv": target_argv,
             "expected_stdout": expected.replace("\r\n", "\n"),
+            "timeout_seconds": float(timeout_seconds),
         })
     return source_command, target_command, validated
 
@@ -203,14 +207,14 @@ def compare_behavior(
             source_result = sandbox.run(
                 source_snapshot, source_image,
                 ValidationCommand(
-                    f"behavior_source_{index}", case["source_argv"], timeout_seconds=20.0,
+                    f"behavior_source_{index}", case["source_argv"], timeout_seconds=case["timeout_seconds"],
                     environment=_command_environment(source_snapshot, case["source_argv"]),
                 ),
             )
             target_result = sandbox.run(
                 target_snapshot, target_image,
                 ValidationCommand(
-                    f"behavior_target_{index}", case["target_argv"], timeout_seconds=20.0,
+                    f"behavior_target_{index}", case["target_argv"], timeout_seconds=case["timeout_seconds"],
                     environment=_command_environment(target_snapshot, case["target_argv"]),
                 ),
             )
