@@ -109,9 +109,11 @@ class PackageRegistrySearcher:
         return data
 
     def search(self, language_id: str, query: str, limit: int = 10) -> PackageSearchResult:
+        if not isinstance(language_id, str) or not language_id.strip() or len(language_id) > 50:
+            raise ValueError("language_id must be a non-empty string of at most 50 characters")
         language = language_id.strip().lower()
-        if not language or not isinstance(query, str) or not query.strip() or len(query) > 200:
-            raise ValueError("language_id and a query of 1-200 characters are required")
+        if not isinstance(query, str) or not query.strip() or len(query) > 200:
+            raise ValueError("query must be a non-empty string of at most 200 characters")
         if not 1 <= limit <= 20:
             raise ValueError("limit must be between 1 and 20")
         try:
@@ -243,8 +245,11 @@ class PackageRegistrySearcher:
         out = []
         for item in data.get("items", []) if isinstance(data, dict) else []:
             name = item.get("full_name")
-            candidate = self._candidate(name, None, item.get("description"), "github-repositories",
-                                        item.get("html_url"), None, item.get("stargazers_count"))
+            description = item.get("description") if isinstance(item.get("description"), str) else ""
+            stars = item.get("stargazers_count")
+            if isinstance(stars, int) and stars >= 0:
+                description = f"{description} [GitHub stars: {stars}]".strip()
+            candidate = self._candidate(name, None, description, "github-repositories", item.get("html_url"))
             if candidate:
                 out.append(candidate)
         return out
