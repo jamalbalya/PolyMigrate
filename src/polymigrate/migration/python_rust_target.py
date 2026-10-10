@@ -1,8 +1,9 @@
 """Deterministic translator for a deliberately small Python-to-Rust subset.
 
 Supports simple assignments, integer expressions (+, -, *), string/integer
-literals, unary +/- on integers, and one-argument print(). Unsupported syntax
-is rejected. Integer arithmetic is limited to signed i32.
+literals, unary +/- on integers, one-argument print(), and simple if/else
+conditions with bounded comparisons. Unsupported syntax is rejected. Integer
+arithmetic is limited to signed i32.
 """
 from __future__ import annotations
 
@@ -127,6 +128,50 @@ class PythonToRustTargetAdapter:
             return sign + value, "int"
         raise UnsupportedPythonSyntax(f"Unsupported expression syntax: {type(node).__name__}")
 
+    def _condition(self, node: ast.expr, assigned: set[str]) -> str:
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return f"!({self._condition(node.operand, assigned)})"
+        if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
+            operator = "&&" if isinstance(node.op, ast.And) else "||"
+            return "(" + f" {operator} ".join(self._condition(item, assigned) for item in node.values) + ")"
+        if isinstance(node, ast.Compare):
+            if len(node.ops) != 1 or len(node.comparators) != 1:
+                raise UnsupportedPythonSyntax("Chained comparisons are not supported in conditions")
+            left, left_type = self._expr(node.left, assigned)
+            right, right_type = self._expr(node.comparators[0], assigned)
+            if left_type != right_type:
+                raise UnsupportedPythonSyntax("Comparisons require operands of the same known type")
+            operators = {
+                ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<",
+                ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=",
+            }
+            operator = operators.get(type(node.ops[0]))
+            if operator is None:
+                raise UnsupportedPythonSyntax("Only ==, !=, <, <=, >, and >= comparisons are supported")
+            if left_type == "string" and operator not in {"==", "!="}:
+                raise UnsupportedPythonSyntax("String ordering comparisons are not supported")
+            return f"({left} {operator} {right})"
+        if isinstance(node, ast.Name):
+            value, value_type = self._expr(node, assigned)
+            if value_type == "int":
+                return f"({value} != 0)"
+            if value_type == "string":
+                return f'({value} != "")'
+        if isinstance(node, ast.Constant) and type(node.value) is bool:
+            return "true" if node.value else "false"
+        raise UnsupportedPythonSyntax(f"Unsupported condition syntax: {type(node).__name__}")
+
+    def _print_statement(self, node: ast.stmt, assigned: set[str]) -> str:
+        if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+            raise UnsupportedPythonSyntax("Conditional bodies may contain only print() statements")
+        call = node.value
+        if not isinstance(call.func, ast.Name) or call.func.id != "print":
+            raise UnsupportedPythonSyntax("Only calls to print() are supported in conditional bodies")
+        if len(call.args) != 1 or call.keywords:
+            raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
+        expression, _ = self._expr(call.args[0], assigned)
+        return f'println!("{{}}", {expression});'
+
     def generate(self, project: SourceProject, context: dict[str, object]) -> list[GeneratedArtifact]:
         del context
         if project.language_id != "python":
@@ -180,6 +225,22 @@ class PythonToRustTargetAdapter:
                     raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
                 expr, _ = self._expr(call.args[0], assigned)
                 statements.append(f'println!("{{}}", {expr});')
+            elif isinstance(node, ast.If):
+                condition = self._condition(node.test, assigned)
+                if not node.body:
+                    raise UnsupportedPythonSyntax("Empty conditional bodies are not supported")
+                body = [self._print_statement(statement, assigned) for statement in node.body]
+                alternative: list[str] = []
+                if node.orelse:
+                    if any(isinstance(statement, ast.If) for statement in node.orelse):
+                        raise UnsupportedPythonSyntax("elif chains are not supported")
+                    alternative = [self._print_statement(statement, assigned) for statement in node.orelse]
+                rendered = [f"if {condition} {{", *("    " + line for line in body), "}"]
+                if alternative:
+                    rendered[-1] = "} else {"
+                    rendered.extend(["    " + line for line in alternative])
+                    rendered.append("}")
+                statements.append("\n".join(rendered))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
             else:
