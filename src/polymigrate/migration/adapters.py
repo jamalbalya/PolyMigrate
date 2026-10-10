@@ -137,7 +137,7 @@ def _tree_sitter_imports(language_id: str, source_text: str) -> set[str] | None:
         if node.type in node_types and node.text:
             text = node.text.decode("utf-8", errors="replace")
             if language_id in {"javascript", "typescript"}:
-                if node.type == "call_expression" and not re.search(r"\\b(?:require|import)\\s*\\(", text):
+                if node.type == "call_expression" and not re.search(r"\b(?:require|import)\s*\(", text):
                     stack.extend(reversed(node.named_children))
                     continue
                 match = re.search(r'''["']([^"']+)["']''', text)
@@ -148,34 +148,34 @@ def _tree_sitter_imports(language_id: str, source_text: str) -> set[str] | None:
                 if match:
                     imports.add(match.group(1))
             elif language_id == "rust":
-                match = re.search(r"\\b(?:use|extern\\s+crate)\\s+([A-Za-z_]\\w*)", text)
+                match = re.search(r"\b(?:use|extern\s+crate)\s+([A-Za-z_]\w*)", text)
                 if match:
                     imports.add(match.group(1))
             elif language_id in {"java", "kotlin"}:
-                match = re.search(r"\\bimport\\s+(?:static\\s+)?([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)+)", text)
+                match = re.search(r"\bimport\s+(?:static\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)", text)
                 if match:
                     imports.add(match.group(1))
             elif language_id == "csharp":
-                match = re.search(r"\\busing\\s+(?:static\\s+)?([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*)\\s*;", text)
+                match = re.search(r"\busing\s+(?:static\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;", text)
                 if match:
                     imports.add(match.group(1))
             elif language_id in {"c", "cpp"}:
-                match = re.search(r'#\\s*include\\s*[<"]([^>"]+)[>"]', text)
+                match = re.search(r'#\s*include\s*[<"]([^>"]+)[>"]', text)
                 if match:
                     imports.add(match.group(1))
             elif language_id == "ruby":
-                if re.search(r"\\b(?:require|require_relative)\\b", text):
+                if re.search(r"\b(?:require|require_relative)\b", text):
                     match = re.search(r'''["']([^"']+)["']''', text)
                     if match:
                         imports.add(match.group(1))
             elif language_id == "php":
-                match = re.search(r"\\buse\\s+(.+?);", text)
+                match = re.search(r"\buse\s+(.+?);", text)
                 if match:
                     value = match.group(1).strip()
-                    value = re.sub(r"^(?:function|const)\\s+", "", value)
+                    value = re.sub(r"^(?:function|const)\s+", "", value)
                     imports.add(value.split(" as ", 1)[0].strip())
             elif language_id == "swift":
-                match = re.search(r"\\bimport\\s+(?:class|struct|enum|protocol|func|var|let)\\s+([A-Za-z_]\\w*)|\\bimport\\s+([A-Za-z_]\\w*)", text)
+                match = re.search(r"\bimport\s+(?:class|struct|enum|protocol|func|var|let)\s+([A-Za-z_]\w*)|\bimport\s+([A-Za-z_]\w*)", text)
                 if match:
                     imports.add(next(group for group in match.groups() if group))
         stack.extend(reversed(node.named_children))
