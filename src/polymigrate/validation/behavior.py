@@ -68,8 +68,10 @@ def _command(value: object, label: str) -> tuple[str, ...]:
 
 def _copy_project_snapshot(source: Path, destination: Path, *, max_files: int = 10_000,
                            max_total_bytes: int = 50_000_000) -> None:
+    if source.is_symlink():
+        raise ValueError("Behavior comparison workspace must not be a symlink")
     root = source.expanduser().resolve(strict=True)
-    if not root.is_dir() or root.is_symlink():
+    if not root.is_dir():
         raise ValueError("Behavior comparison workspace must be a real directory")
     destination.mkdir(parents=True, exist_ok=False)
     files_copied = 0
@@ -93,7 +95,7 @@ def _copy_project_snapshot(source: Path, destination: Path, *, max_files: int = 
             relative = path.relative_to(root)
             target = destination / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(path, target)
+            shutil.copy2(path, target)
             total_bytes += size
     if files_copied == 0:
         raise ValueError("Behavior comparison snapshot contains no regular files")
@@ -137,6 +139,28 @@ def _validate_spec(spec_path: Path) -> tuple[tuple[str, ...], tuple[str, ...], l
     return source_command, target_command, validated
 
 
+def _command_environment(workspace: Path, argv: tuple[str, ...]) -> tuple[tuple[str, str], ...]:
+    executable = Path(argv[0]).name.lower()
+    if executable == "go":
+        return (
+            ("GOCACHE", "/workspace/.polymigrate-gocache"),
+            ("GOTMPDIR", "/workspace/.polymigrate-gotmp"),
+            ("GOPATH", "/workspace/.polymigrate-gopath"),
+            ("GOMODCACHE", "/workspace/.polymigrate-gomodcache"),
+            ("GOPROXY", "off"), ("GOSUMDB", "off"), ("GOTOOLCHAIN", "local"),
+            ("GO111MODULE", "on" if (workspace / "go.mod").is_file() else "off"),
+        )
+    if executable == "cargo":
+        return (
+            ("CARGO_HOME", "/workspace/.cargo-home"),
+            ("CARGO_TARGET_DIR", "/workspace/.cargo-target"),
+            ("CARGO_NET_OFFLINE", "true"),
+        )
+    if executable in {"npm", "npx"}:
+        return (("npm_config_offline", "true"), ("NPM_CONFIG_UPDATE_NOTIFIER", "false"))
+    return ()
+
+
 def compare_behavior(
     spec_path: Path, source_root: Path, target_root: Path,
     source_image: str | None, target_image: str | None,
@@ -168,11 +192,17 @@ def compare_behavior(
         for index, case in enumerate(cases, start=1):
             source_result = sandbox.run(
                 source_snapshot, source_image,
-                ValidationCommand(f"behavior_source_{index}", case["source_argv"], timeout_seconds=20.0),
+                ValidationCommand(
+                    f"behavior_source_{index}", case["source_argv"], timeout_seconds=20.0,
+                    environment=_command_environment(source_snapshot, case["source_argv"]),
+                ),
             )
             target_result = sandbox.run(
                 target_snapshot, target_image,
-                ValidationCommand(f"behavior_target_{index}", case["target_argv"], timeout_seconds=20.0),
+                ValidationCommand(
+                    f"behavior_target_{index}", case["target_argv"], timeout_seconds=20.0,
+                    environment=_command_environment(target_snapshot, case["target_argv"]),
+                ),
             )
             executions.extend((source_result, target_result))
             if source_result.status == "TIMEOUT" or target_result.status == "TIMEOUT":
