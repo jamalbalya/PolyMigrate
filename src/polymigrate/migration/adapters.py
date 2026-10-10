@@ -114,7 +114,7 @@ def check_target_syntax(language_id: str, source_text: str) -> str | None:
         return None
     result = _tree_sitter_structure(language_id, source_text)
     if result is None:
-        return None
+        return f"No usable offline syntax parser was available for {language_id}; generated syntax was not checked."
     _, warning = result
     if warning and ("syntax errors" in warning or "timed out" in warning or "node limit" in warning):
         return warning
