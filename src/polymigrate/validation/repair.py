@@ -56,6 +56,8 @@ class AutonomousRepairLoop:
 
     def run(self, workspace: Path, image: str | None, context: dict[str, Any] | None = None,
             initial_validation: ValidationSuiteResult | None = None) -> RepairLoopResult:
+        if workspace.is_symlink():
+            raise ValueError("Repair workspace must not be a symlink")
         root = workspace.expanduser().resolve(strict=True)
         if not root.is_dir() or root.is_symlink():
             raise ValueError("Repair workspace must be a real directory")
@@ -158,7 +160,8 @@ class AutonomousRepairLoop:
             if total > self.max_total_output_chars:
                 raise ValueError("Repair output exceeds the configured total size limit")
             changes[path] = content
-        return changes, rationale
+        original_content = dict(source_files)
+        return {path: content for path, content in changes.items() if content != original_content[path]}, rationale
 
     def _select_files(self, root: Path, failures: list[Any]) -> list[tuple[str, str]]:
         ignored = {".git", "node_modules", "vendor", "dist", "build", "target", ".build"}
