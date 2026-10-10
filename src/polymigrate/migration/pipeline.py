@@ -76,14 +76,21 @@ class AdapterRegistry:
 
 class MigrationEngine:
     """Run registered adapters and write generated files without touching source."""
-    def __init__(self, adapters: AdapterRegistry) -> None:
+    def __init__(self, adapters: AdapterRegistry, *, max_generated_files: int = 10_000,
+                 max_artifact_bytes: int = 10 * 1024 * 1024) -> None:
+        if max_generated_files < 1 or max_artifact_bytes < 1:
+            raise ValueError("output limits must be positive")
         self.adapters = adapters
+        self.max_generated_files = max_generated_files
+        self.max_artifact_bytes = max_artifact_bytes
 
     def execute(self, source_root: Path, source_language: str, target_language: str,
                 output_root: Path, context: dict[str, Any] | None = None) -> MigrationExecutionResult:
         source = source_root.expanduser().resolve(strict=True)
         if not source.is_dir():
             raise ValueError("Source root must be a directory")
+        if output_root.is_symlink():
+            raise ValueError("Output root must not be a symlink")
         output = output_root.expanduser().resolve(strict=False)
         if output == source or source in output.parents:
             raise ValueError("Output directory must be outside the source tree")
@@ -106,13 +113,22 @@ class MigrationEngine:
             if unit.content_sha256 != expected:
                 raise ValueError(f"Source adapter returned an invalid content hash for {unit.relative_path}")
         artifacts = target_adapter.generate(project, context or {})
+        if len(artifacts) > self.max_generated_files:
+            raise ValueError("Target adapter exceeded the generated file limit")
+        for artifact in artifacts:
+            if not isinstance(artifact.content, str):
+                raise ValueError("Target adapter content must be text")
+            if len(artifact.content.encode("utf-8")) > self.max_artifact_bytes:
+                raise ValueError(f"Target artifact exceeds size limit: {artifact.relative_path}")
         output.mkdir(parents=True, exist_ok=True)
         written: list[str] = []
         artifact_paths: set[str] = set()
         root_resolved = output.resolve(strict=True)
         for artifact in artifacts:
             relative = PurePosixPath(artifact.relative_path)
-            if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+            if (relative.is_absolute() or ".." in relative.parts or not relative.parts
+                    or "\\\\" in artifact.relative_path or "\\x00" in artifact.relative_path
+                    or ":" in relative.parts[0]):
                 raise ValueError(f"Target adapter returned unsafe output path: {artifact.relative_path}")
             normalized = relative.as_posix()
             if normalized in artifact_paths:
