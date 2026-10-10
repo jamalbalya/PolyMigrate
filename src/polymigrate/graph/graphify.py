@@ -28,9 +28,11 @@ class GraphifyAdapter:
         self.max_output_chars = max_output_chars
 
     def load_artifact(self, project_root: Path, artifact_path: Path | None = None) -> GraphResult:
-        candidate = artifact_path or project_root / "graphify-out" / "graph.json"
         try:
-            project_root.resolve(strict=True)
+            resolved_root = project_root.resolve(strict=True)
+            candidate = artifact_path or (resolved_root / "graphify-out" / "graph.json")
+            if artifact_path is not None and not artifact_path.is_absolute():
+                candidate = resolved_root / artifact_path
             resolved_candidate = candidate.resolve(strict=True)
         except OSError:
             return GraphResult("unavailable", warning=f"Graphify artifact not found: {candidate}")
@@ -52,7 +54,10 @@ class GraphifyAdapter:
         loaded = self.load_artifact(root, artifact_path)
         if loaded.status != "available":
             return loaded
-        candidate = (artifact_path or root / "graphify-out" / "graph.json").resolve(strict=True)
+        candidate_path = artifact_path or (root / "graphify-out" / "graph.json")
+        if artifact_path is not None and not artifact_path.is_absolute():
+            candidate_path = root / artifact_path
+        candidate = candidate_path.resolve(strict=True)
         executable = shutil.which(self.executable)
         if executable is None and Path(self.executable).is_file():
             executable = str(Path(self.executable).resolve())
