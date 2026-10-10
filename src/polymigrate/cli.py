@@ -333,6 +333,11 @@ def main(argv: list[str] | None = None) -> int:
                 elif any(isinstance(item.get("knowledge_record_id"), str) for item in library_resolutions):
                     resolution_warnings.append("Library decisions remain unverified and project-scoped because not all required validation gates passed.")
             all_warnings = list(result.warnings) + list(validation.warnings) + list(repair_result.warnings) + list(resolution_warnings)
+            all_warnings.extend(static_security_result.warnings)
+            all_warnings.extend(
+                f"Static security finding {finding.rule_id} ({finding.severity}) at {finding.path}:{finding.line}."
+                for finding in static_security_result.findings
+            )
             if behavior_result is not None:
                 all_warnings.extend(behavior_result.warnings)
             failed_gates = {"FAILED", "BLOCKED", "TIMEOUT", "INCOMPLETE"}
