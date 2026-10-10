@@ -8,6 +8,7 @@ from typing import Any
 from polymigrate.ai.protocols import ModelRequest
 from polymigrate.ai.registry import ProviderRegistry
 from polymigrate.knowledge import KnowledgeRecord, MigrationKnowledgeStore, fingerprint_payload
+from polymigrate.migration.adapters import check_target_syntax
 from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject
 from polymigrate.migration.manifest_reconstruction import reconstruct_target_manifests
 from polymigrate.security.redaction import redact_payload, redact_text
@@ -194,6 +195,9 @@ class LLMTargetAdapter:
             if total_output_chars > self.max_total_output_chars:
                 raise ValueError(f"Generated project exceeds total output limit ({self.max_total_output_chars} characters)")
             target_path = PurePosixPath(unit.relative_path).with_suffix(selected_suffix).as_posix()
+            syntax_warning = check_target_syntax(self.language_id, content)
+            if syntax_warning:
+                self.warnings.append(f"Generated target file {target_path} failed bounded syntax checking: {syntax_warning}")
             artifacts.append(GeneratedArtifact(target_path, content))
         if context.get("reconstruct_manifests") is True:
             try:
