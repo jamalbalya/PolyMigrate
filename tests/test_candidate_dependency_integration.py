@@ -101,7 +101,7 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
                 capture_output=True, text=True, timeout=120, check=False,
             )
             self.assertEqual(behavior.returncode, 0, behavior.stderr)
-            self.assertEqual(behavior.stdout, "verified\\n")
+            self.assertEqual(behavior.stdout, "verified\n")
             review = review_dependency_wiring(root, "rust")
             self.assertEqual(review.status, "PASSED", review.warnings)
             candidate = [{
