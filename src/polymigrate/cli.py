@@ -17,6 +17,7 @@ from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
 from polymigrate.migration.research import LibraryResolutionWorkflow
 from polymigrate.models import MigrationRequest
 from polymigrate.planner import PlanningError, create_plan
+from polymigrate.skills.registry import SkillRegistry
 from polymigrate.validation.suite import validate_generated_project
 
 
@@ -102,6 +103,13 @@ def main(argv: list[str] | None = None) -> int:
                 context = json.loads(args.context_json.read_text(encoding="utf-8"))
                 if not isinstance(context, dict):
                     raise ValueError("context JSON must contain an object")
+            builtin_skill_root = Path(__file__).resolve().parent / "skills" / "builtin"
+            migration_skills = SkillRegistry().load_directory(builtin_skill_root)
+            context["migration_skills"] = [
+                {"id": skill.id, "version": skill.version, "description": skill.description,
+                 "instructions": skill.instructions}
+                for skill in migration_skills
+            ]
             graph = GraphifyAdapter().query(
                 args.source,
                 f"Summarize the project architecture, important dependencies, and call relationships relevant to migrating from {source_language.id} to {target_language.id}. Identify likely high-impact modules and uncertainty.",
