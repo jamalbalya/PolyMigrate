@@ -158,10 +158,7 @@ class AnthropicProvider:
             raise ValueError("api_key and model_id are required")
         self.base_url = self.base_url.rstrip("/")
         _validate_base_url(self.base_url)
-        if self.timeout <= 0:
-            raise ValueError("timeout must be positive")
-        if not 1 <= self.max_output_tokens <= 16_384:
-            raise ValueError("max_output_tokens must be between 1 and 16384")
+        _validate_provider_limits(self.timeout, self.max_output_tokens)
 
     def get_capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(structured_output=False, tool_calling=False, streaming=False)
@@ -194,14 +191,11 @@ class GeminiProvider:
     max_output_tokens: int = 8192
 
     def __post_init__(self) -> None:
-        if not self.api_key or not self.model_id:
+        if not self.api_key or not isinstance(self.model_id, str) or not self.model_id.strip():
             raise ValueError("api_key and model_id are required")
         self.base_url = self.base_url.rstrip("/")
         _validate_base_url(self.base_url)
-        if self.timeout <= 0:
-            raise ValueError("timeout must be positive")
-        if not 1 <= self.max_output_tokens <= 16_384:
-            raise ValueError("max_output_tokens must be between 1 and 16384")
+        _validate_provider_limits(self.timeout, self.max_output_tokens)
 
     def get_capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(structured_output=True, tool_calling=False, streaming=False)
