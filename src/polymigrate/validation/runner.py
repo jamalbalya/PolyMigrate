@@ -1,5 +1,6 @@
 """Docker-isolated validation runner for generated code; it never pulls images or uses a shell."""
 from __future__ import annotations
+import os
 import re
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ class ValidationCommand:
     timeout_seconds: float = 120.0
     mandatory: bool = True
     environment: tuple[tuple[str, str], ...] = ()
+    run_as_current_user: bool = False
 
 @dataclass(frozen=True)
 class SandboxExecution:
@@ -134,8 +136,14 @@ class DockerSandboxRunner:
                 details = "Validation image is not available locally or could not be inspected; no image was pulled."
             return result("BLOCKED", details=details)
         container_name = "polymigrate-" + uuid.uuid4().hex
+        user_args = (
+            ["--user", f"{os.getuid()}:{os.getgid()}"]
+            if command.run_as_current_user and hasattr(os, "getuid") and hasattr(os, "getgid")
+            else []
+        )
         docker_argv = [
             docker, "run", "--rm", "--name", container_name, "--network=none", "--read-only", "--cap-drop=ALL",
+            *user_args,
             "--security-opt=no-new-privileges", f"--pids-limit={self.pids_limit}",
             f"--memory={self.memory_limit}", f"--cpus={self.cpus}",
             *[item for key, value in command.environment for item in ("--env", f"{key}={value}")],
