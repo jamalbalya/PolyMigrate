@@ -15,6 +15,7 @@ from polymigrate.languages import LanguageRegistry
 from polymigrate.migration.adapters import InventorySourceAdapter
 from polymigrate.migration.dependencies import DependencyGapPlanner
 from polymigrate.migration.llm_target import LLMTargetAdapter
+from polymigrate.migration.manifests import scan_project_manifests
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
 from polymigrate.migration.research import LibraryResolutionWorkflow
 from polymigrate.models import MigrationRequest
@@ -157,6 +158,9 @@ def main(argv: list[str] | None = None) -> int:
             providers, _provider_warnings = build_provider_registry()
             source_adapter = InventorySourceAdapter(source_language.id, source_language.extensions)
             source_project = source_adapter.analyze(args.source)
+            source_manifests, manifest_scan_warnings = scan_project_manifests(args.source)
+            context["source_manifests"] = source_manifests
+            context["manifest_scan_warnings"] = manifest_scan_warnings
             project_scope = fingerprint_payload({
                 "project_root": str(args.source.expanduser().resolve()),
                 "source_files": [{"path": unit.relative_path, "sha256": unit.content_sha256} for unit in source_project.units],
