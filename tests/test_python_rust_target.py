@@ -44,6 +44,10 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Only integer arithmetic"):
             self._translate('print("hello" + " world")\n')
 
+    def test_rejects_underscore_placeholder(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "underscore placeholder"):
+            self._translate("_ = 1\nprint(_)\n")
+
     def test_rejects_unsupported_control_flow(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "If"):
             self._translate("if True:\n    print('yes')\n")
