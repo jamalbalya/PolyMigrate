@@ -13,12 +13,12 @@ Implemented in this foundation:
 - Bounded agent runtime with JSON action validation and allowlisted tools.
 - Skill metadata registry with permission checks.
 - Library replacement strategy ranking.
-- Optional Graphify JSON artifact reader with degraded-mode reporting.
+- Optional Graphify JSON artifact reader and safe CLI query adapter with degraded-mode reporting.
 - SQLite migration knowledge store with fingerprints, validation status, and opt-in cross-project reuse.
 - Evidence-derived final review status.
 - Spec-kit documents, initial skills, and GitHub Actions CI.
 
-The provider adapters have not yet been verified against live credentials in this repository environment. They intentionally do not advertise native tool calling. Graphify is read-only and schema-conservative; full CLI integration and incremental graph updates remain future work.
+The provider adapters have not yet been verified against live credentials in this repository environment. They intentionally do not advertise native tool calling. Graphify reads an existing graph and can query it through the graphify CLI; it does not build or update the graph. Live compatibility with the exact installed Graphify version and incremental graph invalidation remain to be verified.
 
 ## Requirements
 
@@ -59,6 +59,12 @@ Provider configuration variables:
 - Gemini: GEMINI_API_KEY, GEMINI_MODEL, optional GEMINI_BASE_URL.
 
 The source-upload flag is required to transmit source text to an external model. Recognizable secrets are redacted on a best-effort basis, but redaction is not guaranteed to find every secret and may alter source semantics. Do not send confidential code to an external provider unless your data-handling policy permits it. Review the generated migration-review.json; all build, test, security, and behavior gates are explicitly marked NOT_RUN in this experimental mode.
+
+### Optional local knowledge cache
+
+Set POLYMIGRATE_KNOWLEDGE_DB to a local SQLite file to enable evidence-gated migration knowledge lookup. To also cache unverified translation drafts within the same project scope, set POLYMIGRATE_CACHE_DRAFTS=1. Draft caching is disabled by default because the local database may contain generated source code. Drafts are never treated as verified and are not shared across projects. Source-content and Graphify-context fingerprints invalidate stale draft matches. Only explicitly shareable, verified knowledge records can be reused across projects.
+
+Graphify CLI reference: https://github.com/Graphify-Labs/graphify
 
 ## Development and tests
 
