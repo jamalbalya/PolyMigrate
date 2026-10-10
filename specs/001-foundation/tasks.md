@@ -19,7 +19,7 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 169 tests ran in the latest verified workflow on Python 3.11, 3.12, and 3.13; all non-skipped tests passed; the dedicated Docker behavior E2E job passed for Python→Node and Python→Go; the wheel build verified all six packaged skill assets.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 179 tests ran in the latest verified workflow on Python 3.11, 3.12, and 3.13 (4 skipped); all other tests passed; the dedicated Docker behavior E2E job must pass on the current head before release; the wheel build verified all six packaged skill assets.
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
