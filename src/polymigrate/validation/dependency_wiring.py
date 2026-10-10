@@ -279,7 +279,7 @@ def _rust_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
     manifest = root / "Cargo.toml"
     if not manifest.is_file() or manifest.is_symlink():
         if files:
-            warnings.append("Missing Cargo.toml manifest.")
+            warnings.append("Missing Cargo.toml manifest: Cargo.toml")
     else:
         try:
             if manifest.stat().st_size > 1_000_000:
