@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_ALLOWED_TOOLS = frozenset({
-    "read_source", "inspect_graph", "search_documentation", "inspect_package_metadata",
+    "read_source", "inspect_graph", "search_documentation", "inspect_package_metadata", "search_package_registry", "resolve_library_gap",
     "write_workspace", "run_build", "run_tests", "compare_behavior", "emit_report",
 })
 
