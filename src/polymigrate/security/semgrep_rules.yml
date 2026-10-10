@@ -89,3 +89,8 @@ rules:
     severity: WARNING
     message: Command execution requires validation of executable and arguments.
     pattern: Command::new($X)
+  - id: polymigrate.swift.process-launch
+    languages: [swift]
+    severity: WARNING
+    message: Process launch requires validation of executable and arguments.
+    pattern: Process.launchedProcess($CMD, arguments: $ARGS)
