@@ -79,7 +79,8 @@ class LLMTranslationTests(unittest.TestCase):
     def test_syntax_checker_reports_python_errors_and_unavailable_optional_parser(self):
         self.assertIn("syntax errors", check_target_syntax("python", "def broken(:\n"))
         with patch("polymigrate.migration.adapters._TREE_SITTER_REGISTRY", None), \
-             patch("polymigrate.migration.adapters._get_tree_sitter_parser", None):
+             patch("polymigrate.migration.adapters._get_tree_sitter_parser", None), \
+             patch("polymigrate.migration.adapters._direct_tree_sitter_parser", return_value=None):
             warning = check_target_syntax("go", "package main")
         self.assertIn("syntax was not checked", warning)
 

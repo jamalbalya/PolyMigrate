@@ -3,7 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -17,6 +20,7 @@ from polymigrate.migration.dependencies import DependencyGapPlanner
 from polymigrate.migration.llm_target import LLMTargetAdapter
 from polymigrate.migration.manifests import scan_project_manifests
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
+from polymigrate.migration.python_go_target import PythonToGoTargetAdapter
 from polymigrate.migration.research import LibraryResolutionWorkflow
 from polymigrate.models import MigrationRequest
 from polymigrate.planner import PlanningError, create_plan
@@ -45,7 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
     migrate.add_argument("--from", dest="source_language", required=True, help="Source language ID")
     migrate.add_argument("--to", dest="target_language", required=True, help="Target language ID")
     migrate.add_argument("--output", required=True, type=Path, help="New or empty output directory outside source")
-    migrate.add_argument("--provider", required=True, help="Configured provider ID, e.g. openai, anthropic, gemini, openrouter")
+    migrate.add_argument("--strategy", choices=("llm", "deterministic"), default="llm", help="Translation strategy (default: llm)")
+    migrate.add_argument("--provider", required=False, help="Configured provider ID, e.g. openai, anthropic, gemini, openrouter")
     migrate.add_argument("--allow-source-upload", action="store_true",
                          help="Explicitly allow source code to be sent to the configured external AI provider")
     migrate.add_argument("--context-json", type=Path, help="Optional JSON object with non-secret migration constraints")
@@ -82,6 +87,254 @@ def _library_resolution_summary(result) -> dict[str, object]:
         "assumptions": list(decision.assumptions), "validation_tests": list(decision.validation_tests),
         "selected_package": selected_package, "warnings": list(result.warnings),
     }
+
+
+
+
+def _derive_final_status(
+    gates: dict[str, str],
+    *,
+    security_status: str,
+    dependency_status: str,
+    required_gates: set[str],
+) -> str:
+    """Derive the public final status from validation evidence."""
+    failed = {"FAILED", "BLOCKED", "TIMEOUT", "INCOMPLETE"}
+
+    if (
+        security_status in {"FAILED", "BLOCKED", "INCOMPLETE", "REVIEW_REQUIRED"}
+        or dependency_status in {"BLOCKED", "UNVERIFIED"}
+        or any(gates.get(name, "NOT_RUN") in failed for name in required_gates)
+    ):
+        return "BLOCKED"
+
+    if (
+        not required_gates
+        or any(gates.get(name, "NOT_RUN") != "PASSED" for name in required_gates)
+        or security_status != "PASSED"
+        or dependency_status != "PASSED"
+    ):
+        return "PARTIAL"
+
+    return "SUCCESS"
+
+def _run_deterministic_migration(args, source_language, target_language) -> int:
+    """Run the offline Python-to-Go subset translator and local Go checks."""
+    if (source_language.id, target_language.id) != ("python", "go"):
+        raise ValueError(
+            "The deterministic strategy currently supports only --from python --to go"
+        )
+
+    context = {}
+    if args.context_json:
+        context = json.loads(args.context_json.read_text(encoding="utf-8"))
+        if not isinstance(context, dict):
+            raise ValueError("context JSON must contain an object")
+
+    source_adapter = InventorySourceAdapter(
+        source_language.id, source_language.extensions
+    )
+    source_project = source_adapter.analyze(args.source)
+
+    adapters = AdapterRegistry()
+    adapters.register_source(source_adapter)
+    adapters.register_target(PythonToGoTargetAdapter())
+    result = MigrationEngine(adapters).execute(
+        args.source,
+        source_language.id,
+        target_language.id,
+        args.output,
+        context,
+        source_project=source_project,
+    )
+
+    # The pipeline and adapter warnings describe the pre-validation state.
+    # Do not carry those stale generic messages into the final deterministic
+    # report; the validation gates and remaining warnings report actual results.
+    stale_validation_warnings = {
+        "Generated output has not yet passed build, test, security, or behavior-equivalence gates.",
+        "Generated output must pass build, test, security, and behavior checks.",
+    }
+    warnings = [
+        warning for warning in result.warnings
+        if warning not in stale_validation_warnings
+    ]
+    gates = {
+        "target_build": "NOT_RUN",
+        "go_vet": "NOT_RUN",
+        "unit_tests": "NOT_RUN",
+        "integration_tests": "NOT_RUN",
+        "e2e_tests": "NOT_RUN",
+        "behavior_comparison": "NOT_RUN",
+        "security_review": "NOT_RUN",
+    }
+    executions = []
+
+    def run_check(command_id: str, command: list[str], timeout: int = 60):
+        started = time.monotonic()
+        env = os.environ.copy()
+        env.update({
+            "GOTOOLCHAIN": "local",
+            "GOPROXY": "off",
+            "GO111MODULE": "off",
+        })
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=result.output_root,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+            status = "PASSED" if completed.returncode == 0 else "FAILED"
+            record = {
+                "command_id": command_id,
+                "status": status,
+                "exit_code": completed.returncode,
+                "duration_seconds": round(time.monotonic() - started, 3),
+                "stdout": completed.stdout[-12000:],
+                "stderr": completed.stderr[-12000:],
+            }
+        except subprocess.TimeoutExpired:
+            status = "TIMEOUT"
+            record = {
+                "command_id": command_id,
+                "status": status,
+                "exit_code": None,
+                "duration_seconds": round(time.monotonic() - started, 3),
+                "stdout": "",
+                "stderr": "Local Go validation exceeded its timeout.",
+            }
+        except OSError as exc:
+            status = "BLOCKED"
+            record = {
+                "command_id": command_id,
+                "status": status,
+                "exit_code": None,
+                "duration_seconds": round(time.monotonic() - started, 3),
+                "stdout": "",
+                "stderr": f"Could not run validation ({type(exc).__name__}).",
+            }
+        executions.append(record)
+        return status
+
+    go = shutil.which("go")
+    gofmt = shutil.which("gofmt")
+    main_go = result.output_root / "main.go"
+
+    if not go or not gofmt:
+        gates["target_build"] = "BLOCKED"
+        warnings.append(
+            "Go validation is blocked because both go and gofmt must be available."
+        )
+    else:
+        format_status = run_check("gofmt", [gofmt, "-w", str(main_go)])
+        if format_status == "PASSED":
+            # Keep the build artifact isolated and guarantee cleanup.
+            with tempfile.TemporaryDirectory(prefix="polymigrate-go-build-") as build_dir:
+                binary_path = str(Path(build_dir) / "program")
+                build_status = run_check(
+                    "target_build", [go, "build", "-o", binary_path, "main.go"]
+                )
+                gates["target_build"] = build_status
+                if build_status == "PASSED":
+                    gates["go_vet"] = run_check("go_vet", [go, "vet", "main.go"])
+                else:
+                    warnings.append(
+                        "go vet was not run because the Go build did not pass."
+                    )
+        else:
+            gates["target_build"] = format_status
+            warnings.append("Go formatting failed; build and vet were not run.")
+
+    security_result = review_generated_output(result.output_root)
+    dependency_result = review_dependency_wiring(result.output_root, "go")
+
+    warnings.extend(security_result.warnings)
+    warnings.extend(dependency_result.warnings)
+    warnings.extend(
+        f"Static security finding {finding.rule_id} ({finding.severity}) "
+        f"at {finding.path}:{finding.line}."
+        for finding in security_result.findings
+    )
+
+    if not args.behavior_spec:
+        behavior = {
+            "status": "NOT_RUN",
+            "cases_checked": 0,
+            "warnings": [
+                "No behavior spec was supplied; behavior equivalence was not tested."
+            ],
+        }
+        warnings.extend(behavior["warnings"])
+    else:
+        source_image = os.environ.get("POLYMIGRATE_DOCKER_IMAGE_PYTHON", "").strip() or None
+        target_image = os.environ.get("POLYMIGRATE_DOCKER_IMAGE_GO", "").strip() or None
+        comparison = compare_behavior(
+            args.behavior_spec, args.source, result.output_root,
+            source_image, target_image,
+        )
+        behavior = comparison.to_dict()
+        gates["behavior_comparison"] = comparison.status
+        warnings.extend(comparison.warnings)
+
+    overall_status = _derive_final_status(
+        gates,
+        security_status=security_result.status,
+        dependency_status=dependency_result.status,
+        required_gates={
+            "target_build",
+            "go_vet",
+            "unit_tests",
+            "integration_tests",
+            "e2e_tests",
+            "behavior_comparison",
+        },
+    )
+
+    summary = {
+        "status": overall_status,
+        "strategy": "deterministic",
+        "source_language": result.source_language,
+        "target_language": result.target_language,
+        "generated_files": list(result.generated_files),
+        "source_inventory": {
+            "inventory_mode": source_project.metadata.get("inventory_mode"),
+            "parser_backends": source_project.metadata.get("parser_backends", []),
+        },
+        "dependency_inventory": [],
+        "library_resolution": [],
+        "warnings": warnings,
+        "validation_image": None,
+        "repair": {
+            "status": "NOT_RUN",
+            "attempts": [],
+            "warnings": ["AI repair is disabled for deterministic strategy."],
+        },
+        "static_security_scan": security_result.to_dict(),
+        "dependency_wiring_review": dependency_result.to_dict(),
+        "behavior_comparison": behavior,
+        "validation_gates": gates,
+        "validation_results": {
+            "gates": gates,
+            "executions": executions,
+            "warnings": warnings,
+        },
+        "note": (
+            "Offline deterministic translation for a constrained Python-to-Go subset. "
+            "No source code is sent to an AI provider. Unsupported syntax is rejected. "
+            "Build/vet checks do not prove full behavior equivalence; unrun gates remain "
+            "NOT_RUN. Static security scanning is heuristic, not a comprehensive audit."
+        ),
+    }
+    (result.output_root / "migration-review.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 3 if overall_status == "BLOCKED" else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -144,11 +397,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if failed else 0
     if args.command == "migrate":
         try:
-            if not args.allow_source_upload:
-                raise PermissionError("Source upload is disabled; pass --allow-source-upload to enable external AI analysis")
             language_registry = LanguageRegistry()
             source_language = language_registry.get(args.source_language)
             target_language = language_registry.get(args.target_language)
+            if args.strategy == "deterministic":
+                return _run_deterministic_migration(args, source_language, target_language)
+            if not args.allow_source_upload:
+                raise PermissionError("Source upload is disabled; pass --allow-source-upload to enable external AI analysis")
+            if not args.provider:
+                raise ValueError("--provider is required when --strategy llm is selected")
             knowledge_db = os.environ.get("POLYMIGRATE_KNOWLEDGE_DB", "").strip()
             cache_drafts = os.environ.get("POLYMIGRATE_CACHE_DRAFTS", "").strip().lower() in {"1", "true", "yes"}
             if cache_drafts and not knowledge_db:
@@ -370,15 +627,18 @@ def main(argv: list[str] | None = None) -> int:
             )
             if behavior_result is not None:
                 all_warnings.extend(behavior_result.warnings)
-            failed_gates = {"FAILED", "BLOCKED", "TIMEOUT", "INCOMPLETE"}
-            if static_security_result.status in {"FAILED", "BLOCKED", "INCOMPLETE", "REVIEW_REQUIRED"} or dependency_wiring_result.status == "BLOCKED" or any(value in failed_gates for value in gates.values()):
-                overall_status = "BLOCKED"
-            elif any(value == "PASSED" for value in gates.values()) and any(
-                value == "NOT_RUN" for value in gates.values()
-            ):
-                overall_status = "PARTIAL"
-            else:
-                overall_status = "GENERATED_UNVERIFIED"
+            overall_status = _derive_final_status(
+                gates,
+                security_status=static_security_result.status,
+                dependency_status=dependency_wiring_result.status,
+                required_gates={
+                    "target_build",
+                    "unit_tests",
+                    "integration_tests",
+                    "e2e_tests",
+                    "behavior_comparison",
+                },
+            )
             summary = {
                 "status": overall_status, "source_language": result.source_language,
                 "target_language": result.target_language, "generated_files": list(result.generated_files),
