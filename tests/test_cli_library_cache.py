@@ -53,7 +53,7 @@ class CLILibraryCacheTests(unittest.TestCase):
             (source/"main.py").write_text("import requests\nprint('hello')\n",encoding="utf-8")
             source2=root/"source2"
             source2.mkdir()
-            (source2/"main.py").write_text("import requests\\nprint('hello')\\n",encoding="utf-8")
+            (source2/"main.py").write_text("import requests\nprint('hello')\n",encoding="utf-8")
             db=root/"knowledge.sqlite"
             reports=[]
             for index,source_dir in enumerate((source,source,source2),start=1):
