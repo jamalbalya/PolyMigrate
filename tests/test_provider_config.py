@@ -47,6 +47,24 @@ class ProviderConfigTests(unittest.TestCase):
         self.assertEqual(provider.model_id, "test-model")
         self.assertEqual(warnings, ())
 
+    def test_9router_is_registered_for_model_discovery_without_selected_model(self):
+        registry, warnings = build_provider_registry({
+            "POLYMIGRATE_9ROUTER_API_KEY": "not-a-real-secret",
+        })
+        provider = registry.get("9router")
+        self.assertEqual(provider.model_id, "")
+        self.assertEqual(provider.base_url, "http://localhost:20128/v1")
+        self.assertTrue(any("model discovery is available" in warning for warning in warnings))
+        self.assertNotIn("not-a-real-secret", " ".join(warnings))
+
+    def test_9router_without_api_key_is_not_registered(self):
+        registry, warnings = build_provider_registry({
+            "POLYMIGRATE_9ROUTER_MODEL": "some-model",
+        })
+        with self.assertRaises(ProviderUnavailableError):
+            registry.get("9router")
+        self.assertTrue(any("POLYMIGRATE_9ROUTER_API_KEY" in warning for warning in warnings))
+
     def test_9router_endpoint_can_be_overridden(self):
         registry, warnings = build_provider_registry({
             "POLYMIGRATE_9ROUTER_API_KEY": "not-a-real-secret",
