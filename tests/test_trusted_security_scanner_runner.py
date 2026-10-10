@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from polymigrate.cli import _security_review_gate_status
 from polymigrate.security.scanner_runner import _parse_report, run_local_security_scanners
 
 
@@ -53,6 +54,7 @@ class LocalScannerRunnerTests(unittest.TestCase):
         self.assertEqual(result.accepted_scanners, ("bandit", "semgrep"))
         self.assertFalse(result.scanner_provenance_verified)
         self.assertTrue(result.scanner_execution_recorded)
+        self.assertEqual(_security_review_gate_status(result), "INCOMPLETE")
 
     def test_high_bandit_finding_fails_the_security_gate(self):
         with tempfile.TemporaryDirectory() as tmp:
