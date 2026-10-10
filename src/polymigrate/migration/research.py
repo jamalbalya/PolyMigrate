@@ -36,7 +36,7 @@ class LibraryResolutionWorkflow:
         planning_prompt = (
             "Create concise search queries for public package registries to find target-language libraries "
             "that may implement the required capabilities. Do not choose a package or claim equivalence. "
-            "Return only JSON: {\"queries\":[\"..."]}. Use at most "
+            "Return only a JSON object containing a queries array of strings. Use at most "
             f"{max_queries} queries, each no longer than 100 characters.\n"
             + json.dumps({"source_library": source_library, "target_language": target_language,
                           "required_capabilities": required_capabilities}, sort_keys=True, ensure_ascii=False)
