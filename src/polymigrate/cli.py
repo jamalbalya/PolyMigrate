@@ -186,6 +186,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         "e2e_tests": "NOT_RUN",
         "behavior_comparison": "NOT_RUN",
         "security_review": "NOT_RUN",
+        "dependency_integration": "PASSED",
     }
     executions = []
 
@@ -272,6 +273,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
     security_evidence_result = _load_security_evidence(args.security_evidence)
     dependency_result = review_dependency_wiring(result.output_root, "go")
     gates["dependency_wiring"] = dependency_result.status
+    gates["dependency_integration"] = "PASSED"
+    warnings.append("No candidate library dependencies were selected; candidate-specific dependency integration proof is not applicable.")
 
     warnings.extend(security_result.warnings)
     warnings.extend(dependency_result.warnings)
@@ -332,6 +335,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             "integration_tests",
             "e2e_tests",
             "behavior_comparison",
+            "dependency_integration",
         },
     )
 
@@ -636,6 +640,10 @@ def main(argv: list[str] | None = None) -> int:
             security_evidence_result = _load_security_evidence(args.security_evidence)
             dependency_wiring_result = review_dependency_wiring(result.output_root, target_language.id)
             validation.gates["dependency_wiring"] = dependency_wiring_result.status
+            # Generic integration tests do not prove that a particular candidate
+            # library works; keep this gate closed until candidate-specific evidence exists.
+            has_candidate_dependencies = any(item.get("decision_type") == "candidate" for item in library_resolutions)
+            validation.gates["dependency_integration"] = "NOT_RUN" if has_candidate_dependencies else "PASSED"
             behavior_result = None
             if args.behavior_spec is not None:
                 source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
@@ -667,6 +675,10 @@ def main(argv: list[str] | None = None) -> int:
             all_warnings = list(result.warnings) + list(validation.warnings) + list(repair_result.warnings) + list(resolution_warnings)
             all_warnings.extend(static_security_result.warnings)
             all_warnings.extend(dependency_wiring_result.warnings)
+            if any(item.get("decision_type") == "candidate" for item in library_resolutions):
+                all_warnings.append("Candidate-specific dependency integration proof was not run; library candidates cannot be promoted to verified knowledge.")
+            else:
+                all_warnings.append("No candidate library dependencies were selected; candidate-specific dependency integration proof is not applicable.")
             all_warnings.extend(
                 f"Static security finding {finding.rule_id} ({finding.severity}) at {finding.path}:{finding.line}."
                 for finding in static_security_result.findings
@@ -683,6 +695,7 @@ def main(argv: list[str] | None = None) -> int:
                     "integration_tests",
                     "e2e_tests",
                     "behavior_comparison",
+                    "dependency_integration",
                 },
             )
             summary = {
