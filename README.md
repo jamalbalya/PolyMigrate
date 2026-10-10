@@ -4,7 +4,7 @@ PolyMigrate is an early-stage, provider-agnostic foundation for autonomous cross
 
 ## Current status
 
-**Foundation / planning milestone.** The current CLI inventories a source project and produces a migration plan. It does not yet translate or refactor source code end-to-end. Do not use it as a production migration tool.
+**Experimental migration milestone; not production-ready.** The CLI supports planning and opt-in AI translation of source files, with bounded manifest analysis/reconstruction when source manifests exist. It is not yet a complete autonomous project migrator: target builds, dependency wiring, framework/test migration, behavior equivalence, and security review are not comprehensively verified.
 
 Implemented in this foundation:
 - Language registry for Python, Go, JavaScript, TypeScript, Java, Rust, C#, C/C++, Kotlin, Ruby, PHP, and Swift.
