@@ -66,53 +66,66 @@ class DependencyExtractor:
         stdlib = getattr(sys, "stdlib_module_names", frozenset())
         for unit in project.units:
             for line in unit.source_text.splitlines():
-                match = pattern.search(line)
-                if not match:
-                    # Go import blocks have one quoted path per line; recognize them only inside an import block.
-                    if project.language_id == "go" and line.strip().startswith(('"', "'")):
-                        match = re.match(r"""^\s*["']([^"']+)["']""", line)
-                    if not match:
-                        continue
-                package = next((group for group in match.groups() if group), "").strip()
-                if not package or package.startswith((".", "/")):
-                    continue
+                packages: list[str] = []
                 if project.language_id == "python":
-                    root = package.split(".", 1)[0]
-                    if root in stdlib or root in local_modules:
+                    import_match = re.match(r"^\\s*import\\s+(.+)$", line)
+                    from_match = re.match(r"^\\s*from\\s+([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*)\\s+import\\b", line)
+                    if import_match:
+                        packages.extend(part.strip().split()[0] for part in import_match.group(1).split(",") if part.strip())
+                    elif from_match:
+                        packages.append(from_match.group(1))
+                else:
+                    for match in pattern.finditer(line):
+                        package = next((group for group in match.groups() if group), "")
+                        if package:
+                            packages.append(package)
+                    # Go import blocks contain one quoted path on each line.
+                    if project.language_id == "go" and not packages and line.strip().startswith(('"', "'")):
+                        match = re.match(r"""^\\s*["']([^"']+)["']""", line)
+                        if match:
+                            packages.append(match.group(1))
+                for package in packages:
+                    package = package.strip()
+                    if not package or package.startswith((".", "/")):
                         continue
-                    package = root
-                elif project.language_id in {"javascript", "typescript"}:
-                    if package.startswith("node:"):
+                    if project.language_id == "python":
+                        root = package.split(".", 1)[0]
+                        if root in stdlib or root in local_modules:
+                            continue
+                        package = root
+                    elif project.language_id in {"javascript", "typescript"}:
+                        if package.startswith("node:"):
+                            continue
+                        parts = package.split("/")
+                        package = "/".join(parts[:2]) if package.startswith("@") and len(parts) >= 2 else parts[0]
+                        if package in self._node_builtins:
+                            continue
+                    elif project.language_id == "go":
+                        root = package.split("/", 1)[0]
+                        if "." not in root:
+                            continue
+                    elif project.language_id == "rust":
+                        if package in {"std", "core", "alloc"}:
+                            continue
+                    elif project.language_id in {"java", "kotlin"}:
+                        if package.startswith(self._java_prefixes):
+                            continue
+                        parts = package.split(".")
+                        package = ".".join(parts[:3]) if len(parts) >= 3 else package
+                    elif project.language_id == "csharp":
+                        if package.startswith(("System.", "Microsoft.")):
+                            continue
+                    elif project.language_id == "swift" and package in self._swift_builtins:
                         continue
-                    parts = package.split("/")
-                    package = "/".join(parts[:2]) if package.startswith("@") and len(parts) >= 2 else parts[0]
-                    if package in self._node_builtins:
-                        continue
-                elif project.language_id == "go":
-                    root = package.split("/", 1)[0]
-                    if "." not in root:
-                        continue
-                elif project.language_id == "rust":
-                    if package in {"std", "core", "alloc"}:
-                        continue
-                elif project.language_id in {"java", "kotlin"}:
-                    if package.startswith(self._java_prefixes):
-                        continue
-                    parts = package.split(".")
-                    package = ".".join(parts[:3]) if len(parts) >= 3 else package
-                elif project.language_id == "csharp":
-                    if package.startswith(("System.", "Microsoft.")):
-                        continue
-                elif project.language_id == "swift" and package in self._swift_builtins:
-                    continue
-                if package not in observed:
-                    observed[package] = ImportEvidence(package, unit.relative_path, line.strip()[:300])
-                if len(observed) >= max_imports:
-                    warnings.append(f"Import inventory reached its {max_imports}-dependency limit.")
-                    return tuple(observed.values()), tuple(warnings)
+                    if package not in observed:
+                        observed[package] = ImportEvidence(package, unit.relative_path, line.strip()[:300])
+                    if len(observed) >= max_imports:
+                        warnings.append(f"Import inventory reached its {max_imports}-dependency limit.")
+                        return tuple(observed.values()), tuple(warnings)
         if not observed:
             warnings.append("No likely third-party imports were detected; dynamic imports and manifest-only dependencies may be missed.")
         return tuple(observed.values()), tuple(warnings)
+
 
 
 class DependencyGapPlanner:
