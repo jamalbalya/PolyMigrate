@@ -89,6 +89,9 @@ class PythonToJavaScriptTargetAdapter:
             op = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*"}[type(node.op)]
             return f"({left} {op} {right})", left_type
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            if (isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant)
+                    and type(node.operand.value) is int and node.operand.value == 0):
+                return "0", "int"
             value, value_type = self._expr(node.operand, assigned)
             if value_type != "int":
                 raise UnsupportedPythonSyntax("Unary + and - are supported only for integers")
