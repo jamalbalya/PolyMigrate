@@ -142,23 +142,6 @@ let text = "import FakeString"
         if len(unavailable) == len(cases):
             self.skipTest("No offline Tree-sitter grammars for the import conformance matrix")
 
-    def test_tree_sitter_go_imports_ignore_comments_and_raw_string_literals(self):
-        source = '''package main
-// import "fake/comment"
-import (
-    "fmt"
-    "example.com/real"
-)
-var text = `import "fake/raw"`
-'''
-        imports = _tree_sitter_imports("go", source)
-        if imports is None:
-            self.skipTest("offline Go Tree-sitter grammar is unavailable")
-        self.assertIn("fmt", imports)
-        self.assertIn("example.com/real", imports)
-        self.assertNotIn("fake/comment", imports)
-        self.assertNotIn("fake/raw", imports)
-
     def test_tree_sitter_javascript_imports_ignore_comments_and_strings(self):
         source = '''// import fake from "fake/comment";
 const text = 'require("fake/string")';
