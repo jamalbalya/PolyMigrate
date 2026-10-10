@@ -80,7 +80,7 @@ def _parse_report(scanner_id: str, payload: Any) -> tuple[list[dict[str, str]], 
     if not isinstance(payload, dict):
         return [], False
     if scanner_id == "semgrep":
-        if payload.get("errors") not in ([], None):
+        if not isinstance(payload.get("errors"), list) or payload["errors"]:
             return [], False
         raw = payload.get("results")
         if not isinstance(raw, list):
@@ -111,9 +111,10 @@ def _parse_report(scanner_id: str, payload: Any) -> tuple[list[dict[str, str]], 
             findings.append({"severity": severity, "rule_id": item["test_id"]})
         return findings, True
     if scanner_id == "gosec":
-        if payload.get("Errors") not in ([], None) or payload.get("GolangErrors") not in ([], None):
+        if (not isinstance(payload.get("Errors"), list) or payload["Errors"]
+                or not isinstance(payload.get("GolangErrors"), list) or payload["GolangErrors"]):
             return [], False
-        raw = payload.get("Issues") or []
+        raw = payload.get("Issues")
         if not isinstance(raw, list):
             return [], False
         findings = []
