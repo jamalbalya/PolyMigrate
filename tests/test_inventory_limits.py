@@ -62,22 +62,85 @@ class InventoryLimitTests(unittest.TestCase):
             self.assertIn("fmt", unit.dependencies)
 
 
-    def test_tree_sitter_go_imports_ignore_comments_and_raw_string_literals(self):
-        source = '''package main
-// import "fake/comment"
-import (
-    "fmt"
-    "example.com/real"
-)
-var text = `import "fake/raw"`
-'''
-        imports = _tree_sitter_imports("go", source)
-        if imports is None:
-            self.skipTest("offline Go Tree-sitter grammar is unavailable")
-        self.assertIn("fmt", imports)
-        self.assertIn("example.com/real", imports)
-        self.assertNotIn("fake/comment", imports)
-        self.assertNotIn("fake/raw", imports)
+    def test_tree_sitter_import_nodes_ignore_comment_and_string_lookalikes(self):
+        cases = {
+            "rust": (
+                '''// use fake::comment;
+let text = "use fake::string";
+use real::package;
+fn main() {}
+''',
+                "real", "fake",
+            ),
+            "java": (
+                '''// import fake.Comment;
+import real.package.Type;
+class Example { String text = "import fake.String"; }
+''',
+                "real.package.Type", "fake",
+            ),
+            "kotlin": (
+                '''// import fake.Comment
+import real.package.Type
+val text = "import fake.String"
+''',
+                "real.package.Type", "fake",
+            ),
+            "csharp": (
+                '''// using Fake.Comment;
+using Real.Namespace;
+class Example { string text = "using Fake.String;"; }
+''',
+                "Real.Namespace", "Fake",
+            ),
+            "cpp": (
+                '''// #include "fake/comment.h"
+#include <real/header.h>
+const char* text = "#include fake/string.h";
+''',
+                "real/header.h", "fake",
+            ),
+            "c": (
+                '''// #include "fake/comment.h"
+#include <real/header.h>
+const char* text = "#include fake/string.h";
+''',
+                "real/header.h", "fake",
+            ),
+            "ruby": (
+                '''# require "fake/comment"
+text = 'require "fake/string"'
+require "real_package"
+''',
+                "real_package", "fake",
+            ),
+            "php": (
+                r'''<?php
+// use Fake\Comment;
+use Real\Package;
+$text = "use Fake\String;";
+''',
+                r"Real\Package", "Fake",
+            ),
+            "swift": (
+                '''// import FakeComment
+import RealModule
+let text = "import FakeString"
+''',
+                "RealModule", "Fake",
+            ),
+        }
+        unavailable = []
+        for language, (source, expected, forbidden) in cases.items():
+            with self.subTest(language=language):
+                imports = _tree_sitter_imports(language, source)
+                if imports is None:
+                    unavailable.append(language)
+                    continue
+                self.assertTrue(any(expected in item for item in imports), imports)
+                self.assertFalse(any(forbidden in item for item in imports), imports)
+        if len(unavailable) == len(cases):
+            self.skipTest("No offline Tree-sitter grammars for the import conformance matrix")
 
     def test_tree_sitter_javascript_imports_ignore_comments_and_strings(self):
         source = '''// import fake from "fake/comment";

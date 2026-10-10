@@ -113,10 +113,20 @@ def _tree_sitter_imports(language_id: str, source_text: str) -> set[str] | None:
     if tree is None:
         return set()
     node_types = {
-        "go": {"import_spec"},
         "javascript": {"import_statement", "export_statement", "call_expression"},
         "typescript": {"import_statement", "export_statement", "call_expression"},
+        "rust": {"use_declaration", "extern_crate_declaration"},
+        "java": {"import_declaration"},
+        "kotlin": {"import_header"},
+        "csharp": {"using_directive"},
+        "cpp": {"preproc_include"},
+        "c": {"preproc_include"},
+        "ruby": {"call"},
+        "php": {"namespace_use_declaration"},
+        "swift": {"import_declaration"},
     }.get(language_id, set())
+    if not node_types:
+        return None
     imports: set[str] = set()
     stack = [tree.root_node]
     visited = 0
@@ -125,13 +135,48 @@ def _tree_sitter_imports(language_id: str, source_text: str) -> set[str] | None:
         visited += 1
         if node.type in node_types and node.text:
             text = node.text.decode("utf-8", errors="replace")
-            if language_id in {"javascript", "typescript"} and node.type == "call_expression":
-                if not re.search(r"\b(?:require|import)\s*\(", text):
+            if language_id in {"javascript", "typescript"}:
+                if node.type == "call_expression" and not re.search(r"\b(?:require|import)\s*\(", text):
                     stack.extend(reversed(node.named_children))
                     continue
-            match = re.search(r'''["']([^"']+)["']''', text)
-            if match:
-                imports.add(match.group(1))
+                match = re.search(r'''["']([^"']+)["']''', text)
+                if match:
+                    imports.add(match.group(1))
+            elif language_id == "go":
+                match = re.search(r'''["']([^"']+)["']''', text)
+                if match:
+                    imports.add(match.group(1))
+            elif language_id == "rust":
+                match = re.search(r"\b(?:use|extern\s+crate)\s+([A-Za-z_]\w*)", text)
+                if match:
+                    imports.add(match.group(1))
+            elif language_id in {"java", "kotlin"}:
+                match = re.search(r"\bimport\s+(?:static\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)", text)
+                if match:
+                    imports.add(match.group(1))
+            elif language_id == "csharp":
+                match = re.search(r"\busing\s+(?:static\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;", text)
+                if match:
+                    imports.add(match.group(1))
+            elif language_id in {"c", "cpp"}:
+                match = re.search(r'#\s*include\s*[<"]([^>"]+)[>"]', text)
+                if match:
+                    imports.add(match.group(1))
+            elif language_id == "ruby":
+                if re.search(r"\b(?:require|require_relative)\b", text):
+                    match = re.search(r'''["']([^"']+)["']''', text)
+                    if match:
+                        imports.add(match.group(1))
+            elif language_id == "php":
+                match = re.search(r"\buse\s+(.+?);", text)
+                if match:
+                    value = match.group(1).strip()
+                    value = re.sub(r"^(?:function|const)\s+", "", value)
+                    imports.add(value.split(" as ", 1)[0].strip())
+            elif language_id == "swift":
+                match = re.search(r"\bimport\s+(?:class|struct|enum|protocol|func|var|let)\s+([A-Za-z_]\w*)|\bimport\s+([A-Za-z_]\w*)", text)
+                if match:
+                    imports.add(next(group for group in match.groups() if group))
         stack.extend(reversed(node.named_children))
     return imports
 
@@ -232,12 +277,12 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
         # parser can misclassify declarations inside comments and string literals.
         if symbol_pattern and tree_sitter_result is None:
             symbols.update(match.group(1) for match in symbol_pattern.finditer(source_text))
-        if language_id in {"go", "javascript", "typescript"}:
+        if language_id == "go":
+            dependencies.update(_extract_go_imports(source_text))
+        elif language_id in _IMPORT_PATTERNS:
             parsed_imports = _tree_sitter_imports(language_id, source_text)
             if parsed_imports is not None:
                 dependencies.update(parsed_imports)
-            elif language_id == "go":
-                dependencies.update(_extract_go_imports(source_text))
             elif import_pattern:
                 dependencies.update(match.group(1) for match in import_pattern.finditer(source_text))
         elif import_pattern:
