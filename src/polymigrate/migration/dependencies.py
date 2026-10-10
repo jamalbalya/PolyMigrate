@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from polymigrate.ai.protocols import ModelRequest
 from polymigrate.ai.registry import ProviderRegistry
 from polymigrate.migration.pipeline import SourceProject
+from polymigrate.security.redaction import redact_text
 
 
 @dataclass(frozen=True)
