@@ -168,6 +168,8 @@ The CI workflow runs compilation and unit/integration/E2E contract tests across 
 - src/polymigrate/graph/: optional Graphify artifact adapter.
 - src/polymigrate/migration/: bounded source-manifest inventory, library strategy ranking, evidence-constrained AI decisions, and a safe adapter execution pipeline.
 - src/polymigrate/migration/python_go_target.py: experimental deterministic translator for a constrained Python-to-Go subset.
+- src/polymigrate/migration/python_javascript_target.py and python_rust_target.py: experimental deterministic translators for strict Python-to-JavaScript and Python-to-Rust subsets.
+- src/polymigrate/validation/dependency_wiring.py: static manifest/import consistency checks for supported languages, including Rust Cargo projects; this is not proof of package API compatibility.
 - src/polymigrate/knowledge.py: persistent evidence-gated knowledge store.
 - src/polymigrate/security/: best-effort secret redaction at model boundaries.
 - src/polymigrate/ai/config.py: environment-based provider setup; use the providers command to inspect configuration without network calls.
