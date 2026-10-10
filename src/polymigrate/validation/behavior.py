@@ -145,8 +145,9 @@ def _validate_spec(spec_path: Path) -> tuple[tuple[str, ...], tuple[str, ...], l
 
 def _command_environment(workspace: Path, argv: tuple[str, ...]) -> tuple[tuple[str, str], ...]:
     executable = Path(argv[0]).name.lower()
+    base = (("HOME", "/workspace/.polymigrate-home"),)
     if executable == "go":
-        return (
+        return base + (
             ("GOCACHE", "/workspace/.polymigrate-gocache"),
             ("GOTMPDIR", "/workspace/.polymigrate-gotmp"),
             ("GOPATH", "/workspace/.polymigrate-gopath"),
@@ -155,14 +156,14 @@ def _command_environment(workspace: Path, argv: tuple[str, ...]) -> tuple[tuple[
             ("GO111MODULE", "on" if (workspace / "go.mod").is_file() else "off"),
         )
     if executable == "cargo":
-        return (
+        return base + (
             ("CARGO_HOME", "/workspace/.cargo-home"),
             ("CARGO_TARGET_DIR", "/workspace/.cargo-target"),
             ("CARGO_NET_OFFLINE", "true"),
         )
     if executable in {"npm", "npx"}:
-        return (("npm_config_offline", "true"), ("npm_config_cache", "/workspace/.polymigrate-npm-cache"), ("NPM_CONFIG_UPDATE_NOTIFIER", "false"))
-    return ()
+        return base + (("npm_config_offline", "true"), ("npm_config_cache", "/workspace/.polymigrate-npm-cache"), ("NPM_CONFIG_UPDATE_NOTIFIER", "false"))
+    return base
 
 
 def compare_behavior(
@@ -190,7 +191,7 @@ def compare_behavior(
                 for name in (
                     ".polymigrate-gocache", ".polymigrate-gotmp", ".polymigrate-gopath",
                     ".polymigrate-gomodcache", ".cargo-home", ".cargo-target",
-                    ".polymigrate-npm-cache",
+                    ".polymigrate-npm-cache", ".polymigrate-home",
                 ):
                     cache_dir = workspace / name
                     if cache_dir.exists() and not cache_dir.is_dir():
@@ -210,6 +211,7 @@ def compare_behavior(
                 ValidationCommand(
                     f"behavior_source_{index}", case["source_argv"], timeout_seconds=case["timeout_seconds"],
                     environment=_command_environment(source_snapshot, case["source_argv"]),
+                    run_as_current_user=True,
                 ),
             )
             target_result = sandbox.run(
@@ -217,6 +219,7 @@ def compare_behavior(
                 ValidationCommand(
                     f"behavior_target_{index}", case["target_argv"], timeout_seconds=case["timeout_seconds"],
                     environment=_command_environment(target_snapshot, case["target_argv"]),
+                    run_as_current_user=True,
                 ),
             )
             executions.extend((source_result, target_result))
