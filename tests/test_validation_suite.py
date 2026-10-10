@@ -82,6 +82,34 @@ class ValidationSuiteTests(unittest.TestCase):
         self.assertEqual(result.gates["target_build"], "PASSED")
         self.assertEqual(runner.commands[0].environment, ())
 
+    def test_pytest_function_style_is_not_silently_run_with_unittest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/"main.py").write_text("print('hello')",encoding="utf-8")
+            tests=root/"tests"
+            tests.mkdir()
+            (tests/"test_app.py").write_text("def test_smoke(): assert True\\n",encoding="utf-8")
+            runner=FakeRunner(["PASSED","PASSED"])
+            validate_generated_project(root,"python","python:3.13",runner)
+        self.assertEqual(runner.commands[1].argv,("python","-m","pytest","-q","tests"))
+
+    def test_available_python_integration_and_e2e_suites_are_discovered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/"main.py").write_text("print('hello')",encoding="utf-8")
+            (root/"tests"/"unit").mkdir(parents=True)
+            (root/"tests"/"unit"/"test_unit.py").write_text("import unittest\\nclass TestUnit(unittest.TestCase):\\n def test_ok(self): self.assertTrue(True)\\n",encoding="utf-8")
+            (root/"tests"/"integration").mkdir()
+            (root/"tests"/"integration"/"test_api.py").write_text("import unittest\\nclass TestApi(unittest.TestCase):\\n def test_ok(self): self.assertTrue(True)\\n",encoding="utf-8")
+            (root/"tests"/"e2e").mkdir()
+            (root/"tests"/"e2e"/"test_flow.py").write_text("import unittest\\nclass TestFlow(unittest.TestCase):\\n def test_ok(self): self.assertTrue(True)\\n",encoding="utf-8")
+            runner=FakeRunner(["PASSED","PASSED","PASSED","PASSED"])
+            result=validate_generated_project(root,"python","python:3.13",runner)
+        self.assertEqual(result.gates["integration_tests"],"PASSED")
+        self.assertEqual(result.gates["e2e_tests"],"PASSED")
+        self.assertEqual([command.command_id for command in runner.commands],
+                         ["build-python-compile","unit_tests-python","integration_tests-python","e2e_tests-python"])
+
 
 if __name__ == "__main__":
     unittest.main()
