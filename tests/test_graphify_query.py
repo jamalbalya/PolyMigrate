@@ -30,6 +30,31 @@ class GraphifyQueryTests(unittest.TestCase):
             self.assertEqual(args[0], ["/usr/bin/graphify", "query", "trace authentication", "--graph", str(artifact.resolve())])
             self.assertNotIn("shell", kwargs)
 
+    def test_artifact_outside_project_root_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            root.mkdir()
+            outside = Path(tmp) / "outside.json"
+            outside.write_text(json.dumps({"nodes": [], "edges": []}), encoding="utf-8")
+            result = GraphifyAdapter().load_artifact(root, outside)
+            self.assertEqual(result.status, "degraded")
+            self.assertIn("inside the project root", result.warning)
+
+    def test_artifact_symlink_cannot_escape_project_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            root.mkdir()
+            outside = Path(tmp) / "outside.json"
+            outside.write_text(json.dumps({"nodes": [], "edges": []}), encoding="utf-8")
+            link = root / "linked-graph.json"
+            try:
+                link.symlink_to(outside)
+            except (OSError, NotImplementedError):
+                self.skipTest("Symlink creation is unavailable")
+            result = GraphifyAdapter().load_artifact(root, link)
+            self.assertEqual(result.status, "degraded")
+            self.assertIn("inside the project root", result.warning)
+
     def test_missing_cli_degrades_without_running_process(self):
         with tempfile.TemporaryDirectory() as tmp:
             root, _ = self._project(tmp)
