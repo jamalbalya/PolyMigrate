@@ -69,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
             target_adapter = LLMTargetAdapter(
                 target_language.id, source_language.id, target_language.extensions[0],
                 providers, args.provider, allow_source_upload=args.allow_source_upload,
+                target_extensions=target_language.extensions,
             )
             adapters.register_target(target_adapter)
             result = MigrationEngine(adapters).execute(
