@@ -177,6 +177,12 @@ def main(argv: list[str] | None = None) -> int:
                 context["graphify_warning"] = graph.warning
 
             providers, _provider_warnings = build_provider_registry()
+            selected_provider = providers.get(args.provider)
+            if not getattr(selected_provider, "model_id", "").strip():
+                raise ValueError(
+                    f"Provider '{args.provider}' has no generation model configured; "
+                    "run 'polymigrate providers --list-models', set the model ID, and retry"
+                )
             source_adapter = InventorySourceAdapter(source_language.id, source_language.extensions)
             source_project = source_adapter.analyze(args.source)
             source_manifests, manifest_scan_warnings = scan_project_manifests(args.source)
