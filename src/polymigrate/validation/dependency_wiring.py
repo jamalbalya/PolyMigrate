@@ -279,7 +279,7 @@ def _ruby_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
         warnings.extend(f"Missing Gemfile declaration for Ruby require: {item}" for item in sorted(missing))
     elif missing:
         warnings.append("Some Ruby require names could not be mapped confidently to declared gems; dependency wiring remains unverified.")
-    return imports, declared, warnings + [f"Missing Ruby dependency declaration: {item}" for item in sorted(missing) if not declared]
+    return imports, declared, warnings
 
 
 def _php_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
@@ -356,7 +356,7 @@ def review_dependency_wiring(root: Path, language: str) -> DependencyWiringRevie
         )
     missing = tuple(sorted(item.split(": ", 1)[1] for item in warnings if item.startswith("Missing ")))
     incomplete = any("could not" in item.lower() or "stopped at" in item.lower() or "could not read" in item.lower() for item in warnings)
-    requires_real_proof = any("remains unverified" in item.lower() or "remains unverified" in item.lower() or "mapping is ambiguous" in item.lower() for item in warnings)
+    requires_real_proof = any("remains unverified" in item.lower() or "mapping is ambiguous" in item.lower() for item in warnings)
     status = "BLOCKED" if missing else "UNVERIFIED" if incomplete or requires_real_proof else "PASSED"
     warnings.append("Static import/manifest consistency does not prove package availability, API compatibility, successful compilation, or runtime behavior.")
     return DependencyWiringReview(status, language, len(imports), tuple(sorted(declared)), missing, tuple(warnings))
