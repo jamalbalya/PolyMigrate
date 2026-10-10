@@ -40,6 +40,40 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
     def test_normalizes_negative_zero_to_preserve_python_print_output(self):
         self.assertIn("console.log(0);", self._translate("print(-0)\n"))
 
+    def test_if_else_comparison_is_translated_and_executes(self):
+        source = 'x = 6\nif x > 0:\n    print("positive")\nelse:\n    print("non-positive")\n'
+        code = self._translate(source)
+        self.assertIn("if ((x > 0)) {", code)
+        self.assertIn("} else {", code)
+
+    def test_compound_conditions_are_translated(self):
+        code = self._translate('x = 6\nif x > 0 and x < 10:\n    print("in range")\n')
+        self.assertIn("&&", code)
+
+    def test_rejects_chained_comparisons(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Chained comparisons"):
+            self._translate('x = 6\nif 0 < x < 10:\n    print("in range")\n')
+
+    def test_rejects_assignment_inside_conditional(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "only print"):
+            self._translate("x = 1\nif x > 0:\n    y = 2\nprint(x)\n")
+
+    def test_rejects_string_ordering_comparisons(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "String ordering"):
+            self._translate('if "b" > "a":\n    print("ordered")\n')
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required")
+    def test_if_else_generated_program_matches_python_output(self):
+        source = 'x = 6\nif x > 0:\n    print("positive")\nelse:\n    print("non-positive")\n'
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.js"
+            path.write_text(code, encoding="utf-8")
+            run = subprocess.run(["node", str(path)], capture_output=True, text=True,
+                                 timeout=10, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "positive\n")
+
     def test_rejects_unsafe_integer_arithmetic(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "safe integer range"):
             self._translate("x = 9007199254740991\ny = x + 1\nprint(y)\n")
