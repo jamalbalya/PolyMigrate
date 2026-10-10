@@ -39,14 +39,27 @@ def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[Valid
             warnings.append("Python unit tests were not run because no test files were found in tests/.")
     elif language_id == "go":
         go_files = sorted(p.relative_to(workspace).as_posix() for p in workspace.rglob("*.go") if not any(part in {".git", "vendor"} for part in p.relative_to(workspace).parts))
+        module_mode = () if (workspace / "go.mod").is_file() else (("GO111MODULE", "off"),)
         if go_files:
-            commands.append(ValidationCommand("build-go", ("go", "build", *go_files), environment=(("GO111MODULE", "off"),)))
+            commands.append(ValidationCommand("build-go", ("go", "build", "./..."), environment=module_mode))
         if any(path.endswith("_test.go") for path in go_files):
-            commands.append(ValidationCommand("unit_tests-go", ("go", "test", *go_files), environment=(("GO111MODULE", "off"),)))
+            commands.append(ValidationCommand("unit_tests-go", ("go", "test", "./..."), environment=module_mode))
         else:
             warnings.append("Go unit tests were not run because no *_test.go files were found.")
     elif language_id in {"javascript", "typescript"}:
-        if language_id == "javascript":
+        package_scripts = {}
+        package_file = workspace / "package.json"
+        if package_file.is_file():
+            try:
+                package = json.loads(package_file.read_text(encoding="utf-8"))
+                package_scripts = package.get("scripts", {}) if isinstance(package, dict) else {}
+                if not isinstance(package_scripts, dict):
+                    package_scripts = {}
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                warnings.append("Node package.json could not be read; package scripts were not executed.")
+        if "build" in package_scripts:
+            commands.append(ValidationCommand("build-node", ("npm", "run", "build")))
+        elif language_id == "javascript":
             files = sorted({
                 p.relative_to(workspace).as_posix()
                 for pattern in ("*.js", "*.mjs", "*.cjs")
@@ -54,18 +67,14 @@ def _commands_for_project(workspace: Path, language_id: str) -> tuple[list[Valid
                 if not any(part in {".git", "node_modules", "dist", "build"} for part in p.relative_to(workspace).parts)
             })
             commands.extend(ValidationCommand(f"build-js-syntax-{i}", ("node", "--check", path)) for i, path in enumerate(files))
+            if any(workspace.rglob("*.jsx")):
+                warnings.append("JSX files require a configured build script; node --check does not validate JSX syntax.")
         elif (workspace / "tsconfig.json").is_file():
             commands.append(ValidationCommand("build-typescript", ("tsc", "--noEmit")))
-        if (workspace / "package.json").is_file():
-            try:
-                package = json.loads((workspace / "package.json").read_text(encoding="utf-8"))
-                scripts = package.get("scripts", {}) if isinstance(package, dict) else {}
-                if isinstance(scripts, dict) and "test" in scripts:
-                    commands.append(ValidationCommand("unit_tests-node", ("npm", "test")))
-                else:
-                    warnings.append("Node unit tests were not run because package.json has no test script.")
-            except (OSError, UnicodeError, json.JSONDecodeError):
-                warnings.append("Node package.json could not be read; package scripts were not executed.")
+        if "test" in package_scripts:
+            commands.append(ValidationCommand("unit_tests-node", ("npm", "test")))
+        elif package_file.is_file():
+            warnings.append("Node unit tests were not run because package.json has no test script.")
     elif language_id == "java":
         if (workspace / "pom.xml").is_file():
             commands.append(ValidationCommand("build-java", ("mvn", "-B", "-DskipTests", "package")))
