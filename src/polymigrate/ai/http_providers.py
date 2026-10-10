@@ -1,0 +1,182 @@
+"""Minimal standard-library HTTP adapters for common LLM APIs.
+
+Tool calling is intentionally not advertised in this milestone. The agent runtime
+must not assume that text generation alone can execute tools safely.
+"""
+from __future__ import annotations
+
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+from typing import Any
+from urllib.parse import urlparse
+
+from polymigrate.ai.protocols import ModelRequest, ModelResponse, ProviderCapabilities
+
+
+class ProviderRequestError(RuntimeError):
+    """Sanitized provider error that never includes credentials or request headers."""
+
+
+def _validate_base_url(base_url: str) -> None:
+    parsed = urlparse(base_url)
+    if parsed.scheme == "https" and parsed.hostname:
+        return
+    if parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
+        return
+    raise ValueError("base_url must use HTTPS; HTTP is permitted only for loopback test/local endpoints")
+
+
+def _prompt(request: ModelRequest) -> str:
+    context = json.dumps(request.context, sort_keys=True, ensure_ascii=False)
+    prefix = "Return a valid JSON object only.\n" if request.require_structured_output else ""
+    return f"{prefix}Task: {request.task}\nContext JSON:\n{context}\n\nInstructions:\n{request.prompt}"
+
+
+def _request_json(url: str, headers: dict[str, str], payload: dict[str, Any], timeout: float) -> dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(url, data=body, headers={**headers, "Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise ProviderRequestError(f"LLM provider returned HTTP {exc.code}") from None
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", None)
+        reason_type = type(reason).__name__ if reason is not None else "UnknownNetworkError"
+        raise ProviderRequestError(f"LLM provider request failed ({reason_type})") from None
+    except (TimeoutError, json.JSONDecodeError, UnicodeError, OSError) as exc:
+        raise ProviderRequestError(f"LLM provider response failed ({type(exc).__name__})") from None
+    if not isinstance(data, dict):
+        raise ProviderRequestError("LLM provider returned a non-object JSON response")
+    return data
+
+
+def _parse_json_content(content: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+@dataclass
+class OpenAICompatibleProvider:
+    """Adapter for OpenAI Chat Completions-compatible APIs, including compatible routers."""
+    provider_id: str
+    api_key: str
+    model_id: str
+    base_url: str = "https://api.openai.com/v1"
+    timeout: float = 60.0
+
+    def __post_init__(self) -> None:
+        self.provider_id = self.provider_id.strip().lower()
+        self.base_url = self.base_url.rstrip("/")
+        _validate_base_url(self.base_url)
+        if not self.provider_id or not self.api_key or not self.model_id:
+            raise ValueError("provider_id, api_key, and model_id are required")
+        if self.timeout <= 0:
+            raise ValueError("timeout must be positive")
+
+    def get_capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(structured_output=True, tool_calling=False, streaming=False)
+
+    def generate(self, request: ModelRequest) -> ModelResponse:
+        payload: dict[str, Any] = {"model": self.model_id, "messages": [{"role": "user", "content": _prompt(request)}]}
+        if request.require_structured_output:
+            payload["response_format"] = {"type": "json_object"}
+        data = _request_json(f"{self.base_url}/chat/completions",
+                             {"Authorization": f"Bearer {self.api_key}"}, payload, self.timeout)
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            raise ProviderRequestError("LLM provider response is missing choices[0].message.content") from None
+        if isinstance(content, list):
+            content = "".join(str(item.get("text", "")) for item in content if isinstance(item, dict))
+        if not isinstance(content, str):
+            raise ProviderRequestError("LLM provider content is not text")
+        structured = _parse_json_content(content) if request.require_structured_output else None
+        if request.require_structured_output and structured is None:
+            raise ProviderRequestError("LLM provider did not return a valid JSON object as requested")
+        return ModelResponse(content, self.provider_id, self.model_id, structured)
+
+
+@dataclass
+class AnthropicProvider:
+    """Adapter for Anthropic Messages API; structured output is not advertised here."""
+    api_key: str
+    model_id: str
+    base_url: str = "https://api.anthropic.com/v1"
+    timeout: float = 60.0
+    provider_id: str = "anthropic"
+
+    def __post_init__(self) -> None:
+        if not self.api_key or not self.model_id:
+            raise ValueError("api_key and model_id are required")
+        self.base_url = self.base_url.rstrip("/")
+        _validate_base_url(self.base_url)
+        if self.timeout <= 0:
+            raise ValueError("timeout must be positive")
+
+    def get_capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(structured_output=False, tool_calling=False, streaming=False)
+
+    def generate(self, request: ModelRequest) -> ModelResponse:
+        if request.require_structured_output or request.require_tool_calling:
+            raise ProviderRequestError("Anthropic adapter does not advertise the requested capability in this release")
+        data = _request_json(
+            f"{self.base_url}/messages",
+            {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"},
+            {"model": self.model_id, "max_tokens": 4096, "messages": [{"role": "user", "content": _prompt(request)}]},
+            self.timeout)
+        try:
+            content = "".join(item.get("text", "") for item in data["content"] if item.get("type") == "text")
+        except (KeyError, TypeError, AttributeError):
+            raise ProviderRequestError("Anthropic response is missing text content") from None
+        if not content:
+            raise ProviderRequestError("Anthropic response contained no text content")
+        return ModelResponse(content, self.provider_id, self.model_id)
+
+
+@dataclass
+class GeminiProvider:
+    """Adapter for Gemini generateContent API."""
+    api_key: str
+    model_id: str
+    base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    timeout: float = 60.0
+    provider_id: str = "gemini"
+
+    def __post_init__(self) -> None:
+        if not self.api_key or not self.model_id:
+            raise ValueError("api_key and model_id are required")
+        self.base_url = self.base_url.rstrip("/")
+        _validate_base_url(self.base_url)
+        if self.timeout <= 0:
+            raise ValueError("timeout must be positive")
+
+    def get_capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(structured_output=True, tool_calling=False, streaming=False)
+
+    def generate(self, request: ModelRequest) -> ModelResponse:
+        generation_config: dict[str, Any] = {}
+        if request.require_structured_output:
+            generation_config["responseMimeType"] = "application/json"
+        data = _request_json(
+            f"{self.base_url}/models/{urllib.parse.quote(self.model_id, safe='')}:generateContent",
+            {"x-goog-api-key": self.api_key},
+            {"contents": [{"role": "user", "parts": [{"text": _prompt(request)}]}],
+             **({"generationConfig": generation_config} if generation_config else {})},
+            self.timeout)
+        try:
+            content = "".join(part.get("text", "") for part in data["candidates"][0]["content"]["parts"])
+        except (KeyError, IndexError, TypeError, AttributeError):
+            raise ProviderRequestError("Gemini response is missing candidate text content") from None
+        if not content:
+            raise ProviderRequestError("Gemini response contained no text content")
+        structured = _parse_json_content(content) if request.require_structured_output else None
+        if request.require_structured_output and structured is None:
+            raise ProviderRequestError("Gemini did not return a valid JSON object as requested")
+        return ModelResponse(content, self.provider_id, self.model_id, structured)
