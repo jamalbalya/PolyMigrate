@@ -34,10 +34,13 @@ class ValidationReportCLITests(unittest.TestCase):
             (source/"main.py").write_text("print('hello')",encoding="utf-8")
             output=Path(tmp)/"out"
             stdout,stderr=StringIO(),StringIO()
+            repair_result=SimpleNamespace(validation=validation,warnings=(),to_dict=lambda:{"status":"UNRESOLVED","attempts":[],"warnings":[]})
             with patch.dict(os.environ,{"POLYMIGRATE_DOCKER_IMAGE_GO":"golang:test"}), \
                  patch("polymigrate.cli.build_provider_registry",return_value=(registry,())), \
                  patch("polymigrate.cli.validate_generated_project",return_value=validation), \
+                 patch("polymigrate.cli.AutonomousRepairLoop") as repair_loop, \
                  redirect_stdout(stdout),redirect_stderr(stderr):
+                repair_loop.return_value.run.return_value=repair_result
                 code=main(["migrate","--source",str(source),"--from","python","--to","go",
                            "--output",str(output),"--provider","fake","--allow-source-upload"])
             report=json.loads((output/"migration-review.json").read_text(encoding="utf-8"))
