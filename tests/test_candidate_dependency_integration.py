@@ -135,6 +135,77 @@ class DependencyIntegrationTest(unittest.TestCase):
             )
             self.assertEqual(status, "PASSED")
 
+    def test_javascript_candidate_is_proven_by_real_local_package_build_and_integration_test(self):
+        if shutil.which("node") is None:
+            self.skipTest("Node.js is unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "package.json").write_text(
+                """{
+  "name": "example-app",
+  "type": "module",
+  "dependencies": {"localdep": "0.1.0"}
+}
+""",
+                encoding="utf-8",
+            )
+            package = root / "node_modules" / "localdep"
+            package.mkdir(parents=True)
+            (package / "package.json").write_text(
+                """{"name":"localdep","version":"0.1.0","type":"module","exports":"./index.js"}
+""",
+                encoding="utf-8",
+            )
+            (package / "index.js").write_text(
+                """export function value() { return "verified"; }
+""",
+                encoding="utf-8",
+            )
+            (root / "main.js").write_text(
+                """import { value } from "localdep";
+console.log(value());
+""",
+                encoding="utf-8",
+            )
+            tests = root / "tests" / "integration"
+            tests.mkdir(parents=True)
+            (tests / "test_dependency.js").write_text(
+                """import assert from "node:assert/strict";
+import { value } from "localdep";
+assert.equal(value(), "verified");
+""",
+                encoding="utf-8",
+            )
+            build = subprocess.run(
+                ("node", "--check", "main.js"), cwd=root, capture_output=True,
+                text=True, timeout=30, check=False,
+            )
+            self.assertEqual(build.returncode, 0, build.stderr)
+            integration = subprocess.run(
+                ("node", "tests/integration/test_dependency.js"), cwd=root,
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(integration.returncode, 0, integration.stderr)
+            behavior = subprocess.run(
+                ("node", "main.js"), cwd=root, capture_output=True, text=True,
+                timeout=30, check=False,
+            )
+            self.assertEqual(behavior.returncode, 0, behavior.stderr)
+            self.assertEqual(behavior.stdout, "verified\n")
+            review = review_dependency_wiring(root, "javascript")
+            self.assertEqual(review.status, "PASSED")
+            candidate = [{
+                "decision_type": "candidate",
+                "selected_package": {"name": "localdep", "registry": "npm"},
+            }]
+            status, _ = _candidate_dependency_integration_status(
+                candidate, review,
+                {"target_build": "PASSED", "integration_tests": "PASSED",
+                 "behavior_comparison": "PASSED"},
+                "javascript",
+            )
+            self.assertEqual(status, "PASSED")
+
     def test_go_dependency_candidate_is_proven_by_real_local_module_build_and_integration_test(self):
         if shutil.which("go") is None:
             self.skipTest("Go toolchain is unavailable")

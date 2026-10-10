@@ -127,7 +127,7 @@ def _candidate_dependency_integration_status(
         ]
     if dependency_review.status != "PASSED":
         return "NOT_RUN", ["Candidate dependency integration proof requires a PASSED dependency wiring review."]
-    if target_language not in {"go", "python"}:
+    if target_language not in {"go", "python", "javascript", "typescript"}:
         return "NOT_RUN", [f"Candidate dependency resolution/build proof is not implemented for target language {target_language}; this gate remains unverified."]
     for gate in ("target_build", "integration_tests", "behavior_comparison"):
         if gates.get(gate) != "PASSED":
@@ -156,6 +156,12 @@ def _candidate_dependency_integration_status(
             return "NOT_RUN", [f"Candidate package '{package_name}' is not proven present in target dependency declarations."]
         if target_language == "python":
             import_match = any(normalize(item) == normalize(package_name) for item in observed_imports)
+        elif target_language in {"javascript", "typescript"}:
+            import_match = any(
+                normalize(item) == normalize(package_name)
+                or item.startswith(package_name + "/")
+                for item in observed_imports
+            )
         else:
             import_match = any(
                 normalize(item) == normalize(package_name)
