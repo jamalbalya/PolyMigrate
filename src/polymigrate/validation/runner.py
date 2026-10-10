@@ -100,7 +100,12 @@ class DockerSandboxRunner:
         except (OSError, subprocess.TimeoutExpired) as exc:
             return result("BLOCKED", details=f"Docker image preflight failed ({type(exc).__name__})")
         if inspected.returncode != 0:
-            return result("BLOCKED", details="Validation image is not available locally; no image was pulled")
+            stderr = (inspected.stderr or "").lower()
+            if "cannot connect" in stderr or "daemon" in stderr or "permission denied" in stderr:
+                details = "Docker daemon or permissions are unavailable; no image was pulled."
+            else:
+                details = "Validation image is not available locally or could not be inspected; no image was pulled."
+            return result("BLOCKED", details=details)
         container_name = "polymigrate-" + uuid.uuid4().hex
         docker_argv = [
             docker, "run", "--rm", "--name", container_name, "--network=none", "--read-only", "--cap-drop=ALL",
