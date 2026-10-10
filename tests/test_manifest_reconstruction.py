@@ -88,7 +88,9 @@ class ManifestReconstructionTests(unittest.TestCase):
             self.assertEqual(code, 0, stderr.getvalue())
             self.assertTrue((output / "main.go").is_file())
             self.assertTrue((output / "go.mod").is_file())
-            self.assertIn("unverified", (output / "migration-review.json").read_text(encoding="utf-8").lower())
+            review = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))
+            self.assertIn("unverified", json.dumps(review).lower())
+            self.assertIn("parser_backends", review["source_inventory"])
             self.assertEqual([request.task for request in provider.requests],
                              ["translate_source_file", "reconstruct_target_manifests"])
 
