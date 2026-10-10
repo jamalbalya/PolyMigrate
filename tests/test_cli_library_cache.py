@@ -51,9 +51,12 @@ class CLILibraryCacheTests(unittest.TestCase):
             source=root/"source"
             source.mkdir()
             (source/"main.py").write_text("import requests\nprint('hello')\n",encoding="utf-8")
+            source2=root/"source2"
+            source2.mkdir()
+            (source2/"main.py").write_text("import requests\\nprint('hello')\\n",encoding="utf-8")
             db=root/"knowledge.sqlite"
             reports=[]
-            for index in (1,2):
+            for index,source_dir in enumerate((source,source,source2),start=1):
                 output=root/f"out-{index}"
                 stdout,stderr=StringIO(),StringIO()
                 with patch.dict(os.environ,{"POLYMIGRATE_KNOWLEDGE_DB":str(db),"POLYMIGRATE_CACHE_DRAFTS":"1"}), \
@@ -61,14 +64,15 @@ class CLILibraryCacheTests(unittest.TestCase):
                      patch("polymigrate.cli.DependencyGapPlanner",return_value=FakeGapPlanner()), \
                      patch("polymigrate.cli.LibraryResolutionWorkflow",return_value=workflow), \
                      redirect_stdout(stdout),redirect_stderr(stderr):
-                    code=main(["migrate","--source",str(source),"--from","python","--to","go",
+                    code=main(["migrate","--source",str(source_dir),"--from","python","--to","go",
                                "--output",str(output),"--provider","fake","--allow-source-upload"])
                 self.assertEqual(code,0,stderr.getvalue())
                 reports.append(json.loads((output/"migration-review.json").read_text(encoding="utf-8")))
-        self.assertEqual(workflow.calls,1)
-        self.assertEqual(len(provider.requests),1)
+        self.assertEqual(workflow.calls,2)
+        self.assertEqual(len(provider.requests),2)
         self.assertEqual(reports[0]["library_resolution"][0]["cache_status"],"UNVERIFIED_CACHED")
         self.assertEqual(reports[1]["library_resolution"][0]["cache_status"],"UNVERIFIED_SAME_PROJECT_CACHE")
+        self.assertEqual(reports[2]["library_resolution"][0]["cache_status"],"UNVERIFIED_CACHED")
         self.assertTrue(any("package metadata may be stale" in warning for warning in reports[1]["warnings"]))
 
 
