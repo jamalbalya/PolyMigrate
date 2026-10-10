@@ -45,6 +45,12 @@ class ProviderResponseTests(unittest.TestCase):
                 OpenAICompatibleProvider("openai","fake-key","test-model").generate(
                     ModelRequest("decision","return json",{},require_structured_output=True))
 
+    def test_oversized_provider_response_is_rejected(self):
+        response=FakeHTTPResponse(b" " * 2_000_001)
+        with patch("urllib.request.urlopen",return_value=response):
+            with self.assertRaisesRegex(ProviderRequestError,"2 MB safety limit"):
+                OpenAICompatibleProvider("openai","fake-key","test-model").generate(ModelRequest("translate","prompt",{}))
+
 
 if __name__ == "__main__":
     unittest.main()
