@@ -9,6 +9,7 @@ from polymigrate.ai.protocols import ModelRequest
 from polymigrate.ai.registry import ProviderRegistry
 from polymigrate.knowledge import KnowledgeRecord, MigrationKnowledgeStore, fingerprint_payload
 from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject
+from polymigrate.migration.manifest_reconstruction import reconstruct_target_manifests
 from polymigrate.security.redaction import redact_payload, redact_text
 
 
@@ -194,4 +195,24 @@ class LLMTargetAdapter:
                 raise ValueError(f"Generated project exceeds total output limit ({self.max_total_output_chars} characters)")
             target_path = PurePosixPath(unit.relative_path).with_suffix(selected_suffix).as_posix()
             artifacts.append(GeneratedArtifact(target_path, content))
+        if context.get("reconstruct_manifests") is True:
+            try:
+                manifest_artifacts, manifest_warnings = reconstruct_target_manifests(
+                    self.language_id,
+                    context.get("source_manifests", []),
+                    context.get("dependency_inventory", []),
+                    context.get("library_resolution", []),
+                    self.providers,
+                    self.provider_id,
+                )
+                existing_paths = {item.relative_path for item in artifacts}
+                for manifest in manifest_artifacts:
+                    if manifest.relative_path in existing_paths:
+                        self.warnings.append(f"Skipped reconstructed manifest that conflicts with translated source: {manifest.relative_path}")
+                        continue
+                    artifacts.append(manifest)
+                    existing_paths.add(manifest.relative_path)
+                self.warnings.extend(manifest_warnings)
+            except Exception as exc:
+                self.warnings.append(f"Target manifest reconstruction failed ({type(exc).__name__}); translated source files were retained.")
         return artifacts
