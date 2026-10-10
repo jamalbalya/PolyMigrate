@@ -8,6 +8,13 @@ from pathlib import Path
 from typing import Iterable
 from polymigrate.migration.pipeline import SourceProject, SourceUnit
 
+try:
+    from tree_sitter_language_pack import LanguageRegistry as _TreeSitterRegistry, get_parser as _get_tree_sitter_parser
+    _TREE_SITTER_REGISTRY = _TreeSitterRegistry.new()
+except Exception:  # Optional parser extra must never break the standard-library fallback.
+    _TREE_SITTER_REGISTRY = None
+    _get_tree_sitter_parser = None
+
 _IGNORED_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".mypy_cache", ".pytest_cache", "dist", "build", "target", "vendor", ".next"}
 
 _SYMBOL_PATTERNS = {
@@ -40,7 +47,64 @@ _IMPORT_PATTERNS = {
 }
 
 
-def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, ...], tuple[str, ...], str | None]:
+_TREE_SITTER_SYMBOL_TYPES = {
+    "go": {"function_declaration", "method_declaration", "type_spec"},
+    "javascript": {"function_declaration", "class_declaration", "method_definition", "variable_declarator"},
+    "typescript": {"function_declaration", "class_declaration", "interface_declaration", "type_alias_declaration", "method_definition", "variable_declarator"},
+    "java": {"class_declaration", "interface_declaration", "enum_declaration", "record_declaration", "method_declaration", "constructor_declaration"},
+    "kotlin": {"class_declaration", "object_declaration", "function_declaration"},
+    "rust": {"function_item", "struct_item", "enum_item", "trait_item", "type_item"},
+    "csharp": {"class_declaration", "interface_declaration", "struct_declaration", "enum_declaration", "method_declaration", "constructor_declaration"},
+    "cpp": {"class_specifier", "struct_specifier", "function_definition", "namespace_definition"},
+    "c": {"struct_specifier", "enum_specifier", "function_definition"},
+    "ruby": {"class", "module", "method", "singleton_method"},
+    "php": {"class_declaration", "interface_declaration", "trait_declaration", "function_definition", "method_declaration"},
+    "swift": {"class_declaration", "struct_declaration", "enum_declaration", "protocol_declaration", "function_declaration"},
+}
+_TREE_SITTER_NAME_TYPES = {"identifier", "type_identifier", "field_identifier", "property_identifier", "constant", "simple_identifier"}
+
+
+def _tree_sitter_structure(language_id: str, source_text: str) -> tuple[set[str], str | None] | None:
+    """Parse with an already-available grammar only; never trigger grammar downloads."""
+    if _TREE_SITTER_REGISTRY is None or _get_tree_sitter_parser is None:
+        return None
+    try:
+        if not _TREE_SITTER_REGISTRY.has_parser(language_id):
+            return None
+        parser = _get_tree_sitter_parser(language_id)
+        if hasattr(parser, "set_max_source_bytes"):
+            parser.set_max_source_bytes(1_000_000)
+        if hasattr(parser, "set_parse_timeout_ms"):
+            parser.set_parse_timeout_ms(250)
+        tree = parser.parse(source_text.encode("utf-8"))
+        if tree is None:
+            return set(), "Tree-sitter parsing timed out or exceeded its source limit; heuristic hints were retained."
+        root = tree.root_node
+        symbols: set[str] = set()
+        stack = [root]
+        visited = 0
+        symbol_types = _TREE_SITTER_SYMBOL_TYPES.get(language_id, set())
+        while stack and visited < 100_000:
+            node = stack.pop()
+            visited += 1
+            if node.type in symbol_types:
+                name_node = node.child_by_field_name("name")
+                if name_node is None:
+                    name_node = next((child for child in node.named_children if child.type in _TREE_SITTER_NAME_TYPES), None)
+                if name_node is not None and name_node.text:
+                    symbols.add(name_node.text.decode("utf-8", errors="replace"))
+            stack.extend(reversed(node.named_children))
+        warning = None
+        if stack:
+            warning = "Tree-sitter structure traversal reached its node limit; symbol hints may be incomplete."
+        if root.has_error:
+            warning = "Tree-sitter reported syntax errors; source text was retained and structure hints may be incomplete."
+        return symbols, warning
+    except Exception:
+        return None
+
+
+def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, ...], tuple[str, ...], str | None, str]:
     """Extract bounded symbol/import hints; Python uses its real AST, other languages use heuristics."""
     symbols: set[str] = set()
     dependencies: set[str] = set()
@@ -49,7 +113,7 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
         try:
             tree = ast.parse(source_text)
         except (SyntaxError, RecursionError):
-            return (), (), "Python syntax could not be parsed safely; source text was retained without AST hints."
+            return (), (), "Python syntax could not be parsed safely; source text was retained without AST hints.", "python-ast-failed"
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 symbols.add(node.name)
@@ -58,6 +122,13 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
             elif isinstance(node, ast.ImportFrom) and node.module:
                 dependencies.add(node.module)
     else:
+        tree_sitter_result = _tree_sitter_structure(language_id, source_text)
+        parser_backend = "heuristic"
+        if tree_sitter_result is not None:
+            tree_symbols, tree_warning = tree_sitter_result
+            symbols.update(tree_symbols)
+            parser_backend = "tree-sitter"
+            warning = tree_warning
         symbol_pattern = _SYMBOL_PATTERNS.get(language_id)
         import_pattern = _IMPORT_PATTERNS.get(language_id)
         if symbol_pattern:
@@ -66,7 +137,8 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
             dependencies.update(match.group(1) for match in import_pattern.finditer(source_text))
         if symbol_pattern is None:
             warning = f"No structural symbol extractor is configured for {language_id}; only source text is available."
-    return tuple(sorted(symbols)[:200]), tuple(sorted(dependencies)[:100]), warning
+        return tuple(sorted(symbols)[:200]), tuple(sorted(dependencies)[:100]), warning, parser_backend
+    return tuple(sorted(symbols)[:200]), tuple(sorted(dependencies)[:100]), warning, "python-ast"
 
 
 class InventorySourceAdapter:
@@ -96,6 +168,7 @@ class InventorySourceAdapter:
         warnings: list[str] = []
         total_bytes = 0
         scanned_entries = 0
+        parser_backends: set[str] = set()
         for current, directories, filenames in os.walk(root, topdown=True, followlinks=False):
             current_path = Path(current)
             directories[:] = sorted(
@@ -126,7 +199,8 @@ class InventorySourceAdapter:
                 except (OSError, UnicodeError):
                     warnings.append(f"Skipped unreadable or non-UTF-8 source file: {relative.as_posix()}")
                     continue
-                symbols, dependencies, structure_warning = _extract_structure(self.language_id, text)
+                symbols, dependencies, structure_warning, parser_backend = _extract_structure(self.language_id, text)
+                parser_backends.add(parser_backend)
                 if structure_warning:
                     warnings.append(f"{relative.as_posix()}: {structure_warning}")
                 units.append(SourceUnit(
@@ -140,4 +214,4 @@ class InventorySourceAdapter:
         if not units:
             raise ValueError(f"No readable {self.language_id} source files found in {root}")
         warnings.append("Inventory mode detects files by extension; it does not fully parse semantics, frameworks, or dependencies.")
-        return SourceProject(root, self.language_id, tuple(units), {"warnings": warnings, "inventory_mode": "extension-based"})
+        return SourceProject(root, self.language_id, tuple(units), {"warnings": warnings, "inventory_mode": "extension-based", "parser_backends": sorted(parser_backends)})
