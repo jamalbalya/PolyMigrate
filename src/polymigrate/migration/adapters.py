@@ -1,4 +1,4 @@
-"""Built-in source inventory adapter; it inventories text source files but does not claim full parsing."""
+"""Bounded source inventory with Python AST hints and heuristic structure extraction for other languages."""
 from __future__ import annotations
 import ast
 import hashlib
