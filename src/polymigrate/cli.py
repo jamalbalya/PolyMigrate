@@ -331,7 +331,11 @@ def main(argv: list[str] | None = None) -> int:
             summary = {
                 "status": overall_status, "source_language": result.source_language,
                 "target_language": result.target_language, "generated_files": list(result.generated_files),
-                "source_inventory": {"inventory_mode": source_project.metadata.get("inventory_mode"),\n                                    "parser_backends": source_project.metadata.get("parser_backends", [])},\n                "dependency_inventory": dependency_inventory, "library_resolution": library_resolutions,\n                "warnings": all_warnings, "validation_image": validation_image,
+                "source_inventory": {
+                    "inventory_mode": source_project.metadata.get("inventory_mode"),
+                    "parser_backends": source_project.metadata.get("parser_backends", []),
+                },
+                "dependency_inventory": dependency_inventory, "library_resolution": library_resolutions,\n                "warnings": all_warnings, "validation_image": validation_image,
                 "repair": repair_result.to_dict(),
                 "validation_gates": gates, "validation_results": validation.to_dict(),
                 "note": "Experimental per-file translation with optional constrained target-manifest reconstruction; dependencies are not installed automatically and full-project behavior is not guaranteed.",
