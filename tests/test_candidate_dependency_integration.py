@@ -33,12 +33,12 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
         self.assertEqual(status, "PASSED")
         self.assertIn("not applicable", warnings[0])
 
-    def test_candidate_passes_only_when_declared_imported_and_all_required_gates_pass(self):
+    def test_generic_green_gates_do_not_replace_candidate_specific_test_evidence(self):
         status, warnings = _candidate_dependency_integration_status(
             [self.candidate], self.review, self.gates, "go"
         )
-        self.assertEqual(status, "PASSED")
-        self.assertIn("Each candidate package is declared and imported", warnings[0])
+        self.assertEqual(status, "NOT_RUN")
+        self.assertIn("requires the generated project root", warnings[0])
 
     def test_missing_import_does_not_pass_candidate_proof(self):
         review = SimpleNamespace(
@@ -131,7 +131,7 @@ class DependencyIntegrationTest(unittest.TestCase):
                 candidate, review,
                 {"target_build": "PASSED", "integration_tests": "PASSED",
                  "behavior_comparison": "PASSED"},
-                "python",
+                "python", project_root=root,
             )
             self.assertEqual(status, "PASSED")
 
@@ -202,7 +202,7 @@ assert.equal(value(), "verified");
                 candidate, review,
                 {"target_build": "PASSED", "integration_tests": "PASSED",
                  "behavior_comparison": "PASSED"},
-                "javascript",
+                "javascript", project_root=root,
             )
             self.assertEqual(status, "PASSED")
 
@@ -269,7 +269,7 @@ raise "unexpected dependency behavior" unless Localdep.value == "verified"
                 candidate, review,
                 {"target_build": "PASSED", "integration_tests": "PASSED",
                  "behavior_comparison": "PASSED"},
-                "ruby",
+                "ruby", project_root=root,
             )
             self.assertEqual(status, "PASSED")
 
@@ -335,7 +335,7 @@ func TestDependencyIntegration(t *testing.T) {
             self.assertEqual(review.status, "PASSED")
             gates = {**self.gates, "behavior_comparison": "PASSED"}
             status, _ = _candidate_dependency_integration_status(
-                [self.candidate], review, gates, "go"
+                [self.candidate], review, gates, "go", project_root=root
             )
             self.assertEqual(status, "PASSED")
 
