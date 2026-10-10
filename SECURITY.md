@@ -8,7 +8,7 @@ Generated code is untrusted. Optional validation runs only in a locally availabl
 
 The Graphify adapter queries an existing local graph through an argument list and does not invoke a shell. Graph-derived context can be included in prompts to the selected provider when source upload is explicitly enabled.
 
-Migration draft caching is disabled by default. If enabled, the local SQLite database can contain generated code. Unverified drafts are scoped to the same project and are never shared across projects. Only verified, explicitly shareable knowledge records can be reused across projects.
+Migration draft caching is disabled by default. If enabled, the local SQLite database can contain generated code. Unverified drafts are scoped to the same project and are never shared across projects. Only verified, explicitly shareable knowledge records can be reused across projects. The store rejects recognizable secret patterns before persisting solutions, but this is best-effort detection and cannot guarantee that every secret is found.
 
 The current CLI does not deploy to production and does not claim behavior equivalence. Review migration-review.json; any gate marked NOT_RUN is not evidence of correctness.
 
