@@ -33,6 +33,8 @@ class ProjectManifestScanTests(unittest.TestCase):
             manifests, warnings = scan_project_manifests(root, max_total_bytes=5)
             self.assertEqual(manifests, [])
             self.assertTrue(any("byte limit" in warning for warning in warnings))
+            manifests, warnings = scan_project_manifests(root, max_scan_entries=1)
+            self.assertTrue(any("traversal limit" in warning for warning in warnings))
 
     def test_symlink_manifest_is_skipped(self):
         with tempfile.TemporaryDirectory() as tmp:
