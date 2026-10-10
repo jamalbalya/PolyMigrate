@@ -37,8 +37,8 @@ class DependencyExtractor:
     """Conservative text-based import inventory; this is not a full language parser."""
     _patterns = {
         "python": re.compile(r"^\s*(?:from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s+import\b|import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*))"),
-        "javascript": re.compile(r"""\b(?:from\s*|require\s*\(\s*)['"]([^'"]+)['"]"""),
-        "typescript": re.compile(r"""\b(?:from\s*|require\s*\(\s*)['"]([^'"]+)['"]"""),
+        "javascript": re.compile(r"""\b(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)['"]([^'"]+)['"]"""),
+        "typescript": re.compile(r"""\b(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)['"]([^'"]+)['"]"""),
         "go": re.compile(r"""\bimport\s+(?:\w+\s+)?["']([^"']+)["']"""),
         "rust": re.compile(r"^\s*(?:use|extern\s+crate)\s+([A-Za-z_]\w*)"),
         "java": re.compile(r"^\s*import\s+(?:static\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)"),
