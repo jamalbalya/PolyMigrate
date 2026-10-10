@@ -44,8 +44,8 @@ def reconstruct_target_manifests(
     allowed = _ALLOWED_MANIFESTS.get(target_language)
     if not allowed:
         return [], [f"No target manifest reconstruction template is configured for {target_language}."]
-    if not source_manifests:
-        return [], ["No source manifests were found; target manifest reconstruction was skipped."]
+    if not source_manifests and not dependency_inventory and not library_resolution:
+        return [], ["No source manifests or dependency evidence were found; target manifest reconstruction was skipped."]
     safe_source_manifests = [
         {"path": str(item.get("path", ""))[:500], "content": redact_text(str(item.get("content", ""))[:8_000])}
         for item in source_manifests[:10] if isinstance(item, dict)
