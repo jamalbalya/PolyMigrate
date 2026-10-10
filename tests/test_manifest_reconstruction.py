@@ -79,7 +79,7 @@ class ManifestReconstructionTests(unittest.TestCase):
         )
         self.assertEqual(artifacts, [])
         self.assertTrue(any("unapproved" in warning for warning in warnings))
-        self.assertTrue(any("executable lifecycle scripts" in warning for warning in warnings))
+        self.assertTrue(any("package.json" in warning for warning in warnings))
 
     def test_rejects_recognizable_secrets_in_manifest_content(self):
         providers = ProviderRegistry()
