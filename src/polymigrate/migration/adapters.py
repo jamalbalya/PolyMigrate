@@ -53,7 +53,6 @@ _SYMBOL_PATTERNS = {
 _IMPORT_PATTERNS = {
     "javascript": re.compile(r"""\b(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)['"]([^'"]+)['"]"""),
     "typescript": re.compile(r"""\b(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)['"]([^'"]+)['"]"""),
-    "go": re.compile(r"""(?m)^\s*(?:import\s+)?["']([^"']+)["']"""),
     "rust": re.compile(r"(?m)^\s*(?:use|extern\s+crate)\s+([A-Za-z_]\w*)"),
     "java": re.compile(r"(?m)^\s*import\s+(?:static\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)"),
     "kotlin": re.compile(r"(?m)^\s*import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)"),
@@ -146,6 +145,20 @@ def check_target_syntax(language_id: str, source_text: str) -> str | None:
     return None
 
 
+def _extract_go_imports(source_text: str) -> set[str]:
+    """Extract paths only from Go import declarations, not arbitrary string literals."""
+    without_comments = re.sub(r"/\*.*?\*/|//[^\n]*", "", source_text, flags=re.DOTALL)
+    imports: set[str] = set()
+    single_pattern = r'''(?m)^\s*import\s+(?:[A-Za-z_][A-Za-z0-9_]*\s+)?["']([^"']+)["']'''
+    block_pattern = r'''(?m)^\s*(?:[A-Za-z_][A-Za-z0-9_]*\s+)?["']([^"']+)["']'''
+    for match in re.finditer(single_pattern, without_comments):
+        imports.add(match.group(1))
+    for block in re.findall(r"(?s)\bimport\s*\((.*?)\)", without_comments):
+        for match in re.finditer(block_pattern, block):
+            imports.add(match.group(1))
+    return imports
+
+
 def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, ...], tuple[str, ...], str | None, str]:
     """Extract bounded symbol/import hints; prefer Python AST or offline Tree-sitter, then fall back to heuristics."""
     symbols: set[str] = set()
@@ -173,9 +186,13 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
             warning = tree_warning
         symbol_pattern = _SYMBOL_PATTERNS.get(language_id)
         import_pattern = _IMPORT_PATTERNS.get(language_id)
-        if symbol_pattern:
+        # Regex symbol extraction is fallback-only. Combining it with an AST
+        # parser can misclassify declarations inside comments and string literals.
+        if symbol_pattern and tree_sitter_result is None:
             symbols.update(match.group(1) for match in symbol_pattern.finditer(source_text))
-        if import_pattern:
+        if language_id == "go":
+            dependencies.update(_extract_go_imports(source_text))
+        elif import_pattern:
             dependencies.update(match.group(1) for match in import_pattern.finditer(source_text))
         if symbol_pattern is None:
             warning = f"No structural symbol extractor is configured for {language_id}; only source text is available."

@@ -61,6 +61,25 @@ class InventoryLimitTests(unittest.TestCase):
             self.assertIn("Run", unit.symbols)
             self.assertIn("fmt", unit.dependencies)
 
+
+    def test_go_import_inventory_ignores_comments_and_string_literals(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.go").write_text(
+                '''package main
+// import "fake/comment"
+import (
+    "fmt"
+    alias "example.com/real"
+)
+var text = "not/an/import"
+func Run() {}
+''',
+                encoding="utf-8",
+            )
+            project = InventorySourceAdapter("go", (".go",)).analyze(root)
+        self.assertEqual(set(project.units[0].dependencies), {"fmt", "example.com/real"})
+
     def test_traversal_limit_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
