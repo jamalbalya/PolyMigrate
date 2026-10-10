@@ -171,7 +171,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
             root = Path(tmp)
             source = root / "source"
             source.mkdir()
-            (source / "main.py").write_text("print(42)\\n", encoding="utf-8")
+            (source / "main.py").write_text("print(42)\n", encoding="utf-8")
             spec = root / "behavior.json"
             spec.write_text("{}", encoding="utf-8")
             output = root / "out"
