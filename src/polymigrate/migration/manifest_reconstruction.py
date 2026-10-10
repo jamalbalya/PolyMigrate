@@ -85,7 +85,7 @@ def reconstruct_target_manifests(
         return [], ["Target manifest reconstruction returned a non-object response; no manifest files were written."]
     raw_files = payload.get("files")
     raw_warnings = payload.get("warnings", [])
-    warnings = [item[:500] for item in raw_warnings[:10] if isinstance(item, str)] if isinstance(raw_warnings, list) else []
+    warnings = [redact_text(item[:500]) for item in raw_warnings[:10] if isinstance(item, str)] if isinstance(raw_warnings, list) else []
     if not isinstance(raw_files, list) or len(raw_files) > 3:
         return [], warnings + ["Target manifest response did not contain a bounded files array."]
     artifacts: list[GeneratedArtifact] = []
