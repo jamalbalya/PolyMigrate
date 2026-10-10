@@ -2,11 +2,13 @@
 from __future__ import annotations
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from polymigrate.ai.config import build_provider_registry
 from polymigrate.languages import LanguageRegistry
+from polymigrate.knowledge import MigrationKnowledgeStore, fingerprint_payload
 from polymigrate.graph.graphify import GraphifyAdapter
 from polymigrate.migration.adapters import InventorySourceAdapter
 from polymigrate.migration.llm_target import LLMTargetAdapter
@@ -74,12 +76,19 @@ def main(argv: list[str] | None = None) -> int:
             if graph.warning:
                 context["graphify_warning"] = graph.warning
             providers, _warnings = build_provider_registry()
+            knowledge_db = os.environ.get("POLYMIGRATE_KNOWLEDGE_DB", "").strip()
+            cache_drafts = os.environ.get("POLYMIGRATE_CACHE_DRAFTS", "").strip().lower() in {"1", "true", "yes"}
+            if cache_drafts and not knowledge_db:
+                raise ValueError("POLYMIGRATE_CACHE_DRAFTS requires POLYMIGRATE_KNOWLEDGE_DB")
+            knowledge_store = MigrationKnowledgeStore(Path(knowledge_db).expanduser()) if knowledge_db else None
+            project_scope = fingerprint_payload({"project_root": str(args.source.expanduser().resolve())}) if knowledge_store else None
             adapters = AdapterRegistry()
             adapters.register_source(InventorySourceAdapter(source_language.id, source_language.extensions))
             target_adapter = LLMTargetAdapter(
                 target_language.id, source_language.id, target_language.extensions[0],
                 providers, args.provider, allow_source_upload=args.allow_source_upload,
-                target_extensions=target_language.extensions,
+                target_extensions=target_language.extensions, knowledge_store=knowledge_store,
+                project_scope=project_scope, cache_drafts=cache_drafts,
             )
             adapters.register_target(target_adapter)
             result = MigrationEngine(adapters).execute(
