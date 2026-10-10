@@ -1,16 +1,12 @@
 """Capability-aware provider registry."""
 from __future__ import annotations
-
 from .protocols import AIProvider, ModelRequest
-
 
 class ProviderUnavailableError(RuntimeError):
     pass
 
-
 class ProviderCapabilityError(RuntimeError):
     pass
-
 
 class ProviderRegistry:
     def __init__(self) -> None:
@@ -29,6 +25,9 @@ class ProviderRegistry:
             return self._providers[provider_id.strip().lower()]
         except KeyError as exc:
             raise ProviderUnavailableError(f"AI provider '{provider_id}' is not configured") from exc
+
+    def all(self) -> tuple[AIProvider, ...]:
+        return tuple(self._providers[key] for key in sorted(self._providers))
 
     def generate(self, provider_id: str, request: ModelRequest):
         provider = self.get(provider_id)
