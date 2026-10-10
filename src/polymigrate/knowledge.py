@@ -1,11 +1,12 @@
 """Persistent, evidence-gated migration knowledge store."""
 from __future__ import annotations
 import hashlib
+from contextlib import contextmanager
 import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from polymigrate.security.redaction import redact_payload
 
@@ -52,7 +53,7 @@ class MigrationKnowledgeStore:
     def __init__(self, database_path: Path) -> None:
         self.database_path = database_path
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS migration_knowledge (
                     record_id TEXT PRIMARY KEY, problem_fingerprint TEXT NOT NULL,
@@ -73,6 +74,16 @@ class MigrationKnowledgeStore:
         connection = sqlite3.connect(self.database_path, timeout=10)
         connection.row_factory = sqlite3.Row
         return connection
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        """Commit/rollback transactions and always close the underlying handle."""
+        connection = self._connect()
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def save(self, record: KnowledgeRecord) -> None:
         if not record.record_id.strip() or not record.project_scope.strip():
