@@ -40,7 +40,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
             with patch("polymigrate.cli.build_provider_registry", return_value=(self.registry, ())), redirect_stdout(stdout), redirect_stderr(stderr):
                 code = main(["migrate", "--source", str(source), "--from", "python", "--to", "go",
                              "--output", str(output), "--provider", "fake", "--allow-source-upload"])
-            self.assertEqual(code, 0, stderr.getvalue())
+            self.assertEqual(code, 3, stderr.getvalue())
             report = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "BLOCKED")
             self.assertEqual(report["validation_gates"]["target_build"], "NOT_RUN")
