@@ -19,7 +19,7 @@ class DockerBehaviorComparisonTests(unittest.TestCase):
             target.mkdir()
             (source / "main.py").write_text("print(42)\n", encoding="utf-8")
             (target / "main.go").write_text(
-                'package main\\nimport "fmt"\\nfunc main() { fmt.Println(42) }\\n',
+                'package main\nimport "fmt"\nfunc main() { fmt.Println(42) }\n',
                 encoding="utf-8",
             )
             spec = root / "behavior.json"
