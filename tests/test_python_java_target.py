@@ -28,7 +28,7 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
         self.assertIn("System.out.println(y);", code)
 
     def test_len_builtin_counts_unicode_code_points(self):
-        code = self._translate('text = "A😀B"\nprint(len(text))\n')
+        code = self._translate('text = "A😀B"\nn = len(text)\nprint(n)\n')
         self.assertIn("codePointCount(0,", code)
         self.assertIn("length())", code)
 
@@ -40,7 +40,7 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("javac") and shutil.which("java"), "JDK is required")
     def test_len_builtin_generated_java_compiles_and_matches_unicode_output(self):
-        source = 'text = "A😀B"\nprint(len(text))\n'
+        source = 'text = "A😀B"\nn = len(text)\nprint(n)\n'
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
