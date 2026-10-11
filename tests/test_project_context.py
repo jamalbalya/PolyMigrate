@@ -60,6 +60,25 @@ class SourceProjectIndexTests(unittest.TestCase):
         self.assertEqual(index["included_file_count"], len(index["files"]))
         self.assertEqual(index["omitted_file_count"], 100 - len(index["files"]))
 
+    def test_untrusted_metadata_strings_cannot_bypass_size_cap(self):
+        project = make_project(1)
+        oversized = SourceProject(
+            source_root=project.source_root,
+            language_id="x" * 10_000,
+            units=(SourceUnit(
+                relative_path="src/main.py",
+                source_text="print(1)",
+                content_sha256="a" * 10_000,
+                symbols=("symbol",),
+                dependencies=("dependency",),
+            ),),
+            metadata={"parser_backends": ["parser"] * 10_000},
+        )
+        index = build_source_project_index(oversized, max_context_chars=512)
+        self.assertLessEqual(len(json.dumps(index, sort_keys=True, ensure_ascii=False)), 512)
+        self.assertEqual(index["source_language"], "x" * 80)
+        self.assertEqual(index["files"], [])
+
     def test_invalid_limits_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "positive"):
             build_source_project_index(make_project(), max_files=0)
