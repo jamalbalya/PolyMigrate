@@ -26,6 +26,7 @@ from polymigrate.migration.manifests import scan_project_manifests
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
 from polymigrate.migration.python_go_target import PythonToGoTargetAdapter
 from polymigrate.migration.python_javascript_target import PythonToJavaScriptTargetAdapter
+from polymigrate.migration.python_typescript_target import PythonToTypeScriptTargetAdapter
 from polymigrate.migration.python_java_target import PythonToJavaTargetAdapter
 from polymigrate.migration.python_cpp_target import PythonToCppTargetAdapter
 from polymigrate.migration.python_csharp_target import PythonToCSharpTargetAdapter
@@ -437,10 +438,10 @@ def _derive_final_status(
 def _run_deterministic_migration(args, source_language, target_language) -> int:
     """Run an offline deterministic Python-to-target subset and local checks."""
     pair = (source_language.id, target_language.id)
-    if pair not in {("python", "go"), ("python", "javascript"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp")}:
+    if pair not in {("python", "go"), ("python", "javascript"), ("python", "typescript"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp")}:
         raise ValueError(
             "The deterministic strategy currently supports --from python --to go, "
-            "javascript, rust, java, php, ruby, cpp, or csharp"
+            "javascript, typescript, rust, java, php, ruby, cpp, or csharp"
         )
 
     context = {}
@@ -460,6 +461,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         adapters.register_target(PythonToGoTargetAdapter())
     elif target_language.id == "javascript":
         adapters.register_target(PythonToJavaScriptTargetAdapter())
+    elif target_language.id == "typescript":
+        adapters.register_target(PythonToTypeScriptTargetAdapter())
     elif target_language.id == "rust":
         adapters.register_target(PythonToRustTargetAdapter())
     elif target_language.id == "php":
@@ -554,7 +557,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         executions.append(record)
         return status
 
-    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "Main.java" if target_language.id == "java" else "main.php" if target_language.id == "php" else "main.rb" if target_language.id == "ruby" else "Program.cs" if target_language.id == "csharp" else "main.cpp")
+    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "main.ts" if target_language.id == "typescript" else "Main.java" if target_language.id == "java" else "main.php" if target_language.id == "php" else "main.rb" if target_language.id == "ruby" else "Program.cs" if target_language.id == "csharp" else "main.cpp")
     if target_language.id == "go":
         go = shutil.which("go")
         gofmt = shutil.which("gofmt")
@@ -582,6 +585,26 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             warnings.append("JavaScript validation is blocked because node is not available.")
         else:
             gates["target_build"] = run_check("target_build", [node, "--check", str(main_source)])
+        gates["go_vet"] = "NOT_APPLICABLE"
+    elif target_language.id == "typescript":
+        tsc = shutil.which("tsc")
+        node = shutil.which("node")
+        if not tsc or not node:
+            gates["target_build"] = "BLOCKED"
+            warnings.append("TypeScript validation is blocked because both tsc and node must be available.")
+        else:
+            with tempfile.TemporaryDirectory(prefix="polymigrate-typescript-build-") as build_dir:
+                build_status = run_check(
+                    "target_build_typescript",
+                    [tsc, "--strict", "--target", "ES2020", "--module", "commonjs",
+                     "--outDir", build_dir, str(main_source)],
+                )
+                gates["target_build"] = build_status
+                if build_status == "PASSED":
+                    compiled_js = Path(build_dir) / main_source.with_suffix(".js").name
+                    runtime_status = run_check("target_runtime_smoke_typescript", [node, str(compiled_js)])
+                    if runtime_status != "PASSED":
+                        gates["target_build"] = runtime_status
         gates["go_vet"] = "NOT_APPLICABLE"
     elif target_language.id == "java":
         javac = shutil.which("javac")
