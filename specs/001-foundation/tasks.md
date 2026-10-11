@@ -104,3 +104,5 @@
 - [x] T086 Align dependency-proof documentation with the existing Rust local-crate build/integration fixture and add a regression test that Java candidate integration remains NOT_RUN until artifact-to-import resolution is actually proven.
 
 - [x] T087 Add narrowly scoped Java candidate-dependency proof only for a declared project-local system-scope JAR whose exact class import is verified in the archive and whose build, integration test, and behavior gates pass; leave public Maven/Gradle resolution unverified.
+
+- [x] T088 Add safe Python `str()` conversion to the deterministic Java subset, preserving Python boolean spelling and rejecting shadowed/invalid calls; verify compiled runtime output.
