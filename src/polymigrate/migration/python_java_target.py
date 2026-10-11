@@ -270,16 +270,19 @@ class PythonToJavaTargetAdapter:
             raise UnsupportedPythonSyntax("print() keyword arguments are not supported")
         if not call.args:
             return "System.out.println();"
+        typed_values = [self._expr(argument, assigned) for argument in call.args]
+        if len(typed_values) == 1:
+            expression, expression_type = typed_values[0]
+            if expression_type == "bool":
+                return f'System.out.println(({expression}) ? "True" : "False");'
+            return f"System.out.println({expression});"
         rendered: list[str] = []
-        for argument in call.args:
-            expression, expression_type = self._expr(argument, assigned)
+        for expression, expression_type in typed_values:
             if expression_type == "bool":
                 expression = f'(({expression}) ? "True" : "False")'
             elif expression_type == "int":
                 expression = f"Integer.toString({expression})"
             rendered.append(expression)
-        if len(rendered) == 1:
-            return f"System.out.println({rendered[0]});"
         return f'System.out.println(String.join(" ", new String[]{{{", ".join(rendered)}}}));'
 
     def _print_statement(self, node: ast.stmt, assigned: set[str]) -> str:
