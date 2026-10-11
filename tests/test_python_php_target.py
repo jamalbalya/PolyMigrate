@@ -89,6 +89,13 @@ class PythonToPHPTranslatorTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "3\n2\n1\n")
 
+    def test_rejects_php_reserved_variables(self):
+        for name in ("this", "GLOBALS", "_SERVER"):
+            with self.subTest(name=name), self.assertRaisesRegex(UnsupportedPythonSyntax, "reserved by PHP"):
+                PythonToPHPTargetAdapter().generate(
+                    project_for(f"{name} = 1\\nprint({name})\\n"), {}
+                )
+
     def test_rejects_zero_step_and_excessive_range(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "step cannot be zero"):
             PythonToPHPTargetAdapter().generate(
