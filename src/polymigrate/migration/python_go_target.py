@@ -248,6 +248,8 @@ class PythonToGoTargetAdapter:
 
     def _condition(self, node: ast.expr, assigned: set[str]) -> str:
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return f"!({self._condition(node.operand, assigned)})", "bool"
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
             return f"!({self._condition(node.operand, assigned)})"
         if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
             operator = "&&" if isinstance(node.op, ast.And) else "||"
