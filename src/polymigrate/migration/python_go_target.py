@@ -98,11 +98,11 @@ class PythonToGoTargetAdapter:
 
     def _expr(self, node: ast.expr, assigned: set[str]) -> tuple[str, str]:
         if isinstance(node, ast.Constant):
-            if isinstance(node.value, bool) or node.value is None:
-                raise UnsupportedPythonSyntax(
-                    "Boolean and None literals are not supported"
-                )
-            if isinstance(node.value, int):
+            if type(node.value) is bool:
+                return ("true" if node.value else "false"), "bool"
+            if node.value is None:
+                raise UnsupportedPythonSyntax("None literals are not supported")
+            if type(node.value) is int:
                 self._checked_integer_value(node, self._int_values)
                 return str(node.value), "int"
             if isinstance(node.value, str):
@@ -133,6 +133,8 @@ class PythonToGoTargetAdapter:
                 raise UnsupportedPythonSyntax(
                     "Mixed or unknown operand types are not supported"
                 )
+            if left_type == "bool":
+                raise UnsupportedPythonSyntax("Boolean arithmetic is not supported")
             if left_type == "string" and not isinstance(node.op, ast.Add):
                 raise UnsupportedPythonSyntax(
                     "Strings support only concatenation with '+'"
@@ -236,11 +238,15 @@ class PythonToGoTargetAdapter:
             operator = operators.get(type(node.ops[0]))
             if operator is None:
                 raise UnsupportedPythonSyntax("Only ==, !=, <, <=, >, and >= comparisons are supported")
+            if left_type == "bool" and operator not in {"==", "!="}:
+                raise UnsupportedPythonSyntax("Boolean ordering comparisons are not supported")
             if left_type == "string" and operator not in {"==", "!="}:
                 raise UnsupportedPythonSyntax("String ordering comparisons are not supported")
             return f"({left} {operator} {right})"
         if isinstance(node, ast.Name):
             value, value_type = self._expr(node, assigned)
+            if value_type == "bool":
+                return value
             if value_type == "int":
                 return f"({value} != 0)"
             if value_type == "string":
@@ -248,6 +254,11 @@ class PythonToGoTargetAdapter:
         if isinstance(node, ast.Constant) and type(node.value) is bool:
             return "true" if node.value else "false"
         raise UnsupportedPythonSyntax(f"Unsupported condition syntax: {type(node).__name__}")
+
+    def _print_expression(self, expression: str, value_type: str) -> str:
+        if value_type == "bool":
+            return f'fmt.Println(map[bool]string{{true: "True", false: "False"}}[{expression}])'
+        return f"fmt.Println({expression})"
 
     def _print_statement(self, node: ast.stmt, assigned: set[str]) -> str:
         if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
@@ -257,8 +268,8 @@ class PythonToGoTargetAdapter:
             raise UnsupportedPythonSyntax("Only calls to print() are supported in conditional bodies")
         if len(call.args) != 1 or call.keywords:
             raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
-        expression, _ = self._expr(call.args[0], assigned)
-        return f"fmt.Println({expression})"
+        expression, value_type = self._expr(call.args[0], assigned)
+        return self._print_expression(expression, value_type)
 
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
         """Render a bounded if/elif/else chain; branch bodies remain print-only."""
@@ -381,8 +392,8 @@ class PythonToGoTargetAdapter:
                     raise UnsupportedPythonSyntax(
                         "print() must have exactly one positional argument"
                     )
-                expr, _ = self._expr(call.args[0], assigned)
-                statements.append(f"fmt.Println({expr})")
+                expr, expr_type = self._expr(call.args[0], assigned)
+                statements.append(self._print_expression(expr, expr_type))
                 used_fmt = True
 
             elif isinstance(node, ast.For):
