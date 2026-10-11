@@ -134,3 +134,5 @@
 - [x] T106 Extend deterministic Python-to-Ruby translation with print-only `if`/`elif`/`else` chains and bounded `range()` loops; preserve Python truthiness, comparison, iteration, overflow, and loop-variable semantics, with real Ruby runtime fixtures passing in CI.
 
 - [x] T107 Add an offline deterministic Python-to-C++17 translator for a single source file with simple assignments, signed-32-bit integer/string/boolean expressions, `str()`, `abs()`, and positional `print()`; reject unsupported syntax, compile with warnings-as-errors, and validate runtime output in CI.
+
+- [x] T108 Extend deterministic Python-to-C++17 translation with print-only `if`/`elif`/`else` chains and bounded `range()` loops; preserve Python truthiness, comparison, iteration, overflow, and loop-variable semantics with real C++17 runtime fixtures passing in CI.

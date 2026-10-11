@@ -44,10 +44,14 @@ class PythonToCppTranslatorTests(unittest.TestCase):
         )[0]
         self.assertEqual(generated.relative_path, "src/module.cpp")
 
-    def test_rejects_unsupported_control_flow_instead_of_guessing(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Unsupported statement syntax: If"):
+    def test_rejects_branch_assignments_and_chained_comparisons(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "bodies may contain only print"):
             PythonToCppTargetAdapter().generate(
-                project_for("value = 1\nif value:\n    print(value)\n"), {}
+                project_for("value = 1\nif value:\n    value = 2\nprint(value)\n"), {}
+            )
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Chained comparisons"):
+            PythonToCppTargetAdapter().generate(
+                project_for("value = 1\nif 0 < value < 2:\n    print(value)\n"), {}
             )
 
     def test_rejects_reserved_and_implementation_reserved_identifiers(self):
@@ -70,12 +74,64 @@ class PythonToCppTranslatorTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one Python source file"):
             PythonToCppTargetAdapter().generate(project, {})
 
+    def test_translates_conditionals_and_python_string_truthiness(self):
+        generated = PythonToCppTargetAdapter().generate(
+            project_for("text = '0'\nif text:\n    print('truthy')\nelse:\n    print('falsey')\n"), {}
+        )[0].content
+        self.assertIn("if ((text != std::string(\"\")))", generated)
+        self.assertIn("} else {", generated)
+
+    def test_rejects_zero_step_and_excessive_range(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "step cannot be zero"):
+            PythonToCppTargetAdapter().generate(
+                project_for("for i in range(1, 5, 0):\n    print(i)\n"), {}
+            )
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000 actual iterations"):
+            PythonToCppTargetAdapter().generate(
+                project_for("for i in range(10001):\n    print(i)\n"), {}
+            )
+
+    def test_rejects_range_counter_overflow_and_boolean_bounds(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "counter could overflow"):
+            PythonToCppTargetAdapter().generate(
+                project_for("for i in range(2147483646, 2147483647, 2):\n    print(i)\n"), {}
+            )
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "arguments must be integers"):
+            PythonToCppTargetAdapter().generate(
+                project_for("for i in range(True):\n    print(i)\n"), {}
+            )
+
+    def test_negative_step_range_loop_compiles_and_runs(self):
+        compiler = shutil.which("g++")
+        if compiler is None:
+            self.skipTest("g++ is not installed in this test environment")
+        generated = PythonToCppTargetAdapter().generate(
+            project_for("for i in range(3, 0, -1):\n    print(i)\n"), {}
+        )[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / generated.relative_path
+            path.write_text(generated.content, encoding="utf-8")
+            executable = root / "program"
+            build = subprocess.run([compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror", str(path), "-o", str(executable)],
+                                   capture_output=True, text=True, timeout=20)
+            self.assertEqual(build.returncode, 0, build.stderr + build.stdout)
+            run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "3\n2\n1\n")
+
+    def test_zero_iteration_range_does_not_define_loop_variable(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "used before assignment"):
+            PythonToCppTargetAdapter().generate(
+                project_for("for i in range(0):\n    print(i)\nprint(i)\n"), {}
+            )
+
     def test_generated_cpp_compiles_and_runs_when_gpp_is_installed(self):
         compiler = shutil.which("g++")
         if compiler is None:
             self.skipTest("g++ is not installed in this test environment")
         generated = PythonToCppTargetAdapter().generate(
-            project_for("prefix = 'value='\nnumber = 6 * 7\nflag = True\nprint(prefix, number, flag, str(False))\n"), {}
+            project_for("prefix = 'value='\nnumber = 6 * 7\nflag = True\nif number > 40:\n    print(prefix, number, flag, str(False))\nelif number == 0:\n    print('zero')\nelse:\n    print('small')\nfor i in range(3):\n    print(i)\nprint(i)\n"), {}
         )[0]
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -90,7 +146,7 @@ class PythonToCppTranslatorTests(unittest.TestCase):
             self.assertEqual(compile_result.returncode, 0, compile_result.stderr + compile_result.stdout)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "value= 42 True False\n")
+            self.assertEqual(run.stdout, "value= 42 True False\n0\n1\n2\n2\n")
 
 
 if __name__ == "__main__":

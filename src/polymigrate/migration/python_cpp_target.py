@@ -137,6 +137,44 @@ class PythonToCppTargetAdapter:
             return ("+" if isinstance(node.op, ast.UAdd) else "-") + expression, "int"
         raise UnsupportedPythonSyntax(f"Unsupported expression syntax: {type(node).__name__}")
 
+    def _condition(self, node: ast.expr, assigned: set[str], types: dict[str, str],
+                   integer_values: dict[str, int], uses_boolean_string: list[bool]) -> str:
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return "!(" + self._condition(node.operand, assigned, types, integer_values, uses_boolean_string) + ")"
+        if isinstance(node, ast.Compare):
+            if len(node.ops) != 1 or len(node.comparators) != 1:
+                raise UnsupportedPythonSyntax("Chained comparisons are not supported")
+            left, left_type = self._expr(node.left, assigned, types, integer_values, uses_boolean_string)
+            right, right_type = self._expr(node.comparators[0], assigned, types, integer_values, uses_boolean_string)
+            if left_type != right_type:
+                raise UnsupportedPythonSyntax("Comparisons require operands of the same inferred type")
+            operator_node = node.ops[0]
+            if isinstance(operator_node, ast.Eq):
+                operator = "=="
+            elif isinstance(operator_node, ast.NotEq):
+                operator = "!="
+            elif isinstance(operator_node, ast.Lt):
+                operator = "<"
+            elif isinstance(operator_node, ast.LtE):
+                operator = "<="
+            elif isinstance(operator_node, ast.Gt):
+                operator = ">"
+            elif isinstance(operator_node, ast.GtE):
+                operator = ">="
+            else:
+                raise UnsupportedPythonSyntax("Only simple equality and integer ordering comparisons are supported")
+            if left_type in {"string", "bool"} and not isinstance(operator_node, (ast.Eq, ast.NotEq)):
+                raise UnsupportedPythonSyntax("String and boolean ordering comparisons are not supported")
+            return f"({left} {operator} {right})"
+        expression, value_type = self._expr(node, assigned, types, integer_values, uses_boolean_string)
+        if value_type == "bool":
+            return expression
+        if value_type == "int":
+            return f"({expression} != 0)"
+        if value_type == "string":
+            return f"({expression} != std::string(\"\"))"
+        raise UnsupportedPythonSyntax("Condition type is not supported")
+
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         if project.language_id != "python":
             raise ValueError("Python-to-C++ adapter requires a Python source project")
@@ -152,9 +190,150 @@ class PythonToCppTargetAdapter:
         integer_values: dict[str, int] = {}
         uses_boolean_string = [False]
         statements: list[str] = []
+        loop_variables: set[str] = set()
         referenced = {node.id for node in ast.walk(tree)
                       if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
         declarations = {"int": "std::int32_t", "string": "std::string", "bool": "bool"}
+
+        def render_print(call: ast.Call) -> list[str]:
+            if not isinstance(call.func, ast.Name) or call.func.id != "print":
+                raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
+            if call.keywords or len(call.args) > 32:
+                raise UnsupportedPythonSyntax("print() supports at most 32 positional arguments and no keywords")
+            expressions = [
+                self._expr(arg, assigned, types, integer_values, uses_boolean_string)
+                for arg in call.args
+            ]
+            if not expressions:
+                return ["std::cout << '\\n';"]
+            uses_boolean_string[0] = True
+            output: list[str] = []
+            for index, (expression, _) in enumerate(expressions):
+                if index:
+                    output.append('std::cout << " ";')
+                output.append(f"std::cout << polymigrate_string({expression});")
+            output.append("std::cout << '\\n';")
+            return output
+
+        def render_body(body: list[ast.stmt], indent: int) -> list[str]:
+            rendered: list[str] = []
+            for statement in body:
+                if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    rendered.extend(" " * indent + line for line in render_print(statement.value))
+                elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str):
+                    continue
+                else:
+                    raise UnsupportedPythonSyntax("if/elif/else and range() loop bodies may contain only print() statements")
+            if not rendered:
+                raise UnsupportedPythonSyntax("Empty control-flow bodies are not supported")
+            return rendered
+
+        def render_if(statement: ast.If, indent: int = 0, depth: int = 1,
+                      keyword: str = "if", close_end: bool = True) -> list[str]:
+            if depth > 20:
+                raise UnsupportedPythonSyntax("if/elif chains are limited to 20 branches")
+            condition = self._condition(statement.test, assigned, types, integer_values, uses_boolean_string)
+            rendered = [" " * indent + f"{keyword} ({condition}) {{"]
+            rendered.extend(render_body(statement.body, indent + 4))
+            if statement.orelse:
+                if len(statement.orelse) == 1 and isinstance(statement.orelse[0], ast.If):
+                    rendered.extend(render_if(statement.orelse[0], indent, depth + 1, "} else if", False))
+                else:
+                    rendered.append(" " * indent + "} else {")
+                    rendered.extend(render_body(statement.orelse, indent + 4))
+            if close_end:
+                rendered.append(" " * indent + "}")
+            return rendered
+
+        def render_for(statement: ast.For) -> list[str]:
+            if not isinstance(statement.target, ast.Name):
+                raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
+            name = statement.target.id
+            if (not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _CPP_RESERVED
+                    or name in _CPP_BUILTINS or name.startswith("__")
+                    or (name.startswith("_") and len(name) > 1 and name[1].isupper())):
+                raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not a supported C++ identifier")
+            if name in assigned:
+                raise UnsupportedPythonSyntax("range() loop variables cannot shadow assigned variables")
+            if statement.orelse:
+                raise UnsupportedPythonSyntax("for/else statements are not supported")
+            if (not isinstance(statement.iter, ast.Call) or not isinstance(statement.iter.func, ast.Name)
+                    or statement.iter.func.id != "range"):
+                raise UnsupportedPythonSyntax("Only range() loops are supported")
+            call = statement.iter
+            if "range" in assigned:
+                raise UnsupportedPythonSyntax("Shadowing the range() builtin is not supported")
+            if call.keywords or len(call.args) not in {1, 2, 3}:
+                raise UnsupportedPythonSyntax("range() supports one, two, or three positional integer arguments")
+            rendered_args: list[str] = []
+            values: list[int] = []
+            for argument in call.args:
+                expression, value_type = self._expr(argument, assigned, types, integer_values, uses_boolean_string)
+                if value_type != "int":
+                    raise UnsupportedPythonSyntax("range() arguments must be integers, not booleans or strings")
+                rendered_args.append(expression)
+                values.append(self._int_value(argument, integer_values))
+            if len(values) == 1:
+                start_expr, start_value = "0", 0
+                stop_expr, stop_value = rendered_args[0], values[0]
+                step_expr, step_value = "1", 1
+            elif len(values) == 2:
+                start_expr, start_value = rendered_args[0], values[0]
+                stop_expr, stop_value = rendered_args[1], values[1]
+                step_expr, step_value = "1", 1
+            else:
+                start_expr, start_value = rendered_args[0], values[0]
+                stop_expr, stop_value = rendered_args[1], values[1]
+                step_expr, step_value = rendered_args[2], values[2]
+            if step_value == 0:
+                raise UnsupportedPythonSyntax("range() step cannot be zero")
+            actual_range = range(start_value, stop_value, step_value)
+            count = len(actual_range)
+            if count > 10_000:
+                raise UnsupportedPythonSyntax("range() loops are limited to 10000 actual iterations")
+            if not statement.body:
+                raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported")
+            assigned.add(name)
+            types[name] = "int"
+            integer_values[name] = start_value
+            validation_values = list(actual_range) if count else [start_value]
+            for loop_value in validation_values:
+                integer_values[name] = loop_value
+                for child in statement.body:
+                    if isinstance(child, ast.Expr) and isinstance(child.value, ast.Call):
+                        call_node = child.value
+                        if not isinstance(call_node.func, ast.Name) or call_node.func.id != "print":
+                            raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
+                        if call_node.keywords or len(call_node.args) > 32:
+                            raise UnsupportedPythonSyntax("print() supports at most 32 positional arguments and no keywords")
+                        for argument in call_node.args:
+                            self._expr(argument, assigned, types, integer_values, uses_boolean_string)
+                    elif isinstance(child, ast.Expr) and isinstance(child.value, ast.Constant) and isinstance(child.value.value, str):
+                        continue
+                    else:
+                        raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
+            body = render_body(statement.body, 4)
+            if count == 0:
+                assigned.remove(name)
+                types.pop(name, None)
+                integer_values.pop(name, None)
+                return []
+            last_value = actual_range[-1]
+            next_value = last_value + step_value
+            if not _CPP_INT_MIN <= next_value <= _CPP_INT_MAX:
+                raise UnsupportedPythonSyntax("range() loop counter could overflow the signed 32-bit C++ integer range")
+            operator = "<" if step_value > 0 else ">"
+            rendered = [
+                f"std::int32_t {name} = {start_expr};",
+                f"while ({name} {operator} {stop_expr}) {{",
+            ]
+            rendered.extend(body)
+            rendered.append(f"    {name} += {step_expr};")
+            rendered.append("}")
+            rendered.append(f"{name} = {last_value};")
+            integer_values[name] = last_value
+            loop_variables.add(name)
+            return rendered
 
         for node in tree.body:
             if isinstance(node, ast.Assign):
@@ -180,32 +359,17 @@ class PythonToCppTargetAdapter:
                 else:
                     integer_values.pop(name, None)
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
-                call = node.value
-                if not isinstance(call.func, ast.Name) or call.func.id != "print":
-                    raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
-                if call.keywords or len(call.args) > 32:
-                    raise UnsupportedPythonSyntax("print() supports at most 32 positional arguments and no keywords")
-                expressions = [
-                    self._expr(arg, assigned, types, integer_values, uses_boolean_string)
-                    for arg in call.args
-                ]
-                if not expressions:
-                    statements.append("std::cout << '\\n';")
-                else:
-                    uses_boolean_string[0] = True
-                    output = []
-                    for index, (expression, _) in enumerate(expressions):
-                        if index:
-                            output.append('std::cout << " ";')
-                        output.append(f"std::cout << polymigrate_string({expression});")
-                    output.append("std::cout << '\\n';")
-                    statements.extend(output)
+                statements.extend(render_print(node.value))
+            elif isinstance(node, ast.If):
+                statements.extend(render_if(node))
+            elif isinstance(node, ast.For):
+                statements.extend(render_for(node))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
             else:
                 raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}")
 
-        unused = sorted(assigned - referenced)
+        unused = sorted(assigned - referenced - loop_variables)
         if unused:
             raise UnsupportedPythonSyntax("Assigned variable(s) are never used: " + ", ".join(unused))
         helper = (
