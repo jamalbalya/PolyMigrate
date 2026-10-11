@@ -413,7 +413,7 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             self._translate("_ = 1\nprint(_)\n")
 
     def test_rejects_unsupported_control_flow(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "While"):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "integer comparison"):
             self._translate("while True:\n    print('yes')\n")
 
     @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
