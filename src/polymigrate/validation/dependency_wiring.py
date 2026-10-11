@@ -204,6 +204,69 @@ def _javascript_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]
 
 
 
+def _java_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
+    """Inventory Java imports and Maven/Gradle coordinates without guessing mappings."""
+    files, warnings = _files(root, {".java"})
+    imports: set[str] = set()
+    local_packages: set[str] = set()
+    for path in files:
+        text = _read(path)
+        if text is None:
+            warnings.append(f"Could not read {path.relative_to(root).as_posix()}.")
+            continue
+        clean = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+        clean = re.sub(r"(?m)^\s*//.*$", "", clean)
+        local_packages.update(
+            match.group(1) for match in re.finditer(
+                r"(?m)^\s*package\s+([A-Za-z_$][A-Za-z0-9_$.]*)\s*;", clean
+            )
+        )
+        for match in re.finditer(
+            r"(?m)^\s*import\s+(?:static\s+)?([A-Za-z_$][A-Za-z0-9_$.]*)(?:\.\*)?\s*;",
+            clean,
+        ):
+            imports.add(match.group(1))
+
+    external = {
+        item for item in imports
+        if not item.startswith(("java.", "javax.", "jdk."))
+        and not any(item == package or item.startswith(package + ".") for package in local_packages)
+    }
+    declared: set[str] = set()
+    manifests = [root / "pom.xml", root / "build.gradle", root / "build.gradle.kts"]
+    present = [path for path in manifests if path.is_file() and not path.is_symlink()]
+    for path in present:
+        text = _read(path) or ""
+        if path.name == "pom.xml":
+            try:
+                xml_root = ET.fromstring(text)
+                for node in xml_root.iter():
+                    if node.tag.rsplit("}", 1)[-1] == "dependency":
+                        values = {}
+                        for child in node:
+                            values[child.tag.rsplit("}", 1)[-1]] = (child.text or "").strip()
+                        if values.get("groupId") and values.get("artifactId"):
+                            declared.add(f"{values['groupId']}:{values['artifactId']}")
+            except ET.ParseError:
+                warnings.append("pom.xml could not be parsed for Java dependency declarations.")
+        else:
+            declared.update(re.findall(
+                r"""(?m)\b(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testRuntimeOnly|compile)\s*\(?\s*['"]([^'"]+:[^'"]+:[^'"]+)['"]""",
+                text,
+            ))
+
+    if external and not present:
+        warnings.extend(
+            f"Missing Java dependency manifest for external import: {item}"
+            for item in sorted(external)
+        )
+    elif external and present:
+        warnings.append(
+            "Java import-to-Maven/Gradle coordinate mapping is ambiguous; dependency wiring remains unverified until a real build and integration test proves it."
+        )
+    return imports, declared, warnings
+
+
 def _kotlin_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
     files, warnings = _files(root, {".kt", ".kts"})
     imports: set[str] = set()
@@ -398,6 +461,8 @@ def review_dependency_wiring(root: Path, language: str) -> DependencyWiringRevie
         imports, declared, warnings = _javascript_dependencies(resolved)
     elif language == "kotlin":
         imports, declared, warnings = _kotlin_dependencies(resolved)
+    elif language == "java":
+        imports, declared, warnings = _java_dependencies(resolved)
     elif language == "ruby":
         imports, declared, warnings = _ruby_dependencies(resolved)
     elif language == "rust":
