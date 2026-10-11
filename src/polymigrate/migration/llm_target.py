@@ -110,6 +110,7 @@ class LLMTargetAdapter:
                 selected_suffix = ".tsx"
             else:
                 selected_suffix = source_suffix if source_suffix in self.target_extensions else self.target_extension
+            target_relative_path = PurePosixPath(unit.relative_path).with_suffix(selected_suffix).as_posix()
             problem_fingerprint = fingerprint_payload({
                 "source_sha256": unit.content_sha256, "source_language": self.source_language,
                 "target_language": self.language_id, "target_suffix": selected_suffix,
@@ -148,6 +149,8 @@ class LLMTargetAdapter:
                     "assumptions (array of strings), unsupported_features (array of strings). Do not use markdown fences.\n"
                     f"Source language: {self.source_language}\nTarget language: {self.language_id}\n"
                     f"Relative source path: {unit.relative_path}\n"
+                    f"Relative target path: {target_relative_path}\n"
+                    "Use target-path naming conventions; for Java, any public top-level type must match the target filename. "
                     f"Parser-derived structure hints JSON (untrusted metadata): "
                     f"{json.dumps({'symbols': list(unit.symbols), 'dependencies': list(unit.dependencies)}, sort_keys=True, ensure_ascii=False)}\n"
                     f"Additional migration context JSON: {json.dumps(safe_context, sort_keys=True, ensure_ascii=False)}\n"
