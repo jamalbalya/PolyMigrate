@@ -19,7 +19,7 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 525 tests passed across all three versions (6 environment-dependent tests skipped), all 6 packaged skill assets were verified, and the dedicated Docker behavior E2E job passed 2 tests on commit `afcb3f8e`; rerun CI after subsequent commits before release.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; the latest verified run `38151698136` on commit `31731533` completed 533 tests per Python version with 6 environment-dependent skips and no failures, verified all 6 packaged skill assets, passed 8 PHP translator/CLI tests against a real PHP CLI, and passed 2 sandboxed Docker behavior E2E tests.
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
@@ -122,3 +122,5 @@
 - [x] T100 Add runtime-equivalence fixtures for safe assignments to previously assigned variables inside bounded `range()` loops across Python-to-Go, Python-to-JavaScript, Python-to-Rust, and Python-to-Java; reject loop-local declarations and loop-index reassignment.
 
 - [x] T101 Add Unicode-code-point-aware `len(string)` support to deterministic Python-to-Go, JavaScript, Rust, and Java translators; reject builtin shadowing, invalid argument forms, and non-string values, enforce target integer bounds, and compare generated runtime output with Python fixtures.
+
+- [x] T102 Add an offline deterministic Python-to-PHP translator for simple assignments, bounded signed-32-bit integer expressions, strings/booleans, `str()`, `abs()`, and positional `print()`; reject unsupported syntax, add a dedicated CI job that installs PHP CLI and verifies lint plus runtime output, and keep T023 open because general parser/generator coverage across all language pairs remains incomplete.
