@@ -308,10 +308,14 @@ def _candidate_dependency_integration_status(
 
 
 def _security_review_gate_status(result) -> str:
-    """Never mark comprehensive security review passed without authenticated scanner provenance."""
-    if not result.scanner_provenance_verified:
-        return "INCOMPLETE"
-    return result.status
+    """Keep the comprehensive review gate closed until T059 is implemented.
+
+    Authenticated scanner provenance proves which bounded tools and rules ran;
+    it does not prove the scan is comprehensive. Preserve scanner findings and
+    provenance in the separate scanner report, but never promote this gate to
+    PASSED based on the current limited scanner profile alone.
+    """
+    return "INCOMPLETE"
 
 
 def _derive_final_status(

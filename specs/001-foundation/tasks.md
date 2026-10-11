@@ -90,3 +90,5 @@
 - [x] T078 Expand bounded static security heuristics for dynamic SQL interpolation, unsafe temporary paths, disabled TLS verification, Rust unsafe blocks, and process launching; keep the overall security gate explicitly non-comprehensive.
 
 - [x] T079 Require an operator-managed SHA-256 pin for the bundled Semgrep rules file before scanner provenance is trusted; regression-test missing, malformed, and mismatched rules pins. This authenticates configured inputs only and does not close the comprehensive security audit gate T059.
+
+- [x] T080 Keep `security_review` INCOMPLETE even when local scanner binaries and bundled Semgrep rules are authenticated; add regression coverage so scanner provenance cannot be mistaken for a comprehensive audit. T059 remains open.

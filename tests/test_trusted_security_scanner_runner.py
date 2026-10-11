@@ -79,7 +79,8 @@ class LocalScannerRunnerTests(unittest.TestCase):
         self.assertEqual(result.status, "PASSED")
         self.assertTrue(result.scanner_execution_recorded)
         self.assertTrue(result.scanner_provenance_verified)
-        self.assertEqual(_security_review_gate_status(result), "PASSED")
+        # Authenticated scanner identity is not the same as a comprehensive audit.
+        self.assertEqual(_security_review_gate_status(result), "INCOMPLETE")
         self.assertTrue(result.to_dict()["scanner_provenance_verified"])
 
     def test_mismatched_scanner_pin_keeps_review_incomplete(self):
