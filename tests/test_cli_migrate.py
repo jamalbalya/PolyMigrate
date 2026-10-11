@@ -51,6 +51,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
             self.assertTrue(any("Dependency-gap planning emitted warnings" in warning for warning in report["warnings"]))
             self.assertTrue((output / "main.go").is_file())
             self.assertIn("source_project_index", self.registry.get("fake").requests[0].prompt)
+            self.assertIn('"references": ["print"]', self.registry.get("fake").requests[0].prompt)
             self.assertEqual(source_file.read_text(encoding="utf-8"), "print('hello')")
 
     def test_deterministic_migration_never_initializes_ai_provider(self):
