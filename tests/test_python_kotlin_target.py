@@ -88,6 +88,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
         cases = (
             ("n = 1\nwhile n > 0:\n    print(n)\n", "does not update its condition variables"),
             ("n = 1\nwhile n > 0:\n    n = n\n", "made no progress"),
+            ("n = 0\nwhile n < 10001:\n    n = n + 1\n", "could not be proven to terminate within 10000 iterations"),
             ("text = 'x'\nwhile text:\n    print(text)\n", "while conditions must be one simple integer comparison"),
             ("n = 1\nwhile n > 0:\n    if n:\n        print(n)\n", "while bodies may contain only print"),
         )
