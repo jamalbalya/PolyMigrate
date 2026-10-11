@@ -523,7 +523,7 @@ class PythonToKotlinTargetAdapter:
             raise UnsupportedPythonSyntax("This adapter currently accepts exactly one source file")
         self.warnings = [
             "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), len(string), print(), if/elif/else chains with print and same-type assignments to existing variables, bounded range() loops, and while loops with statically proven termination.",
-            "Assignments inside branches or range loops, nested control flow, unbounded while loops, functions, imports, classes, collections, and full project migration are not supported by this subset."
+            "Augmented assignments, assignments inside range loops, nested control flow, unbounded while loops, functions, imports, classes, collections, and full project migration are not supported by this subset."
         ]
         try:
             tree = ast.parse(project.units[0].source_text)
