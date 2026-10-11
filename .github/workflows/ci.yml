@@ -117,3 +117,23 @@ jobs:
         run: python -m pip install --editable .
       - name: Run Ruby translator and CLI runtime tests
         run: python -m unittest tests.test_python_ruby_target tests.test_cli_deterministic_ruby -v
+
+  cpp-deterministic-e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install C++ compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y g++
+      - name: Install package
+        run: python -m pip install --editable .
+      - name: Run C++ translator and CLI runtime tests
+        run: python -m unittest tests.test_python_cpp_target tests.test_cli_deterministic_cpp -v
