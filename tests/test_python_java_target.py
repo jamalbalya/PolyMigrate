@@ -27,6 +27,35 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
         self.assertIn("int y = (x * 7);", code)
         self.assertIn("System.out.println(y);", code)
 
+    def test_str_builtin_converts_integer_and_boolean_to_python_text(self):
+        code = self._translate('x = 42\nprint("value=" + str(x))\nprint(str(True))\n')
+        self.assertIn("Integer.toString(x)", code)
+        self.assertIn('((true) ? "True" : "False")', code)
+
+    def test_str_builtin_cannot_be_shadowed_or_called_with_keywords(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the str"):
+            self._translate('str = "shadowed"\nprint(str(2))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
+            self._translate("print(str(value=2))\n")
+
+    @unittest.skipUnless(shutil.which("javac") and shutil.which("java"), "JDK is required")
+    def test_str_builtin_generated_java_compiles_and_matches_output(self):
+        source = 'x = 42\nprint("value=" + str(x))\nprint(str(True))\n'
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_file = root / "Main.java"
+            java_file.write_text(code, encoding="utf-8")
+            compiled = subprocess.run(
+                ["javac", str(java_file)], capture_output=True, text=True, timeout=30, check=False
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            executed = subprocess.run(
+                ["java", "-cp", tmp, "Main"], capture_output=True, text=True, timeout=30, check=False
+            )
+            self.assertEqual(executed.returncode, 0, executed.stderr)
+            self.assertEqual(executed.stdout, "value=42\nTrue\n")
+
     def test_string_concatenation_and_escaping(self):
         code = self._translate('message = "hello\\\\nworld"\nprint(message)\n')
         self.assertIn(r'"hello\\nworld"', code)
