@@ -26,7 +26,7 @@ def build_source_project_index(
     for unit in units[:max_files]:
         entries.append({
             "path": unit.relative_path[:300],
-            "sha256": unit.content_sha256,
+            "sha256": unit.content_sha256[:64],
             "symbols": [item[:120] for item in unit.symbols[:max_symbols_per_file]],
             "dependencies": [item[:120] for item in unit.dependencies[:max_dependencies_per_file]],
         })
@@ -36,7 +36,7 @@ def build_source_project_index(
         parser_backends = []
     payload: dict[str, Any] = {
         "schema_version": 1,
-        "source_language": project.language_id,
+        "source_language": project.language_id[:80],
         "total_source_files": len(units),
         "included_file_count": len(entries),
         "omitted_file_count": max(0, len(units) - len(entries)),
