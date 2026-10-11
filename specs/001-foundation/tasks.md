@@ -87,3 +87,4 @@
 - [x] T075 Fail closed when dependency-gap planning fails or library decisions remain unresolved/custom; do not treat an empty candidate list as proof that dependency integration passed.
 - [x] T076 Support statically known positive and negative non-zero `range()` steps in deterministic Go, JavaScript, and Rust translators; cap actual iteration count and reject target-integer overflow, with runtime-equivalence tests.
 - [x] T077 Support boolean literals/variables in deterministic Go, JavaScript, and Rust subsets, preserve Python-style boolean output, and reject boolean arithmetic or ordering comparisons; verify target runtime behavior.
+- [x] T078 Expand bounded static security heuristics for dynamic SQL interpolation, unsafe temporary paths, disabled TLS verification, Rust unsafe blocks, and process launching; keep the overall security gate explicitly non-comprehensive.
