@@ -122,15 +122,41 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
         files = self._translate("start = 1\nstop = 4\nfor i in range(start, stop):\n    print(i)\n")
         self.assertIn("for i in start..stop {", files["src/main.rs"])
 
-    def test_rejects_range_step_and_large_loop(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "explicit steps"):
-            self._translate("for i in range(0, 3, 2):\n    print(i)\n")
+    def test_range_steps_are_bounded_and_zero_is_rejected(self):
+        code = self._translate("for i in range(0, 5, 2):\n    print(i)\n")
+        negative_code = self._translate("for i in range(5, 0, -2):\n    print(i)\n")
+        self.assertIn("i += 2;", code["src/main.rs"])
+        self.assertIn("while i > 0", negative_code["src/main.rs"])
+        self._translate("for i in range(0, 10001, 2):\n    print(i)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "step cannot be zero"):
+            self._translate("for i in range(0, 5, 0):\n    print(i)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "overflow the target integer range"):
+            self._translate("for i in range(2147483646, 2147483647, 2):\n    print(i)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000-iteration"):
+            self._translate("for i in range(0, 20002, 2):\n    print(i)\n")
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000-iteration"):
             self._translate("for i in range(10001):\n    print(i)\n")
 
     def test_rejects_loop_variable_shadowing(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "cannot shadow"):
             self._translate("i = 1\nfor i in range(3):\n    print(i)\n")
+
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_signed_range_steps_generated_project_builds_and_runs(self):
+        source = "for i in range(0, 5, 2):\n    print(i)\nfor j in range(5, 0, -2):\n    print(j)\n"
+        files = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(
+                ["cargo", "run", "--offline", "--quiet"], cwd=root,
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "0\n2\n4\n5\n3\n1\n")
 
     @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
     def test_range_loop_generated_project_builds_and_runs(self):

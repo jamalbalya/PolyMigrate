@@ -103,14 +103,14 @@ class PythonToJavaScriptTargetAdapter:
 
     def _range_spec(
         self, node: ast.For, assigned: set[str]
-    ) -> tuple[str, str, int, int]:
+    ) -> tuple[str, str, int, int, str, int]:
         call = node.iter
         if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Name) or call.func.id != "range":
             raise UnsupportedPythonSyntax("Only range() loops are supported")
         if "range" in assigned:
             raise UnsupportedPythonSyntax("Shadowing the range() builtin is not supported")
-        if call.keywords or len(call.args) not in {1, 2}:
-            raise UnsupportedPythonSyntax("range() supports one or two arguments; explicit steps are not supported")
+        if call.keywords or len(call.args) not in {1, 2, 3}:
+            raise UnsupportedPythonSyntax("range() supports one, two, or three positional arguments")
         if len(call.args) == 1:
             start_expression, start_value = "0", 0
             stop_node = call.args[0]
@@ -118,17 +118,40 @@ class PythonToJavaScriptTargetAdapter:
             if stop_type != "int":
                 raise UnsupportedPythonSyntax("range() bounds must be integers")
             stop_value = self._checked_integer_value(stop_node, self._int_values)
+            step_expression, step_value = "1", 1
         else:
-            start_node, stop_node = call.args
+            start_node, stop_node = call.args[:2]
             start_expression, start_type = self._expr(start_node, assigned)
             stop_expression, stop_type = self._expr(stop_node, assigned)
             if start_type != "int" or stop_type != "int":
                 raise UnsupportedPythonSyntax("range() bounds must be integers")
             start_value = self._checked_integer_value(start_node, self._int_values)
             stop_value = self._checked_integer_value(stop_node, self._int_values)
-        if max(0, stop_value - start_value) > 10_000:
+            if len(call.args) == 3:
+                step_node = call.args[2]
+                step_expression, step_type = self._expr(step_node, assigned)
+                if step_type != "int":
+                    raise UnsupportedPythonSyntax("range() step must be an integer")
+                step_value = self._checked_integer_value(step_node, self._int_values)
+            else:
+                step_expression, step_value = "1", 1
+        if step_value == 0:
+            raise UnsupportedPythonSyntax("range() step cannot be zero")
+        if step_value > 0:
+            iterations = max(0, (stop_value - start_value + step_value - 1) // step_value)
+        else:
+            stride = -step_value
+            iterations = max(0, (start_value - stop_value + stride - 1) // stride)
+        if iterations > 10_000:
             raise UnsupportedPythonSyntax("range() exceeds the 10000-iteration static limit")
-        return start_expression, stop_expression, start_value, stop_value
+        # The generated loop increments after the final body execution. Reject a
+        # post-loop value outside the target's exact integer range rather than
+        # allowing overflow or loss of JavaScript integer precision.
+        post_value = start_value + iterations * step_value
+        minimum, maximum = -(2**53 - 1), 2**53 - 1
+        if not minimum <= post_value <= maximum:
+            raise UnsupportedPythonSyntax("range() step would overflow the target integer range")
+        return start_expression, stop_expression, start_value, stop_value, step_expression, step_value
 
     def _condition(self, node: ast.expr, assigned: set[str]) -> str:
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
@@ -265,14 +288,16 @@ class PythonToJavaScriptTargetAdapter:
                     raise UnsupportedPythonSyntax("for/else statements are not supported")
                 if not node.body:
                     raise UnsupportedPythonSyntax("Empty loop bodies are not supported")
-                start_expression, stop_expression, _, _ = self._range_spec(node, assigned)
+                start_expression, stop_expression, _, _, step_expression, step_value = self._range_spec(node, assigned)
                 assigned.add(name)
                 self._types[name] = "int"
                 body = [self._print_statement(statement, assigned) for statement in node.body]
                 assigned.remove(name)
                 self._types.pop(name, None)
                 self._int_values.pop(name, None)
-                rendered = [f"for (let {name} = {start_expression}; {name} < {stop_expression}; {name}++) {{",
+                operator = "<" if step_value > 0 else ">"
+                increment = f"{name}++" if step_value == 1 else f"{name}--" if step_value == -1 else f"{name} += {step_expression}"
+                rendered = [f"for (let {name} = {start_expression}; {name} {operator} {stop_expression}; {increment}) {{",
                             *("    " + line for line in body), "}"]
                 statements.append("\n".join(rendered))
             elif isinstance(node, ast.If):
