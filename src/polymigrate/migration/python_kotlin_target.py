@@ -263,7 +263,7 @@ class PythonToKotlinTargetAdapter:
             step_value = 1
         else:
             start_expr, start_value = rendered_args[0], values[0]
-            stop_expr, stop_value, step_value = rendered_args[1], values[2], values[2]
+            stop_expr, stop_value, step_value = rendered_args[1], values[1], values[2]
         if step_value == 0:
             raise UnsupportedPythonSyntax("range() step cannot be zero")
         if abs(step_value) > _INT_MAX:
