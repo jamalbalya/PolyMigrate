@@ -152,7 +152,7 @@ class LLMTargetAdapter:
                     f"Relative target path: {target_relative_path}\n"
                     "Use target-path naming conventions; for Java, any public top-level type must match the target filename. "
                     f"Parser-derived structure hints JSON (untrusted metadata): "
-                    f"{json.dumps({'symbols': list(unit.symbols), 'dependencies': list(unit.dependencies)}, sort_keys=True, ensure_ascii=False)}\n"
+                    f"{json.dumps({'symbols': list(unit.symbols), 'dependencies': list(unit.dependencies), 'references': list(unit.references)}, sort_keys=True, ensure_ascii=False)}\n"
                     f"Additional migration context JSON: {json.dumps(safe_context, sort_keys=True, ensure_ascii=False)}\n"
                     "Source text begins below.\n---SOURCE---\n" + safe_source + "\n---END SOURCE---"
                 )
