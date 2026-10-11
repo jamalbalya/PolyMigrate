@@ -42,6 +42,10 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
         self.assertIn("} else if (((x > 0) && (label.isNotEmpty()))) {", code)
         self.assertIn('println(listOf<Any>("positive", x).joinToString(" ") { pyString(it) })', code)
 
+    def test_escapes_kotlin_string_templates(self):
+        code = self._translate("print('$value')\n")
+        self.assertIn(r'"\$value"', code)
+
     def test_python_floor_division_and_modulo_semantics(self):
         code = self._translate("print(-3 // 2, -3 % 2)\n")
         self.assertIn("Math.floorDiv(-3, 2)", code)
