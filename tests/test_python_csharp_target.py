@@ -97,11 +97,12 @@ class PythonToCSharpTranslatorTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "positive 3\n")
 
-    def test_rejects_unsupported_control_flow(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Unsupported statement syntax: If"):
-            PythonToCSharpTargetAdapter().generate(
-                project_for("value = 1\nif value:\n    print(value)\n"), {}
-            )
+    def test_supports_print_only_conditional_control_flow(self):
+        generated = PythonToCSharpTargetAdapter().generate(
+            project_for("value = 1\nif value:\n    print(value)\n"), {}
+        )[0].content
+        self.assertIn("if ((value != 0)) {", generated)
+        self.assertIn('Console.WriteLine(string.Join(" ", new string[] { PolymigrateString(value) }));', generated)
 
     def test_rejects_reserved_and_builtin_identifiers(self):
         for name in ("class", "var", "Console", "PolymigrateString"):
