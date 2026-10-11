@@ -224,6 +224,105 @@ class PythonToKotlinTargetAdapter:
             break
         return "\n".join(rendered)
 
+
+    def _for_statement(self, node: ast.For, assigned: set[str], types: dict[str, str],
+                       integer_values: dict[str, int], referenced_after: bool) -> str | None:
+        if not isinstance(node.target, ast.Name):
+            raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
+        name = node.target.id
+        if (not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _KOTLIN_RESERVED
+                or name in {"print", "str", "abs", "range", "pyString", "println", "Math",
+                            "Int", "String", "Boolean", "Any", "listOf"}):
+            raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not a supported Kotlin identifier")
+        if name in assigned:
+            raise UnsupportedPythonSyntax("range() loop variables cannot shadow an already assigned variable")
+        if node.orelse:
+            raise UnsupportedPythonSyntax("for/else statements are not supported in Kotlin")
+        if (not isinstance(node.iter, ast.Call) or not isinstance(node.iter.func, ast.Name)
+                or node.iter.func.id != "range"):
+            raise UnsupportedPythonSyntax("Only range() loops are supported in Kotlin")
+        call = node.iter
+        if call.keywords or len(call.args) not in {1, 2, 3}:
+            raise UnsupportedPythonSyntax("range() supports one, two, or three positional integer arguments")
+
+        rendered_args: list[str] = []
+        values: list[int] = []
+        for argument in call.args:
+            expression, value_type = self._expr(argument, assigned, types, integer_values)
+            if value_type != "int":
+                raise UnsupportedPythonSyntax("range() arguments must be statically known integers")
+            rendered_args.append(expression)
+            values.append(self._int_value(argument, integer_values))
+        if len(values) == 1:
+            start_expr, start_value = "0", 0
+            stop_expr, stop_value = rendered_args[0], values[0]
+            step_value = 1
+        elif len(values) == 2:
+            start_expr, start_value = rendered_args[0], values[0]
+            stop_expr, stop_value = rendered_args[1], values[1]
+            step_value = 1
+        else:
+            start_expr, start_value = rendered_args[0], values[0]
+            stop_expr, stop_value, step_value = rendered_args[1], values[2], values[2]
+        if step_value == 0:
+            raise UnsupportedPythonSyntax("range() step cannot be zero")
+        if abs(step_value) > _INT_MAX:
+            raise UnsupportedPythonSyntax("range() step magnitude exceeds the signed 32-bit Kotlin Int range")
+        actual_range = range(start_value, stop_value, step_value)
+        count = len(actual_range)
+        if count > 10_000:
+            raise UnsupportedPythonSyntax("range() loops are limited to 10000 actual iterations")
+        if not node.body:
+            raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported")
+
+        assigned.add(name)
+        types[name] = "int"
+        previous_value = integer_values.get(name)
+        rendered_body: list[str] | None = None
+        validation_values = list(actual_range) if count else [start_value]
+        try:
+            for loop_value in validation_values:
+                integer_values[name] = loop_value
+                body_lines: list[str] = []
+                for statement in node.body:
+                    if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                        body_lines.append(self._print_call(statement.value, assigned, types, integer_values))
+                    elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
+                          and isinstance(statement.value.value, str)):
+                        continue
+                    else:
+                        raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
+                if not body_lines:
+                    raise UnsupportedPythonSyntax("range() loop bodies must contain at least one print() statement")
+                if rendered_body is None:
+                    rendered_body = body_lines
+        finally:
+            assigned.discard(name)
+            types.pop(name, None)
+            if previous_value is None:
+                integer_values.pop(name, None)
+            else:
+                integer_values[name] = previous_value
+
+        if count == 0:
+            if referenced_after:
+                raise UnsupportedPythonSyntax("A zero-iteration range() leaves its loop variable undefined in Python")
+            return None
+
+        last_value = actual_range[-1]
+        if step_value > 0:
+            progression = f"{start_expr}..{last_value} step {step_value}"
+        else:
+            progression = f"{start_expr} downTo {last_value} step {abs(step_value)}"
+        body = "\n".join("    " + line for line in (rendered_body or []))
+        rendered = f"for ({name} in {progression}) {{\n{body}\n}}"
+        if referenced_after:
+            rendered += f"\nvar {name}: Int = {last_value}"
+            assigned.add(name)
+            types[name] = "int"
+            integer_values[name] = last_value
+        return rendered
+
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         del context
         if project.language_id != "python":
@@ -231,8 +330,8 @@ class PythonToKotlinTargetAdapter:
         if len(project.units) != 1:
             raise UnsupportedPythonSyntax("This adapter currently accepts exactly one source file")
         self.warnings = [
-            "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), print(), and print-only if/elif/else chains.",
-            "Loops, assignments inside branches, nested control flow, functions, imports, classes, collections, and full project migration are not supported by this subset.",
+            "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), print(), print-only if/elif/else chains, and statically bounded print-only range() loops.",
+            "Assignments inside branches or loops, nested control flow, while loops, functions, imports, classes, collections, and full project migration are not supported by this subset."
         ]
         try:
             tree = ast.parse(project.units[0].source_text)
@@ -240,10 +339,13 @@ class PythonToKotlinTargetAdapter:
             raise UnsupportedPythonSyntax("Python source contains invalid or excessively nested syntax") from None
         has_str_call = any(isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "str" for item in ast.walk(tree))
         has_abs_call = any(isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "abs" for item in ast.walk(tree))
+        has_range_call = any(isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "range" for item in ast.walk(tree))
         if has_str_call and any(isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "str" for item in ast.walk(tree)):
             raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
         if has_abs_call and any(isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "abs" for item in ast.walk(tree)):
             raise UnsupportedPythonSyntax("Shadowing the abs() builtin is not supported")
+        if has_range_call and any(isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "range" for item in ast.walk(tree)):
+            raise UnsupportedPythonSyntax("Shadowing the range() builtin is not supported")
 
         assigned: set[str] = set()
         types: dict[str, str] = {}
@@ -253,7 +355,7 @@ class PythonToKotlinTargetAdapter:
             item.id for item in ast.walk(tree)
             if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load)
         }
-        for node in tree.body:
+        for node_index, node in enumerate(tree.body):
             if isinstance(node, ast.Assign):
                 if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
                     raise UnsupportedPythonSyntax("Only assignments to one simple variable are supported")
@@ -277,6 +379,16 @@ class PythonToKotlinTargetAdapter:
                 statements.append(self._print_call(node.value, assigned, types, integer_values))
             elif isinstance(node, ast.If):
                 statements.append(self._if_statement(node, assigned, types, integer_values))
+            elif isinstance(node, ast.For):
+                referenced_after = any(
+                    isinstance(child, ast.Name) and child.id == node.target.id and isinstance(child.ctx, ast.Load)
+                    for later in tree.body[node_index + 1:] for child in ast.walk(later)
+                ) if isinstance(node.target, ast.Name) else False
+                rendered_loop = self._for_statement(
+                    node, assigned, types, integer_values, referenced_after
+                )
+                if rendered_loop is not None:
+                    statements.append(rendered_loop)
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
             else:
