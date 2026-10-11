@@ -69,6 +69,8 @@ class PythonToGoTargetAdapter:
                 node.operand, values
             )
             value = operand if isinstance(node.op, ast.UAdd) else -operand
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "abs" and len(node.args) == 1 and not node.keywords:
+            value = abs(PythonToGoTargetAdapter._checked_integer_value(node.args[0], values))
         elif isinstance(node, ast.BinOp) and isinstance(
             node.op, (ast.Add, ast.Sub, ast.Mult)
         ):
@@ -123,6 +125,18 @@ class PythonToGoTargetAdapter:
                     f"Variable '{node.id}' is used before assignment"
                 )
             return node.id, self._types[node.id]
+
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "abs":
+            if "abs" in assigned:
+                raise UnsupportedPythonSyntax("Shadowing the abs() builtin is not supported")
+            if len(node.args) != 1 or node.keywords:
+                raise UnsupportedPythonSyntax("abs() must have exactly one positional argument")
+            expression, value_type = self._expr(node.args[0], assigned)
+            if value_type != "int":
+                raise UnsupportedPythonSyntax("abs() supports only integer values")
+            self._checked_integer_value(node, self._int_values)
+            self._uses_abs = True
+            return f"polymigrateAbsInt32({expression})", "int"
 
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "str":
             if "str" in assigned:
@@ -349,6 +363,7 @@ class PythonToGoTargetAdapter:
         assigned: set[str] = set()
         self._types = {}
         self._int_values = {}
+        self._uses_abs = False
         statements: list[str] = []
         used_fmt = False
 
@@ -369,6 +384,17 @@ class PythonToGoTargetAdapter:
         )
         if has_str_call and assigns_str:
             raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
+
+        has_abs_call = any(
+            isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "abs"
+            for item in ast.walk(tree)
+        )
+        assigns_abs = any(
+            isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "abs"
+            for item in ast.walk(tree)
+        )
+        if has_abs_call and assigns_abs:
+            raise UnsupportedPythonSyntax("Shadowing the abs() builtin is not supported")
 
         referenced_names = {
             node.id
@@ -481,6 +507,12 @@ class PythonToGoTargetAdapter:
             )
 
         imports = 'import "fmt"\n' if used_fmt else ""
+        helper = (
+            "func polymigrateAbsInt32(value int) int {\n"
+            "\tif value < 0 {\n\t\treturn -value\n\t}\n"
+            "\treturn value\n}\n\n"
+            if self._uses_abs else ""
+        )
         body = "\n".join(f"\t{statement}" for statement in statements)
-        content = f"package main\n\n{imports}\nfunc main() {{\n{body}\n}}\n"
+        content = f"package main\n\n{imports}\n{helper}func main() {{\n{body}\n}}\n"
         return [GeneratedArtifact("main.go", content)]
