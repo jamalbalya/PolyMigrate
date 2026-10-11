@@ -124,6 +124,13 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
         self.assertIn("&&", code)
         self.assertIn("(x != 0)", code)
 
+    def test_rejects_conditional_chains_over_twenty_branches(self):
+        lines = ["x = 0", "if x == 0:", "    print('match')"]
+        for value in range(1, 21):
+            lines.extend([f"elif x == {value}:", "    print('match')"])
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "20 branches"):
+            self._translate("\n".join(lines) + "\n")
+
     def test_rejects_chained_comparisons(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Chained comparisons"):
             self._translate('x = 6\nif 0 < x < 10:\n    print("in range")\n')
