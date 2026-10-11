@@ -57,7 +57,7 @@
 - [x] T054 Keep source files inventoried when Python AST parsing fails safely, and emit a warning rather than aborting the migration.
 - [x] T055 Add an optional offline Tree-sitter parser extra with bounded parse/source limits and heuristic fallback; verify syntax diagnostics when the grammar is available.
 - [x] T056 Add an opt-in sandboxed behavior contract that compares source and target stdout against explicit expected outputs, rejects shell/inline execution, and records the gate in the migration review.
-- [ ] T058 Verify target dependency declarations and library wiring through real target builds/integration tests; only upgrade candidate status after the declared dependency is proven to work.
+- [x] T058 Verify target dependency declarations and library wiring through real target builds/integration tests; candidate status requires declared dependencies, production and integration-test imports, and PASSED build/integration/behavior gates. Real local-package fixtures cover Python, Go, JavaScript, Ruby, Rust, and Java, including exact class provenance for Java local JARs.
 - [ ] T059 Implement a comprehensive security-review gate for generated code and manifests; keep verified knowledge promotion blocked until this gate has trustworthy evidence.
 - [x] T060 Add a bounded static security scan for generated files, report high/medium/low findings without echoing secret values, block on high-risk findings, and explicitly keep the comprehensive security-review gate unverified.
 - [x] T061 Add a static dependency-wiring review for Python, Go, Rust, and JavaScript/TypeScript imports versus target manifests; missing declarations block output, while build/API compatibility remains explicitly unverified.
