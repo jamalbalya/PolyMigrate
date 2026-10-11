@@ -64,7 +64,7 @@ class PythonToCSharpTranslatorTests(unittest.TestCase):
         generated = PythonToCSharpTargetAdapter().generate(
             project_for("for i in range(2, 5):\n    print(i)\nprint(i)\n"), {}
         )[0].content
-        self.assertIn("for (int i = 2; i < 5; i += 1) {", generated)
+        self.assertIn("for (int polymigrateRangeCounter0 = 2; polymigrateRangeCounter0 < 5; polymigrateRangeCounter0 += 1) {", generated)
         self.assertIn("int i = 4;", generated)
         self.assertLess(generated.index("for (int i = 2"), generated.index("int i = 4;"))
 
