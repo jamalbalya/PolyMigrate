@@ -241,7 +241,7 @@ class PythonToJavaTargetAdapter:
 
         self.warnings = [
             "Python-to-Java translation supports only assignments, bounded integer expressions, string concatenation, booleans, and one-argument print().",
-            "Control flow, functions, imports, classes, I/O beyond print(), and project manifests are not translated.",
+            "Loops, nested control flow, functions, imports, classes, I/O beyond print(), and project manifests are not translated.",
             "Generated output must pass build, test, security, dependency, and behavior checks.",
         ]
         self._types = {}

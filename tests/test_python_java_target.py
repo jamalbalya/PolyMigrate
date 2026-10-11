@@ -36,9 +36,9 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
         code = self._translate("flag = True\nprint(flag)\n")
         self.assertIn('System.out.println((flag) ? "True" : "False");', code)
 
-    def test_rejects_control_flow_instead_of_guessing(self):
+    def test_rejects_unsupported_while_loop(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Unsupported statement syntax"):
-            self._translate('if True:\n    print("yes")\n')
+            self._translate('while True:\n    print("yes")\n')
 
     def test_rejects_loops(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Unsupported statement syntax"):
