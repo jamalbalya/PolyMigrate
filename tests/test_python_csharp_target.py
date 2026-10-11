@@ -66,7 +66,7 @@ class PythonToCSharpTranslatorTests(unittest.TestCase):
         )[0].content
         self.assertIn("for (int polymigrateRangeCounter0 = 2; polymigrateRangeCounter0 < 5; polymigrateRangeCounter0 += 1) {", generated)
         self.assertIn("int i = 4;", generated)
-        self.assertLess(generated.index("for (int i = 2"), generated.index("int i = 4;"))
+        self.assertLess(generated.index("for (int polymigrateRangeCounter0 = 2"), generated.index("int i = 4;"))
 
     def test_zero_iteration_range_does_not_define_loop_variable(self):
         generated = PythonToCSharpTargetAdapter().generate(
