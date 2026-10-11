@@ -70,6 +70,31 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "value=42\nTrue\n")
 
+    def test_abs_builtin_supports_safe_integer_values(self):
+        code = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
+        self.assertIn("Math.abs(x)", code)
+        self.assertIn("Math.abs(7)", code)
+
+    def test_abs_builtin_rejects_shadowing_invalid_types_and_overflow(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the abs"):
+            self._translate('abs = 1\nprint(abs(2))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the abs"):
+            self._translate('print(abs(2))\nabs = 1\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "integer values"):
+            self._translate('print(abs(True))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
+            self._translate("print(abs(value=2))\n")
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required")
+    def test_abs_builtin_generated_javascript_matches_python_output(self):
+        code = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.js"
+            path.write_text(code, encoding="utf-8")
+            run = subprocess.run(["node", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "42\n7\n")
+
     def test_print_string(self):
         self.assertIn('console.log("hello");', self._translate('print("hello")\n'))
 
