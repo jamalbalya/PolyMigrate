@@ -333,13 +333,13 @@ class PythonToJavaTargetAdapter:
             return statement
         if isinstance(node, ast.Assign):
             if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
-                raise UnsupportedPythonSyntax("Conditional assignments must target one existing variable")
+                raise UnsupportedPythonSyntax("Assignments in conditional and loop bodies must target one existing variable")
             name = node.targets[0].id
             if name not in assigned:
-                raise UnsupportedPythonSyntax("Conditional assignments must target previously assigned variables")
+                raise UnsupportedPythonSyntax("Assignments in conditional and loop bodies must target previously assigned variables")
             expression, value_type = self._expr(node.value, assigned)
             if self._types.get(name) != value_type:
-                raise UnsupportedPythonSyntax("Conditional assignments cannot change a variable's type")
+                raise UnsupportedPythonSyntax("Assignments in conditional and loop bodies cannot change a variable's type")
             if value_type == "int":
                 self._int_values[name] = self._checked_integer_value(node.value, self._int_values)
             else:
