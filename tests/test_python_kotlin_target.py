@@ -64,6 +64,31 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
                 self._translate(source)
 
+    def test_bounded_range_loops_preserve_positive_and_negative_steps(self):
+        code = self._translate(
+            "for i in range(0, 5, 2):\n    print(i)\n"
+            "for j in range(5, 0, -2):\n    print(j)\n"
+        )
+        self.assertIn("for (i in 0..4 step 2)", code)
+        self.assertIn("for (j in 5 downTo 1 step 2)", code)
+
+    def test_range_loop_preserves_last_value_when_referenced_after(self):
+        code = self._translate("for i in range(3):\n    print(i)\nprint(i)\n")
+        self.assertIn("for (i in 0..2 step 1)", code)
+        self.assertIn("var i: Int = 2", code)
+
+    def test_range_loops_fail_closed_on_zero_step_large_ranges_and_undefined_loop_value(self):
+        cases = (
+            ("for i in range(0, 5, 0):\n    print(i)\n", "step cannot be zero"),
+            ("for i in range(10001):\n    print(i)\n", "limited to 10000"),
+            ("for i in range(0):\n    print(i)\nprint(i)\n", "loop variable undefined"),
+            ("for i in range(3):\n    i = 4\n", "only print() statements"),
+            ("range = 3\nfor i in range(3):\n    print(i)\n", "Shadowing the range() builtin"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
     @unittest.skipUnless(shutil.which("kotlinc") and shutil.which("java"), "Kotlin compiler and Java are required")
     def test_kotlin_runtime_matches_python_fixture(self):
         source = (
@@ -73,6 +98,10 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             "else:\n    print('zero')\n"
             "print(-3 // 2, -3 % 2)\n"
             "print('$value')\n"
+            "for i in range(0, 5, 2):\n    print(i)\n"
+            "for j in range(5, 0, -2):\n    print(j)\n"
+            "for k in range(3):\n    print(k)\n"
+            "print(k)\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
@@ -90,7 +119,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
                 capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n")
+            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n")
 
 
 if __name__ == "__main__":
