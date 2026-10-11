@@ -86,6 +86,10 @@ class LocalScannerRunnerTests(unittest.TestCase):
         self.assertFalse(result.scanner_provenance_verified)
         self.assertTrue(result.scanner_execution_recorded)
         self.assertEqual(_security_review_gate_status(result), "INCOMPLETE")
+        self.assertEqual(
+            _security_review_gate_status(result, SimpleNamespace(status="PASSED"), SimpleNamespace(status="PASSED")),
+            "INCOMPLETE",
+        )
 
     def test_pinned_scanner_binary_hashes_allow_provenance_verification(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -121,6 +125,12 @@ class LocalScannerRunnerTests(unittest.TestCase):
                 result, SimpleNamespace(status="PASSED"), SimpleNamespace(status="PASSED")
             ),
             "PASSED",
+        )
+        self.assertEqual(
+            _security_review_gate_status(
+                result, SimpleNamespace(status="REVIEW_REQUIRED"), SimpleNamespace(status="PASSED")
+            ),
+            "REVIEW_REQUIRED",
         )
 
     def test_mismatched_scanner_pin_keeps_review_incomplete(self):
@@ -185,6 +195,10 @@ class LocalScannerRunnerTests(unittest.TestCase):
         self.assertFalse(result.scanner_provenance_verified)
         self.assertTrue(result.scanner_execution_recorded)
         self.assertEqual(result.findings[0]["rule_id"], "B307")
+        self.assertEqual(
+            _security_review_gate_status(result, SimpleNamespace(status="PASSED"), SimpleNamespace(status="PASSED")),
+            "FAILED",
+        )
 
 
     def test_missing_report_fields_cannot_be_interpreted_as_clean_scan(self):
@@ -226,6 +240,10 @@ class LocalScannerRunnerTests(unittest.TestCase):
         self.assertEqual(result.status, "FAILED")
         self.assertEqual(result.findings[0]["rule_id"], "GITLEAKS:generic-api-key")
         self.assertNotIn("redacted", json.dumps(result.to_dict()))
+        self.assertEqual(
+            _security_review_gate_status(result, SimpleNamespace(status="PASSED"), SimpleNamespace(status="PASSED")),
+            "FAILED",
+        )
 
     def test_known_dependency_vulnerability_blocks_security_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -241,6 +259,10 @@ class LocalScannerRunnerTests(unittest.TestCase):
                 result = run_local_security_scanners(root, "python")
         self.assertEqual(result.status, "FAILED")
         self.assertEqual(result.findings[0]["rule_id"], "OSV:GHSA-test-1234")
+        self.assertEqual(
+            _security_review_gate_status(result, SimpleNamespace(status="PASSED"), SimpleNamespace(status="PASSED")),
+            "FAILED",
+        )
 
     def test_untrusted_or_malformed_scanner_output_cannot_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
