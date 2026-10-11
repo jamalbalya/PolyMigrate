@@ -52,6 +52,7 @@ class SourceProjectIndexTests(unittest.TestCase):
         self.assertTrue(index["truncated"])
         self.assertEqual(len(index["files"][0]["symbols"]), 1)
         self.assertEqual(len(index["files"][0]["dependencies"]), 1)
+        self.assertEqual(len(index["files"][0]["references"]), 1)
 
     def test_total_serialized_context_respects_size_cap(self):
         project = make_project(100)
