@@ -265,6 +265,9 @@ class PythonToGoTargetAdapter:
             raise UnsupportedPythonSyntax("print() keyword arguments such as sep/end are not supported")
         if len(call.args) > 32:
             raise UnsupportedPythonSyntax("print() is limited to 32 positional arguments")
+        if len(call.args) == 1:
+            expression, value_type = self._expr(call.args[0], assigned)
+            return self._print_expression(expression, value_type)
         values = []
         for argument in call.args:
             expression, value_type = self._expr(argument, assigned)
