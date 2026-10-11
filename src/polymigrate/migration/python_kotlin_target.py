@@ -310,16 +310,17 @@ class PythonToKotlinTargetAdapter:
 
         def render_body(values: dict[str, int]) -> list[str]:
             rendered: list[str] = []
+            local_values = dict(values)
             for statement in node.body:
                 if isinstance(statement, ast.Assign):
                     name = statement.targets[0].id
-                    expression, value_type = self._expr(statement.value, assigned, types, values, string_values)
+                    expression, value_type = self._expr(statement.value, assigned, types, local_values, string_values)
                     if value_type != "int":
                         raise UnsupportedPythonSyntax("while assignments must remain integer-valued")
-                    self._int_value(statement.value, values, string_values)
+                    local_values[name] = self._int_value(statement.value, local_values, string_values)
                     rendered.append(f"{name} = {expression}")
                 elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
-                    rendered.append(self._print_call(statement.value, assigned, types, values, string_values))
+                    rendered.append(self._print_call(statement.value, assigned, types, local_values, string_values))
                 elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str):
                     continue
             if not rendered:
