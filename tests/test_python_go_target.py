@@ -92,6 +92,8 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self._translate("print(abs(value=2))\n")
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "portable Go int32 range"):
             self._translate("print(abs(-2147483648))\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "generated abs helper name"):
+            self._translate("polymigrateAbsInt32 = 1\nprint(abs(2), polymigrateAbsInt32)\n")
 
     @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
     def test_abs_builtin_generated_go_matches_python_output(self):
