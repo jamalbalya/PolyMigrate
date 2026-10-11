@@ -44,11 +44,11 @@ class DeterministicPythonJavaCLITests(unittest.TestCase):
             source = root / "source"
             source.mkdir()
             (source / "main.py").write_text(
-                'name = "Jamal"\\ncount = 3\\nprint(name, count, True)\\nprint()\\n',
+                'name = "Jamal"\ncount = 3\nprint(name, count, True)\nprint()\n',
                 encoding="utf-8",
             )
             output = root / "out"
-            with patch("polymigrate.cli.build_provider_registry") as provider_setup, \\
+            with patch("polymigrate.cli.build_provider_registry") as provider_setup, \
                  redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                 code = main([
                     "migrate", "--source", str(source), "--from", "python",
@@ -68,7 +68,7 @@ class DeterministicPythonJavaCLITests(unittest.TestCase):
                 capture_output=True, text=True, timeout=10,
             )
             self.assertEqual(run_result.returncode, 0, run_result.stderr)
-            self.assertEqual(run_result.stdout, "Jamal 3 True\\n\\n")
+            self.assertEqual(run_result.stdout, "Jamal 3 True\n\n")
 
 
 if __name__ == "__main__":
