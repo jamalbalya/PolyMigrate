@@ -126,3 +126,5 @@
 - [x] T102 Add an offline deterministic Python-to-PHP translator for simple assignments, bounded signed-32-bit integer expressions, strings/booleans, `str()`, `abs()`, and positional `print()`; reject unsupported syntax, add a dedicated CI job that installs PHP CLI and verifies lint plus runtime output, and keep T023 open because general parser/generator coverage across all language pairs remains incomplete.
 
 - [x] T103 Extend the deterministic Python-to-PHP subset with print-only `if`/`elif`/`else` chains, safe single comparisons, and Python-compatible truthiness; reject branch assignments, nested control flow, and chained comparisons, with real PHP runtime tests passing in CI.
+
+- [x] T104 Add bounded Python `for i in range(...)` loops to the deterministic Python-to-PHP subset, with static integer/overflow checks, a 10,000-iteration cap, Python-compatible post-loop variable behavior, reserved-variable checks, and real PHP runtime fixtures passing in CI.

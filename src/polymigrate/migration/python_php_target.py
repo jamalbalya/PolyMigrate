@@ -15,6 +15,7 @@ from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject
 _PHP_INT_MIN = -(2**31)
 _PHP_INT_MAX = 2**31 - 1
 _PHP_BUILTINS = {"print", "str", "abs"}
+_PHP_RESERVED_VARIABLES = {"this", "GLOBALS", "_SERVER", "_GET", "_POST", "_FILES", "_COOKIE", "_SESSION", "_REQUEST", "_ENV"}
 
 
 class UnsupportedPythonSyntax(ValueError):
@@ -226,6 +227,95 @@ class PythonToPHPTargetAdapter:
                         rendered.extend(render_body(statement.orelse, indent + 4))
                     rendered.append(" " * indent + "}")
                 return rendered
+            loop_variables: set[str] = set()
+
+            def render_for(statement: ast.For) -> list[str]:
+                if not isinstance(statement.target, ast.Name):
+                    raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
+                name = statement.target.id
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _PHP_BUILTINS or name in _PHP_RESERVED_VARIABLES:
+                    raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not supported")
+                if name in assigned:
+                    raise UnsupportedPythonSyntax("range() loop variables cannot shadow assigned variables")
+                if statement.orelse:
+                    raise UnsupportedPythonSyntax("for/else statements are not supported")
+                if not isinstance(statement.iter, ast.Call) or not isinstance(statement.iter.func, ast.Name) or statement.iter.func.id != "range":
+                    raise UnsupportedPythonSyntax("Only range() loops are supported")
+                call = statement.iter
+                if "range" in assigned:
+                    raise UnsupportedPythonSyntax("Shadowing the range() builtin is not supported")
+                if call.keywords or len(call.args) not in {1, 2, 3}:
+                    raise UnsupportedPythonSyntax("range() supports one, two, or three positional integer arguments")
+                rendered_args: list[str] = []
+                values: list[int] = []
+                for argument in call.args:
+                    expression, value_type = self._expr(argument, assigned, types, integer_values, uses_boolean_string)
+                    if value_type != "int":
+                        raise UnsupportedPythonSyntax("range() arguments must be integers, not booleans or strings")
+                    rendered_args.append(expression)
+                    values.append(self._int_value(argument, integer_values))
+                if len(values) == 1:
+                    start_expr, start_value = "0", 0
+                    stop_expr, stop_value = rendered_args[0], values[0]
+                    step_expr, step_value = "1", 1
+                elif len(values) == 2:
+                    start_expr, start_value = rendered_args[0], values[0]
+                    stop_expr, stop_value = rendered_args[1], values[1]
+                    step_expr, step_value = "1", 1
+                else:
+                    start_expr, start_value = rendered_args[0], values[0]
+                    stop_expr, stop_value = rendered_args[1], values[1]
+                    step_expr, step_value = rendered_args[2], values[2]
+                if step_value == 0:
+                    raise UnsupportedPythonSyntax("range() step cannot be zero")
+                actual_range = range(start_value, stop_value, step_value)
+                count = len(actual_range)
+                if count > 10_000:
+                    raise UnsupportedPythonSyntax("range() loops are limited to 10000 actual iterations")
+                if not statement.body:
+                    raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported")
+                assigned.add(name)
+                types[name] = "int"
+                integer_values[name] = start_value
+                # Validate every emitted loop expression for every possible index so
+                # target integer overflow cannot hide in a later iteration.
+                validation_values = list(actual_range) if count else [start_value]
+                for loop_value in validation_values:
+                    integer_values[name] = loop_value
+                    for child in statement.body:
+                        if isinstance(child, ast.Expr) and isinstance(child.value, ast.Call):
+                            call_node = child.value
+                            if not isinstance(call_node.func, ast.Name) or call_node.func.id != "print":
+                                raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
+                            if call_node.keywords or len(call_node.args) > 32:
+                                raise UnsupportedPythonSyntax("print() supports at most 32 positional arguments and no keywords")
+                            for argument in call_node.args:
+                                self._expr(argument, assigned, types, integer_values, uses_boolean_string)
+                        elif isinstance(child, ast.Expr) and isinstance(child.value, ast.Constant) and isinstance(child.value.value, str):
+                            continue
+                        else:
+                            raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
+                body = render_body(statement.body, 4)
+                if count == 0:
+                    assigned.remove(name)
+                    types.pop(name, None)
+                    integer_values.pop(name, None)
+                    return []
+                last_value = actual_range[-1]
+                next_value = last_value + step_value
+                if not _PHP_INT_MIN <= next_value <= _PHP_INT_MAX:
+                    raise UnsupportedPythonSyntax("range() loop counter could overflow the signed 32-bit PHP integer range")
+                operator = "<" if step_value > 0 else ">"
+                rendered = [f"for (${name} = {start_expr}; ${name} {operator} {stop_expr}; ${name} += {step_expr}) {{"]
+                rendered.extend(body)
+                rendered.append("}")
+                # Python keeps the last yielded value; a PHP for-loop leaves its
+                # counter one step beyond it, so restore the Python value explicitly.
+                rendered.append(f"${name} = {last_value};")
+                integer_values[name] = last_value
+                loop_variables.add(name)
+                return rendered
+
             for node in tree.body:
                 if isinstance(node, ast.Assign):
                     if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
@@ -233,6 +323,8 @@ class PythonToPHPTargetAdapter:
                     name = node.targets[0].id
                     if name in _PHP_BUILTINS:
                         raise UnsupportedPythonSyntax(f"Variable name '{name}' conflicts with a supported builtin")
+                    if name in _PHP_RESERVED_VARIABLES:
+                        raise UnsupportedPythonSyntax(f"Variable name '{name}' is reserved by PHP")
                     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
                         raise UnsupportedPythonSyntax(f"Variable name '{name}' is not supported")
                     expression, value_type = self._expr(node.value, assigned, types, integer_values, uses_boolean_string)
@@ -252,11 +344,13 @@ class PythonToPHPTargetAdapter:
                     statements.append(render_print(node.value))
                 elif isinstance(node, ast.If):
                     statements.extend(render_if(node))
+                elif isinstance(node, ast.For):
+                    statements.extend(render_for(node))
                 elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                     continue
                 else:
                     raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}")
-            unused = sorted(assigned - referenced)
+            unused = sorted(assigned - referenced - loop_variables)
             if unused:
                 raise UnsupportedPythonSyntax("Assigned variable(s) are never used: " + ", ".join(unused))
             helper = (

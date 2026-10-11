@@ -59,6 +59,69 @@ class PythonToPHPTranslatorTests(unittest.TestCase):
                 project_for("value = 1\nif 0 < value < 2:\n    print(value)\n"), {}
             )
 
+    def test_translates_bounded_range_loop_and_preserves_python_loop_value(self):
+        php = shutil.which("php")
+        if php is None:
+            self.skipTest("PHP CLI is not installed in this test environment")
+        generated = PythonToPHPTargetAdapter().generate(
+            project_for("for i in range(3):\n    print(i)\nprint(i)\n"), {}
+        )[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / generated.relative_path
+            path.write_text(generated.content, encoding="utf-8")
+            lint = subprocess.run([php, "-l", str(path)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(lint.returncode, 0, lint.stderr + lint.stdout)
+            run = subprocess.run([php, str(path)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "0\n1\n2\n2\n")
+
+    def test_translates_negative_step_range_loop(self):
+        php = shutil.which("php")
+        if php is None:
+            self.skipTest("PHP CLI is not installed in this test environment")
+        generated = PythonToPHPTargetAdapter().generate(
+            project_for("for i in range(3, 0, -1):\n    print(i)\n"), {}
+        )[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / generated.relative_path
+            path.write_text(generated.content, encoding="utf-8")
+            run = subprocess.run([php, str(path)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "3\n2\n1\n")
+
+    def test_rejects_php_reserved_variables(self):
+        for name in ("this", "GLOBALS", "_SERVER"):
+            with self.subTest(name=name), self.assertRaisesRegex(UnsupportedPythonSyntax, "reserved by PHP"):
+                PythonToPHPTargetAdapter().generate(
+                    project_for(f"{name} = 1" + chr(10) + f"print({name})" + chr(10)), {}
+                )
+
+    def test_rejects_zero_step_and_excessive_range(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "step cannot be zero"):
+            PythonToPHPTargetAdapter().generate(
+                project_for("for i in range(1, 5, 0):\n    print(i)\n"), {}
+            )
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000 actual iterations"):
+            PythonToPHPTargetAdapter().generate(
+                project_for("for i in range(10001):\n    print(i)\n"), {}
+            )
+
+    def test_rejects_range_counter_overflow_and_boolean_bounds(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "counter could overflow"):
+            PythonToPHPTargetAdapter().generate(
+                project_for("for i in range(2147483646, 2147483647, 2):\n    print(i)\n"), {}
+            )
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "arguments must be integers"):
+            PythonToPHPTargetAdapter().generate(
+                project_for("for i in range(True):\n    print(i)\n"), {}
+            )
+
+    def test_zero_iteration_loop_does_not_define_loop_variable(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "used before assignment"):
+            PythonToPHPTargetAdapter().generate(
+                project_for("for i in range(0):\n    print(i)\nprint(i)\n"), {}
+            )
+
     def test_rejects_signed_32_bit_overflow(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "signed 32-bit range"):
             PythonToPHPTargetAdapter().generate(
