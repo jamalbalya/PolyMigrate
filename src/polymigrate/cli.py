@@ -20,6 +20,7 @@ from polymigrate.knowledge import KnowledgeRecord, MigrationKnowledgeStore, fing
 from polymigrate.languages import LanguageRegistry
 from polymigrate.migration.adapters import InventorySourceAdapter
 from polymigrate.migration.dependencies import DependencyGapPlanner
+from polymigrate.migration.context import build_source_project_index
 from polymigrate.migration.llm_target import LLMTargetAdapter
 from polymigrate.migration.manifests import scan_project_manifests
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
@@ -813,6 +814,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             source_adapter = InventorySourceAdapter(source_language.id, source_language.extensions)
             source_project = source_adapter.analyze(args.source)
+            context["source_project_index"] = build_source_project_index(source_project)
             source_manifests, manifest_scan_warnings = scan_project_manifests(args.source)
             source_manifest_fingerprint = fingerprint_payload(source_manifests)
             context["source_manifests"] = source_manifests
