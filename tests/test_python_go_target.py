@@ -76,6 +76,35 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "value=42\nTrue\n")
 
+    def test_abs_builtin_supports_safe_integer_values(self):
+        code = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
+        self.assertIn("polymigrateAbsInt32(x)", code)
+        self.assertIn("func polymigrateAbsInt32(value int) int", code)
+
+    def test_abs_builtin_rejects_shadowing_invalid_types_and_overflow(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the abs"):
+            self._translate('abs = 1\nprint(abs(2))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the abs"):
+            self._translate('print(abs(2))\nabs = 1\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "integer values"):
+            self._translate('print(abs(True))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
+            self._translate("print(abs(value=2))\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "portable Go int32 range"):
+            self._translate("print(abs(-2147483648))\n")
+
+    @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
+    def test_abs_builtin_generated_go_matches_python_output(self):
+        code = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.go"
+            path.write_text(code, encoding="utf-8")
+            fmt = subprocess.run(["gofmt", "-w", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(fmt.returncode, 0, fmt.stderr)
+            run = subprocess.run(["go", "run", str(path)], capture_output=True, text=True, timeout=60)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "42\n7\n")
+
     def test_print_string(self):
         code = self._translate('print("hello")\n')
         self.assertIn('import "fmt"', code)
