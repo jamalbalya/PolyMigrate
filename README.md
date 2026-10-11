@@ -16,7 +16,7 @@ Implemented in this foundation:
 - Optional Graphify JSON artifact reader and safe CLI query adapter with degraded-mode reporting.
 - SQLite migration knowledge store with fingerprints, validation status, and opt-in cross-project reuse.
 - Evidence-derived final review status.
-- Deterministic Python-to-Go, Python-to-JavaScript, Python-to-Rust, Python-to-Java, and Python-to-PHP translators for explicitly constrained syntax subsets, with target validation and explicit validation-gate reporting.
+- Deterministic Python-to-Go, Python-to-JavaScript, Python-to-Rust, Python-to-Java, Python-to-PHP, and Python-to-Ruby translators for explicitly constrained syntax subsets, with target validation and explicit validation-gate reporting.
 - Spec-kit documents, initial skills, and GitHub Actions CI.
 
 The provider adapters have not yet been verified against live credentials in this repository environment. They intentionally do not advertise native tool calling. Graphify reads an existing graph and can query it through the graphify CLI; graph construction and updates are handled by the local Graphify workflow. Graphify runtime/version compatibility is not a CI validation gate for this project.
