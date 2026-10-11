@@ -235,7 +235,7 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
             self._translate('x = 2\nif 0 < x < 4:\n    print("yes")\n')
 
     def test_rejects_assignments_inside_conditional_bodies(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "only print"):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "previously assigned variables"):
             self._translate("x = 1\nif x > 0:\n    y = 2\nprint(x)\n")
 
     def test_rejects_conditional_chains_over_twenty_branches(self):
