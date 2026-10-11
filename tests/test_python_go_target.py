@@ -51,6 +51,29 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "32 positional"):
             self._translate("print(" + ", ".join("1" for _ in range(33)) + ")\n")
 
+    def test_str_builtin_converts_integer_and_boolean(self):
+        code = self._translate('x = 42\nprint("value=" + str(x))\nprint(str(True))\n')
+        self.assertIn("fmt.Sprint(x)", code)
+        self.assertIn('map[bool]string{true: "True", false: "False"}[true]', code)
+
+    def test_str_builtin_rejects_shadowing_and_keyword_arguments(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the str"):
+            self._translate('str = "shadowed"\nprint(str(2))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
+            self._translate("print(str(value=2))\n")
+
+    @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
+    def test_str_builtin_generated_go_matches_python_output(self):
+        code = self._translate('x = 42\nprint("value=" + str(x))\nprint(str(True))\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.go"
+            path.write_text(code, encoding="utf-8")
+            fmt = subprocess.run(["gofmt", "-w", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(fmt.returncode, 0, fmt.stderr)
+            run = subprocess.run(["go", "run", str(path)], capture_output=True, text=True, timeout=60)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "value=42\nTrue\n")
+
     def test_print_string(self):
         code = self._translate('print("hello")\n')
         self.assertIn('import "fmt"', code)
