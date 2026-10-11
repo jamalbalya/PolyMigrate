@@ -278,6 +278,24 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
             self._translate("for i in range(3):\n    x = i\n")
 
     @unittest.skipUnless(shutil.which("javac") and shutil.which("java"), "JDK is required")
+    def test_range_loop_updates_previously_assigned_variable_and_matches_python(self):
+        source = "x = 0\\nfor i in range(3):\\n    x += i\\nprint(x)\\n"
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_file = root / "Main.java"
+            java_file.write_text(code, encoding="utf-8")
+            compiled = subprocess.run(
+                ["javac", str(java_file)], capture_output=True, text=True, timeout=30, check=False
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            executed = subprocess.run(
+                ["java", "-cp", tmp, "Main"], capture_output=True, text=True, timeout=30, check=False
+            )
+            self.assertEqual(executed.returncode, 0, executed.stderr)
+            self.assertEqual(executed.stdout, "3\\n")
+
+    @unittest.skipUnless(shutil.which("javac") and shutil.which("java"), "JDK is required")
     def test_generated_java_range_loop_compiles_and_matches_expected_output(self):
         source = "for i in range(3):\n    print(i)\n"
         code = self._translate(source)
