@@ -216,7 +216,11 @@ def _candidate_dependency_integration_status(
     project_root: Path | None = None,
     dependency_warnings: list[str] | tuple[str, ...] = (),
 ) -> tuple[str, list[str]]:
-    """Require every reported library gap to be resolved before candidate proof can pass."""
+    """Require complete dependency evidence and resolved library gaps before a pass."""
+    if dependency_warnings:
+        return "NOT_RUN", [
+            "Dependency-gap planning emitted warnings; the dependency inventory may be incomplete, so integration cannot be proven."
+        ]
     unresolved = [item for item in library_resolutions if item.get("decision_type") != "candidate"]
     if unresolved:
         return "UNVERIFIED", [
@@ -224,10 +228,6 @@ def _candidate_dependency_integration_status(
         ]
     candidates = list(library_resolutions)
     if not candidates:
-        if dependency_warnings:
-            return "NOT_RUN", [
-                "Dependency-gap planning emitted warnings; absence of candidate records is not proof that dependency integration is unnecessary."
-            ]
         return "PASSED", [
             "No candidate library dependencies or unresolved library gaps were reported; candidate-specific dependency integration proof is not applicable."
         ]
