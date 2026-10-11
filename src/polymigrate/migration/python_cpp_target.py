@@ -12,6 +12,7 @@ _CPP_INT_MIN = -(2**31)
 _CPP_INT_MAX = 2**31 - 1
 _CPP_BUILTINS = {"print", "str", "abs", "range", "polymigrate_string", "std"}
 _CPP_RESERVED = {
+    "NULL", "EOF", "INT32_MAX", "INT32_MIN", "UINT32_MAX", "UINT32_MIN", "INT64_MAX", "INT64_MIN", "UINT64_MAX", "UINT64_MIN", "EXIT_SUCCESS", "EXIT_FAILURE",
     "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor",
     "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t",
     "class", "compl", "concept", "const", "consteval", "constexpr", "constinit",
