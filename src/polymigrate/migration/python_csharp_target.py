@@ -34,6 +34,8 @@ class UnsupportedPythonSyntax(ValueError):
 
 
 def _csharp_string(value: str) -> str:
+    if any(0xD800 <= ord(char) <= 0xDFFF for char in value):
+        raise UnsupportedPythonSyntax("C# string literals containing lone Unicode surrogates are rejected")
     if any(ord(char) < 32 and char not in "\n\r\t" for char in value):
         raise UnsupportedPythonSyntax("C# string literals containing unsupported control characters are rejected")
     return json.dumps(value, ensure_ascii=False)
