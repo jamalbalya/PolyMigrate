@@ -56,7 +56,7 @@ class DependencyWiringReviewTests(unittest.TestCase):
 
     def test_unsupported_language_is_explicitly_unverified(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result = review_dependency_wiring(Path(tmp), "java")
+            result = review_dependency_wiring(Path(tmp), "swift")
         self.assertEqual(result.status, "UNVERIFIED")
 
 

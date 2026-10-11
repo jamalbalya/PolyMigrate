@@ -98,3 +98,5 @@
 - [x] T083 Extend the strict Python-to-Java subset with bounded `if`/`elif`/`else` chains, safe numeric/boolean comparisons, Java string equality, and print-only branches; reject chained comparisons and branch assignments and verify generated Java output with a real JDK.
 
 - [x] T084 Add bounded Python `range()` loops to the strict Java subset with statically known bounds, non-zero signed steps, a 10,000-iteration cap, overflow checks, print-only bodies, and actual JDK runtime fixtures.
+
+- [x] T085 Add Java import inventory and Maven/Gradle dependency declaration parsing; block external imports without a manifest and keep package-to-coordinate mapping UNVERIFIED when static evidence cannot prove the mapping.
