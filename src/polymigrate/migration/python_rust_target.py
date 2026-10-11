@@ -73,6 +73,8 @@ class PythonToRustTargetAdapter:
         elif isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
             operand = PythonToRustTargetAdapter._checked_integer_value(node.operand, values)
             value = operand if isinstance(node.op, ast.UAdd) else -operand
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "abs" and len(node.args) == 1 and not node.keywords:
+            value = abs(PythonToRustTargetAdapter._checked_integer_value(node.args[0], values))
         elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult)):
             left = PythonToRustTargetAdapter._checked_integer_value(node.left, values)
             right = PythonToRustTargetAdapter._checked_integer_value(node.right, values)
@@ -104,6 +106,17 @@ class PythonToRustTargetAdapter:
             if node.id not in assigned:
                 raise UnsupportedPythonSyntax(f"Variable '{node.id}' is used before assignment")
             return node.id, self._types[node.id]
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "abs":
+            if "abs" in assigned:
+                raise UnsupportedPythonSyntax("Shadowing the abs() builtin is not supported")
+            if len(node.args) != 1 or node.keywords:
+                raise UnsupportedPythonSyntax("abs() must have exactly one positional argument")
+            expression, value_type = self._expr(node.args[0], assigned)
+            if value_type != "int":
+                raise UnsupportedPythonSyntax("abs() supports only integer values")
+            self._checked_integer_value(node, self._int_values)
+            return f"({expression}).abs()", "int"
+
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "str":
             if "str" in assigned:
                 raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
@@ -322,6 +335,17 @@ class PythonToRustTargetAdapter:
         )
         if has_str_call and assigns_str:
             raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
+
+        has_abs_call = any(
+            isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "abs"
+            for item in ast.walk(tree)
+        )
+        assigns_abs = any(
+            isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "abs"
+            for item in ast.walk(tree)
+        )
+        if has_abs_call and assigns_abs:
+            raise UnsupportedPythonSyntax("Shadowing the abs() builtin is not supported")
 
         referenced_names = {
             node.id for node in ast.walk(tree)
