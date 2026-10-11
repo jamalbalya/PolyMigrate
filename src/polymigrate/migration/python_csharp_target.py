@@ -101,7 +101,7 @@ class PythonToCSharpTargetAdapter:
                 uses_boolean_string[0] = True
                 return f"PolymigrateString({expression})", "string"
             if value_type == "int":
-                return f"{expression}.ToString(CultureInfo.InvariantCulture)", "string"
+                return f"({expression}).ToString(CultureInfo.InvariantCulture)", "string"
             if value_type == "string":
                 return expression, "string"
             raise UnsupportedPythonSyntax("str() supports only integer, string, and boolean values")
@@ -222,7 +222,7 @@ class PythonToCSharpTargetAdapter:
             "    <OutputType>Exe</OutputType>\n"
             "    <TargetFramework>net8.0</TargetFramework>\n"
             "    <ImplicitUsings>disable</ImplicitUsings>\n"
-            "    <Nullable>disable</Nullable>\n"
+            "    <Nullable>disable</Nullable>\n    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>\n"
             "  </PropertyGroup>\n"
             "</Project>\n"
         )
