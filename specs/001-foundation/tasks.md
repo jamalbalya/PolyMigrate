@@ -76,7 +76,7 @@
 
 - [x] T069 Add Rust Cargo manifest/import consistency checks and candidate-specific crate proof using an offline local crate, actual Cargo build/test execution, and runtime output; public registry availability remains unverified without an explicit real-project build.
 
-- [x] T070 Extend the deterministic Python-to-JavaScript subset with bounded if/else conditions, short-circuit boolean combinations, and runtime-tested output; branch assignments, chained comparisons, and string ordering remain explicitly unsupported.
+- [x] T070 Extend the deterministic Python-to-JavaScript subset with bounded if/else conditions, short-circuit boolean combinations, and runtime-tested output; at this milestone branch assignments, chained comparisons, and string ordering were unsupported. Existing-variable branch assignments were later added under T094.
 
 - [x] T071 Extend the deterministic Python-to-Go subset with bounded if/else conditions, boolean combinations, and integer/string truthiness mapping; validate generated code with Go formatting and runtime fixtures.
 
@@ -95,9 +95,9 @@
 
 - [x] T082 Add an offline deterministic Python-to-Java translator for a strict single-file assignment/expression/print subset; reject unsupported control flow, run `javac` and a runtime smoke check when available, and cover the target with explicit output fixtures. This expands one pair only and does not complete T023.
 
-- [x] T083 Extend the strict Python-to-Java subset with bounded `if`/`elif`/`else` chains, safe numeric/boolean comparisons, Java string equality, and print-only branches; reject chained comparisons and branch assignments and verify generated Java output with a real JDK.
+- [x] T083 Extend the strict Python-to-Java subset with bounded `if`/`elif`/`else` chains, safe numeric/boolean comparisons, Java string equality, and print-only branches; at this milestone chained comparisons and branch assignments were rejected. Existing-variable branch assignments were later added under T094 and covered by JDK-backed output fixtures.
 
-- [x] T084 Add bounded Python `range()` loops to the strict Java subset with statically known bounds, non-zero signed steps, a 10,000-iteration cap, overflow checks, print-only bodies, and actual JDK runtime fixtures.
+- [x] T084 Add bounded Python `range()` loops to the strict Java subset with statically known bounds, non-zero signed steps, a 10,000-iteration cap, overflow checks, print-only bodies at the initial milestone, and actual JDK runtime fixtures. Safe assignments to existing variables in loop bodies were later covered by T100.
 
 - [x] T085 Add Java import inventory and Maven/Gradle dependency declaration parsing; block external imports without a manifest and keep package-to-coordinate mapping UNVERIFIED when static evidence cannot prove the mapping.
 
