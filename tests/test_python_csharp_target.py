@@ -60,6 +60,60 @@ class PythonToCSharpTranslatorTests(unittest.TestCase):
         self.assertIn('Console.WriteLine(string.Join(" ", new string[] { PolymigrateString("positive"), PolymigrateString(count) }));', generated)
         self.assertIn("} else {", generated)
 
+    def test_translates_bounded_range_loop_and_preserves_post_loop_value(self):
+        generated = PythonToCSharpTargetAdapter().generate(
+            project_for("for i in range(2, 5):\n    print(i)\nprint(i)\n"), {}
+        )[0].content
+        self.assertIn("for (int polymigrateRangeCounter0 = 2; polymigrateRangeCounter0 < 5; polymigrateRangeCounter0 += 1) {", generated)
+        self.assertIn("int i = 4;", generated)
+        self.assertLess(generated.index("for (int polymigrateRangeCounter0 = 2"), generated.index("int i = 4;"))
+
+    def test_zero_iteration_range_does_not_define_loop_variable(self):
+        generated = PythonToCSharpTargetAdapter().generate(
+            project_for("for i in range(0):\n    print(i)\nprint('done')\n"), {}
+        )[0].content
+        self.assertNotIn("for (int i", generated)
+        self.assertNotIn("int i =", generated)
+        self.assertIn('Console.WriteLine(string.Join(" ", new string[] { PolymigrateString("done") }));', generated)
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "used before assignment"):
+            PythonToCSharpTargetAdapter().generate(
+                project_for("for i in range(0):\n    print(i)\nprint(i)\n"), {}
+            )
+
+    def test_range_loop_rejects_unsafe_or_unsupported_cases(self):
+        cases = (
+            ("for i in range(3, 0, 0):\n    print(i)\n", "step cannot be zero"),
+            ("for i in range(10001):\n    print(i)\n", "limited to 10000 actual iterations"),
+            ("i = 4\nfor i in range(3):\n    print(i)\n", "cannot shadow an already assigned variable"),
+            ("for i in range(3):\n    i = 4\n", "loop bodies may contain only print"),
+            ("for i in range(3):\n    if i:\n        print(i)\n", "loop bodies may contain only print"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                PythonToCSharpTargetAdapter().generate(project_for(source), {})
+
+    def test_generated_negative_range_loop_matches_python_output_when_dotnet_is_installed(self):
+        dotnet = shutil.which("dotnet")
+        if dotnet is None:
+            self.skipTest(".NET SDK is not installed in this test environment")
+        source = "for i in range(3, 0, -1):\n    print(i)\nprint(i)\n"
+        artifacts = PythonToCSharpTargetAdapter().generate(project_for(source), {})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for artifact in artifacts:
+                path = root / artifact.relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(artifact.content, encoding="utf-8")
+            build = subprocess.run(
+                [dotnet, "build", str(root / "PolyMigrate.csproj"), "--configuration", "Release", "--nologo", "--verbosity", "quiet"],
+                capture_output=True, text=True, timeout=120,
+            )
+            self.assertEqual(build.returncode, 0, build.stderr + build.stdout)
+            assembly = root / "bin" / "Release" / "net8.0" / "PolyMigrate.dll"
+            run = subprocess.run([dotnet, str(assembly)], capture_output=True, text=True, timeout=20)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "3\n2\n1\n1\n")
+
     def test_rejects_conditional_assignments_nested_control_and_chained_comparisons(self):
         cases = (
             ("x = 1\nif x:\n    x = 2\nprint(x)\n", "conditional bodies may contain only print"),

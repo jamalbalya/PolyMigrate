@@ -238,6 +238,133 @@ class PythonToCSharpTargetAdapter:
             break
         return "\n".join(rendered)
 
+    def _for_statement(self, node: ast.For, assigned: set[str], types: dict[str, str],
+                       integer_values: dict[str, int], uses_boolean_string: list[bool],
+                       referenced_counts: dict[str, int], source_names: set[str],
+                       loop_index: int) -> str | None:
+        if not isinstance(node.target, ast.Name):
+            raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
+        name = node.target.id
+        if (not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)
+                or name in _CSHARP_RESERVED or name in _CSHARP_BUILTINS or name.startswith("__")):
+            raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not a supported C# identifier")
+        if name in assigned:
+            raise UnsupportedPythonSyntax("range() loop variables cannot shadow an already assigned variable")
+        if node.orelse:
+            raise UnsupportedPythonSyntax("for/else statements are not supported")
+        if (not isinstance(node.iter, ast.Call) or not isinstance(node.iter.func, ast.Name)
+                or node.iter.func.id != "range"):
+            raise UnsupportedPythonSyntax("Only range() loops are supported")
+        call = node.iter
+        if call.keywords or len(call.args) not in {1, 2, 3}:
+            raise UnsupportedPythonSyntax("range() supports one, two, or three positional integer arguments")
+
+        rendered_args: list[str] = []
+        values: list[int] = []
+        for argument in call.args:
+            expression, value_type = self._expr(
+                argument, assigned, types, integer_values, uses_boolean_string
+            )
+            if value_type != "int":
+                raise UnsupportedPythonSyntax("range() arguments must be integers, not booleans or strings")
+            rendered_args.append(expression)
+            values.append(self._int_value(argument, integer_values))
+        if len(values) == 1:
+            start_expr, start_value = "0", 0
+            stop_expr, stop_value = rendered_args[0], values[0]
+            step_expr, step_value = "1", 1
+        elif len(values) == 2:
+            start_expr, start_value = rendered_args[0], values[0]
+            stop_expr, stop_value = rendered_args[1], values[1]
+            step_expr, step_value = "1", 1
+        else:
+            start_expr, start_value = rendered_args[0], values[0]
+            stop_expr, stop_value = rendered_args[1], values[1]
+            step_expr, step_value = rendered_args[2], values[2]
+        if step_value == 0:
+            raise UnsupportedPythonSyntax("range() step cannot be zero")
+        actual_range = range(start_value, stop_value, step_value)
+        count = len(actual_range)
+        if count > 10_000:
+            raise UnsupportedPythonSyntax("range() loops are limited to 10000 actual iterations")
+        if not node.body:
+            raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported")
+
+        counter_index = loop_index
+        counter_name = f"polymigrateRangeCounter{counter_index}"
+        while counter_name in source_names or counter_name in assigned:
+            counter_index += 1
+            counter_name = f"polymigrateRangeCounter{counter_index}"
+        name_loads_inside = sum(
+            1 for child in ast.walk(node)
+            if isinstance(child, ast.Name) and child.id == name and isinstance(child.ctx, ast.Load)
+        )
+        referenced_after = referenced_counts.get(name, 0) - name_loads_inside > 0
+
+        loop_name_nodes = [
+            child for statement in node.body for child in ast.walk(statement)
+            if isinstance(child, ast.Name) and child.id == name and isinstance(child.ctx, ast.Load)
+        ]
+        for child in loop_name_nodes:
+            child.id = counter_name
+        assigned.add(counter_name)
+        types[counter_name] = "int"
+        integer_values[counter_name] = start_value
+        validation_values = list(actual_range) if count else [start_value]
+        rendered_body: list[str] | None = None
+        try:
+            for loop_value in validation_values:
+                integer_values[counter_name] = loop_value
+                body_lines: list[str] = []
+                for child in node.body:
+                    if isinstance(child, ast.Expr) and isinstance(child.value, ast.Call):
+                        body_lines.append(self._print_call(
+                            child.value, assigned, types, integer_values, uses_boolean_string
+                        ))
+                    elif (isinstance(child, ast.Expr) and isinstance(child.value, ast.Constant)
+                          and isinstance(child.value.value, str)):
+                        continue
+                    else:
+                        raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
+                if not body_lines:
+                    raise UnsupportedPythonSyntax("range() loop bodies must contain at least one print() statement")
+                if rendered_body is None:
+                    rendered_body = body_lines
+        finally:
+            for child in loop_name_nodes:
+                child.id = name
+            assigned.discard(counter_name)
+            types.pop(counter_name, None)
+            integer_values.pop(counter_name, None)
+
+        if count == 0:
+            # The loop has no runtime effect. Remove references from its entire
+            # AST subtree so unused-variable checks reflect emitted code, not dead code.
+            for child in ast.walk(node):
+                if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load):
+                    referenced_counts[child.id] = referenced_counts.get(child.id, 0) - 1
+            return None
+
+        last_value = actual_range[-1]
+        next_value = last_value + step_value
+        if not _CSHARP_INT_MIN <= next_value <= _CSHARP_INT_MAX:
+            raise UnsupportedPythonSyntax("range() loop counter could overflow the signed 32-bit C# integer range")
+        operator = "<" if step_value > 0 else ">"
+        body = "\n".join("                " + line for line in (rendered_body or []))
+        rendered = [
+            "{",
+            f"            for (int {counter_name} = {start_expr}; {counter_name} {operator} {stop_expr}; {counter_name} += {step_expr}) {{",
+            body,
+            "            }",
+            "        }",
+        ]
+        if referenced_after:
+            rendered.append(f"        int {name} = {last_value};")
+            integer_values[name] = last_value
+            assigned.add(name)
+            types[name] = "int"
+        return "\n".join(rendered)
+
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         if project.language_id != "python":
             raise ValueError("Python-to-C# adapter requires a Python source project")
@@ -249,19 +376,22 @@ class PythonToCSharpTargetAdapter:
         except (SyntaxError, ValueError, RecursionError) as exc:
             raise UnsupportedPythonSyntax(f"Cannot parse {unit.relative_path}: {type(exc).__name__}") from None
         self.warnings = [
-            "Deterministic Python-to-C# translation supports single-file assignments, bounded integer/string/boolean expressions, str(), abs(), positional print(), and print-only if/elif/else chains.",
-            "Loops, branch assignments, nested control flow, functions, imports, classes, collections, and full project migration are not supported by this subset.",
+            "Deterministic Python-to-C# translation supports single-file assignments, bounded integer/string/boolean expressions, str(), abs(), positional print(), print-only if/elif/else chains, and bounded print-only range() loops.",
+            "While loops, branch assignments, nested control flow, functions, imports, classes, collections, and full project migration are not supported by this subset.",
         ]
         assigned: set[str] = set()
         types: dict[str, str] = {}
         integer_values: dict[str, int] = {}
         uses_boolean_string = [False]
         statements: list[str] = []
-        referenced = {node.id for node in ast.walk(tree)
-                      if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
+        referenced_counts: dict[str, int] = {}
+        source_names = {reference.id for reference in ast.walk(tree) if isinstance(reference, ast.Name)}
+        for reference in ast.walk(tree):
+            if isinstance(reference, ast.Name) and isinstance(reference.ctx, ast.Load):
+                referenced_counts[reference.id] = referenced_counts.get(reference.id, 0) + 1
         declarations = {"int": "int", "string": "string", "bool": "bool"}
 
-        for node in tree.body:
+        for statement_index, node in enumerate(tree.body):
             if isinstance(node, ast.Assign):
                 if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
                     raise UnsupportedPythonSyntax("Only assignments to one simple variable are supported")
@@ -291,12 +421,19 @@ class PythonToCSharpTargetAdapter:
                 statements.append(self._if_statement(
                     node, assigned, types, integer_values, uses_boolean_string
                 ))
+            elif isinstance(node, ast.For):
+                loop_statement = self._for_statement(
+                    node, assigned, types, integer_values, uses_boolean_string,
+                    referenced_counts, source_names, statement_index
+                )
+                if loop_statement is not None:
+                    statements.append(loop_statement)
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
             else:
                 raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}")
 
-        unused = sorted(assigned - referenced)
+        unused = sorted(name for name in assigned if referenced_counts.get(name, 0) <= 0)
         if unused:
             raise UnsupportedPythonSyntax("Assigned variable(s) are never used: " + ", ".join(unused))
         helper = (
