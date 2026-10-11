@@ -1,6 +1,6 @@
 """Deterministic translator for a deliberately small Python-to-JavaScript subset.
 
-Supported: integer/string literals, simple assignments, print(expr), + - *,
+Supported: integer/string literals, simple assignments, bounded positional print(), + - *,
 unary +/- on integers, and simple if/else conditions using safe comparisons.
 Python integers are restricted to JavaScript's safe integer range. Unsupported
 syntax is rejected rather than guessed.
