@@ -180,8 +180,7 @@ class PythonToPHPTargetAdapter:
                     if not expressions:
                         statements.append("echo PHP_EOL;")
                     else:
-                        if any(value_type == "bool" for _, value_type in expressions):
-                            uses_boolean_string[0] = True
+                        uses_boolean_string[0] = True
                         statements.append(
                             "echo implode(' ', array_map('polymigrateString', [" + values + "])) . PHP_EOL;"
                         )
