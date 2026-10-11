@@ -49,6 +49,14 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
         self.assertEqual(status, "NOT_RUN")
         self.assertIn("emitted warnings", warnings[0])
 
+    def test_planner_warnings_keep_candidate_proof_unverified(self):
+        status, warnings = _candidate_dependency_integration_status(
+            [self.candidate], self.review, self.gates, "go",
+            dependency_warnings=("import inventory reached its limit",),
+        )
+        self.assertEqual(status, "NOT_RUN")
+        self.assertIn("inventory may be incomplete", warnings[0])
+
     def test_custom_implementation_recommendation_is_not_dependency_integration_proof(self):
         status, warnings = _candidate_dependency_integration_status(
             [{"decision_type": "custom_implementation", "strategy": "custom"}],
