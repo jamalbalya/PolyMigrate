@@ -171,6 +171,27 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "two\n")
 
+    @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
+    def test_boolean_literals_and_output_match_python(self):
+        source = 'flag = True\nother = False\nif flag and not other:\n    print("condition")\nprint(flag)\nprint(other)\nif flag == True:\n    print("equal")\n'
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.go"
+            path.write_text(code, encoding="utf-8")
+            fmt = subprocess.run(["gofmt", "-w", str(path)], capture_output=True,
+                                 text=True, timeout=10, check=False)
+            self.assertEqual(fmt.returncode, 0, fmt.stderr)
+            run = subprocess.run(["go", "run", str(path)], capture_output=True,
+                                 text=True, timeout=30, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "condition\nTrue\nFalse\nequal\n")
+
+    def test_boolean_arithmetic_and_ordering_are_rejected(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Boolean arithmetic"):
+            self._translate("flag = True\nprint(flag + True)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Boolean ordering"):
+            self._translate('flag = True\nif flag < False:\n    print("no")\n')
+
     def test_range_loop_is_translated(self):
         code = self._translate("for i in range(3):\n    print(i)\n")
         self.assertIn("for i := 0; i < 3; i++ {", code)
