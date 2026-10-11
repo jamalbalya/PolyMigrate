@@ -129,4 +129,4 @@
 
 - [x] T104 Add bounded Python `for i in range(...)` loops to the deterministic Python-to-PHP subset, with static integer/overflow checks, a 10,000-iteration cap, Python-compatible post-loop variable behavior, reserved-variable checks, and real PHP runtime fixtures passing in CI.
 
-- [ ] T105 Add an offline deterministic Python-to-Ruby translator for simple assignments, signed-32-bit integer/string/boolean expressions, `str()`, `abs()`, and positional `print()`; reject unsupported syntax and reserved local names, add Ruby syntax/runtime CI coverage, and keep general parser/generator coverage open.
+- [x] T105 Add an offline deterministic Python-to-Ruby translator for simple assignments, signed-32-bit integer/string/boolean expressions, `str()`, `abs()`, and positional `print()`; reject unsupported syntax and reserved local names, add Ruby syntax/runtime CI coverage, and keep general parser/generator coverage open.
