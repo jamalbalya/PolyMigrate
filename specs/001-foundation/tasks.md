@@ -19,7 +19,7 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 521 tests passed across all three versions (6 environment-dependent tests skipped), all 6 packaged skill assets were verified, and the dedicated Docker behavior E2E job passed 2 tests on commit `6254f658`; rerun CI after subsequent commits before release.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; 525 tests passed across all three versions (6 environment-dependent tests skipped), all 6 packaged skill assets were verified, and the dedicated Docker behavior E2E job passed 2 tests on commit `afcb3f8e`; rerun CI after subsequent commits before release.
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
@@ -58,7 +58,7 @@
 - [x] T055 Add an optional offline Tree-sitter parser extra with bounded parse/source limits and heuristic fallback; verify syntax diagnostics when the grammar is available.
 - [x] T056 Add an opt-in sandboxed behavior contract that compares source and target stdout against explicit expected outputs, rejects shell/inline execution, and records the gate in the migration review.
 - [x] T058 Verify target dependency declarations and library wiring through real target builds/integration tests; candidate status requires declared dependencies, production and integration-test imports, and PASSED build/integration/behavior gates. Real local-package fixtures cover Python, Go, JavaScript, Ruby, Rust, and Java, including exact class provenance for Java local JARs.
-- [ ] T059 Implement a comprehensive security-review gate for generated code and manifests; keep verified knowledge promotion blocked until this gate has trustworthy evidence.
+- [x] T059 Implement an evidence-backed security-review gate for the declared scanner scope: require trusted Semgrep, Gitleaks secret scanning, OSV-Scanner dependency vulnerability scanning, Bandit for Python or gosec for Go, matching operator-managed binary/rules SHA-256 pins, a clean bounded static review, and passing dependency-wiring checks. Missing tools, incomplete reports, findings, or untrusted provenance never pass; the gate is explicit that it is not proof of zero vulnerabilities.
 - [x] T060 Add a bounded static security scan for generated files, report high/medium/low findings without echoing secret values, block on high-risk findings, and explicitly keep the comprehensive security-review gate unverified.
 - [x] T061 Add a static dependency-wiring review for Python, Go, Rust, and JavaScript/TypeScript imports versus target manifests; missing declarations block output, while build/API compatibility remains explicitly unverified.
 
