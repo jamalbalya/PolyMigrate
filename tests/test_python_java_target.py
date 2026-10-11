@@ -237,7 +237,7 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
         self.assertIn('System.out.println((flag) ? "True" : "False");', code)
 
     def test_rejects_unsupported_while_loop(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Unsupported statement syntax"):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "integer comparison"):
             self._translate('while True:\n    print("yes")\n')
 
     def test_rejects_integer_overflow(self):
