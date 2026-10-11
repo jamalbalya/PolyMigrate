@@ -145,3 +145,5 @@
 - [x] T112 Add a fail-closed deterministic Python-to-TypeScript subset using the fixed int/string/boolean model, strict TypeScript compiler validation, bounded expressions/control flow, runtime-equivalence fixtures, and a clear unsupported-syntax boundary; Python 3.11–3.13 CI and the dedicated strict `tsc` plus Node runtime fixtures pass.
 
 - [x] T113 Add a fail-closed deterministic Python-to-Kotlin subset with explicit supported expression/control-flow rules, Kotlin compiler/runtime and CLI fixtures, correct Kotlin string-template escaping, and documented unsupported syntax; the pinned Kotlin CI job passed all 8 translator/CLI tests, including runtime comparison with Python.
+
+- [ ] T114 Add bounded Python `range()` loops to the Kotlin subset, preserving Python step and loop-variable semantics; enforce a strict iteration budget and reject unsafe arithmetic, nested control flow, and unsupported bodies with compiler/runtime-equivalence fixtures.
