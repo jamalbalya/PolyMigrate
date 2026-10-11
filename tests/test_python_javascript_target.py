@@ -74,6 +74,19 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "positive\n")
 
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required")
+    def test_elif_chain_generated_program_matches_python_output(self):
+        source = 'x = 2\nif x == 1:\n    print("one")\nelif x == 2:\n    print("two")\nelse:\n    print("other")\n'
+        code = self._translate(source)
+        self.assertIn("else if", code)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.js"
+            path.write_text(code, encoding="utf-8")
+            run = subprocess.run(["node", str(path)], capture_output=True, text=True,
+                                 timeout=10, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "two\n")
+
     def test_range_loop_is_translated(self):
         code = self._translate("for i in range(3):\n    print(i)\n")
         self.assertIn("for (let i = 0; i < 3; i++) {", code)
