@@ -127,4 +127,4 @@
 
 - [x] T103 Extend the deterministic Python-to-PHP subset with print-only `if`/`elif`/`else` chains, safe single comparisons, and Python-compatible truthiness; reject branch assignments, nested control flow, and chained comparisons, with real PHP runtime tests passing in CI.
 
-- [ ] T104 Add bounded Python `for i in range(...)` loops to the deterministic Python-to-PHP subset, with static integer/overflow checks, a 10,000-iteration cap, Python-compatible post-loop variable behavior, and real PHP runtime fixtures.
+- [x] T104 Add bounded Python `for i in range(...)` loops to the deterministic Python-to-PHP subset, with static integer/overflow checks, a 10,000-iteration cap, Python-compatible post-loop variable behavior, reserved-variable checks, and real PHP runtime fixtures passing in CI.
