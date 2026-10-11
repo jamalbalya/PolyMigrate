@@ -113,3 +113,4 @@
 - [x] T092 Add deterministic `abs()` support for safe integer expressions across Python-to-Go, JavaScript, Rust, and Java; reject shadowing, invalid call forms, non-integer values, and overflow, with target-runtime fixtures.
 - [x] T093 Support Python `not` expressions as boolean values in all four deterministic targets, reuse the constrained truthiness/comparison translator, and verify target runtime output for boolean and integer truthiness.
 - [x] T094 Allow deterministic `if`/`elif`/`else` bodies to assign only to previously assigned variables of the same inferred type, reject branch-local declarations/type changes, invalidate stale integer facts after branches, and verify target runtime output across all four deterministic targets.
+- [x] T095 Support bounded integer `+=`, `-=`, and `*=` across all four deterministic targets, plus string `+=` in Go/JavaScript/Java; validate type consistency, overflow, unsupported forms, and generated runtime output.
