@@ -494,9 +494,9 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         gates["go_vet"] = "NOT_APPLICABLE"
 
     security_result = review_generated_output(result.output_root)
-    trusted_security_result = run_local_security_scanners(result.output_root, "go")
+    trusted_security_result = run_local_security_scanners(result.output_root, target_language.id)
     security_evidence_result = _load_security_evidence(args.security_evidence)
-    dependency_result = review_dependency_wiring(result.output_root, "go")
+    dependency_result = review_dependency_wiring(result.output_root, target_language.id)
     gates["dependency_wiring"] = dependency_result.status
     gates["dependency_integration"] = "PASSED"
     gates["security_review"] = _security_review_gate_status(trusted_security_result)
