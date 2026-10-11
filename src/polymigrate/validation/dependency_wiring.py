@@ -11,6 +11,7 @@ import re
 import sys
 import tomllib
 import xml.etree.ElementTree as ET
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -266,6 +267,87 @@ def _java_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
             "Java import-to-Maven/Gradle coordinate mapping is ambiguous; dependency wiring remains unverified until a real build and integration test proves it."
         )
     return imports, declared, warnings
+
+
+def java_candidate_jar_imports(
+    root: Path, coordinate: str, imports: tuple[str, ...] | set[str]
+) -> set[str]:
+    """Prove imported Java classes exist in a declared, project-local system-scope JAR."""
+    if root.is_symlink() or ":" not in coordinate:
+        return set()
+    try:
+        resolved_root = root.expanduser().resolve(strict=True)
+    except OSError:
+        return set()
+    if not resolved_root.is_dir():
+        return set()
+    pom = resolved_root / "pom.xml"
+    if pom.is_symlink() or not pom.is_file():
+        return set()
+    pom_text = _read(pom)
+    if pom_text is None:
+        return set()
+    try:
+        xml_root = ET.fromstring(pom_text)
+    except ET.ParseError:
+        return set()
+
+    system_path = None
+    wanted_group, wanted_artifact = coordinate.split(":", 1)
+    for node in xml_root.iter():
+        if node.tag.rsplit("}", 1)[-1] != "dependency":
+            continue
+        values = {
+            child.tag.rsplit("}", 1)[-1]: (child.text or "").strip()
+            for child in node
+        }
+        if (
+            values.get("groupId") == wanted_group
+            and values.get("artifactId") == wanted_artifact
+            and values.get("scope", "compile") == "system"
+            and values.get("systemPath")
+        ):
+            system_path = values["systemPath"]
+            break
+    if not system_path:
+        return set()
+
+    prefixes = ("$" + "{project.basedir}/", "$" + "{basedir}/")
+    relative_text = next(
+        (system_path[len(prefix):] for prefix in prefixes if system_path.startswith(prefix)),
+        system_path,
+    )
+    relative = Path(relative_text)
+    if relative.is_absolute() or ".." in relative.parts or "$" in relative_text:
+        return set()
+    jar_path = resolved_root
+    for part in relative.parts:
+        jar_path = jar_path / part
+        if jar_path.is_symlink():
+            return set()
+    try:
+        resolved_jar = jar_path.resolve(strict=True)
+        if (
+            resolved_root not in resolved_jar.parents
+            or not resolved_jar.is_file()
+            or resolved_jar.suffix.lower() != ".jar"
+            or resolved_jar.stat().st_size > 50_000_000
+        ):
+            return set()
+        with zipfile.ZipFile(resolved_jar) as archive:
+            infos = archive.infolist()
+            if len(infos) > 100_000:
+                return set()
+            classes = {
+                item.filename[:-6].replace("/", ".")
+                for item in infos
+                if item.filename.endswith(".class")
+                and not item.filename.startswith("META-INF/")
+                and not item.filename.endswith("module-info.class")
+            }
+    except (OSError, zipfile.BadZipFile, RuntimeError):
+        return set()
+    return {item for item in imports if item in classes}
 
 
 def _kotlin_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:

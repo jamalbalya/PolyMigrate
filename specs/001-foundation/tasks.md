@@ -102,3 +102,5 @@
 - [x] T085 Add Java import inventory and Maven/Gradle dependency declaration parsing; block external imports without a manifest and keep package-to-coordinate mapping UNVERIFIED when static evidence cannot prove the mapping.
 
 - [x] T086 Align dependency-proof documentation with the existing Rust local-crate build/integration fixture and add a regression test that Java candidate integration remains NOT_RUN until artifact-to-import resolution is actually proven.
+
+- [x] T087 Add narrowly scoped Java candidate-dependency proof only for a declared project-local system-scope JAR whose exact class import is verified in the archive and whose build, integration test, and behavior gates pass; leave public Maven/Gradle resolution unverified.

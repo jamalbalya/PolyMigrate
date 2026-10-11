@@ -1,6 +1,7 @@
 """Command-line interface."""
 from __future__ import annotations
 import argparse
+from dataclasses import replace
 import ast
 import json
 import os
@@ -33,7 +34,7 @@ from polymigrate.skills.registry import SkillRegistry
 from polymigrate.validation.repair import AutonomousRepairLoop
 from polymigrate.validation.suite import validate_generated_project
 from polymigrate.validation.behavior import compare_behavior
-from polymigrate.validation.dependency_wiring import review_dependency_wiring
+from polymigrate.validation.dependency_wiring import java_candidate_jar_imports, review_dependency_wiring
 from polymigrate.security.static_review import review_generated_output
 from polymigrate.security.evidence_gate import evaluate_security_evidence
 from polymigrate.security.scanner_runner import run_local_security_scanners
@@ -128,6 +129,7 @@ def _candidate_test_imports(root: Path, target_language: str) -> set[str]:
         "typescript": {".ts", ".tsx"},
         "ruby": {".rb"},
         "rust": {".rs"},
+        "java": {".java"},
     }.get(target_language, set())
     imports: set[str] = set()
     try:
@@ -155,6 +157,7 @@ def _candidate_test_imports(root: Path, target_language: str) -> set[str]:
                 or lower_name.endswith("_test.go")
                 or lower_name.endswith("_test.rb")
                 or lower_name.endswith("_test.rs")
+                or lower_name.endswith("_test.java")
                 or ".test." in lower_name
                 or ".spec." in lower_name
             )
@@ -206,6 +209,13 @@ def _candidate_test_imports(root: Path, target_language: str) -> set[str]:
                     r"(?m)^\s*extern\s+crate\s+([A-Za-z_][A-Za-z0-9_]*)\s*;", clean
                 ))
                 imports.update(item for item in found if item not in {"std", "core", "alloc", "crate", "self", "super"})
+            elif target_language == "java":
+                clean = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+                clean = re.sub(r"(?m)^\s*//.*$", "", clean)
+                imports.update(re.findall(
+                    r"(?m)^\s*import\s+(?:static\s+)?([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*;",
+                    clean,
+                ))
     return imports
 
 
@@ -232,9 +242,22 @@ def _candidate_dependency_integration_status(
         return "PASSED", [
             "No candidate library dependencies or unresolved library gaps were reported; candidate-specific dependency integration proof is not applicable."
         ]
-    if dependency_review.status != "PASSED":
-        return "NOT_RUN", ["Candidate dependency integration proof requires a PASSED dependency wiring review."]
-    if target_language not in {"go", "python", "javascript", "typescript", "ruby", "rust"}:
+    java_mapping_only_unverified = (
+        target_language == "java"
+        and dependency_review.status == "UNVERIFIED"
+        and any("Java import-to-Maven/Gradle coordinate mapping is ambiguous" in item
+                for item in dependency_review.warnings)
+        and not any(
+            "could not be parsed" in item.lower()
+            or "could not read" in item.lower()
+            or "stopped at" in item.lower()
+            or item.startswith("Missing ")
+            for item in dependency_review.warnings
+        )
+    )
+    if dependency_review.status != "PASSED" and not java_mapping_only_unverified:
+        return "NOT_RUN", ["Candidate dependency integration proof requires a PASSED dependency wiring review or resolvable Java JAR evidence."]
+    if target_language not in {"go", "python", "javascript", "typescript", "ruby", "rust", "java"}:
         return "NOT_RUN", [f"Candidate dependency resolution/build proof is not implemented for target language {target_language}; this gate remains unverified."]
     for gate in ("target_build", "integration_tests", "behavior_comparison"):
         if gates.get(gate) != "PASSED":
@@ -250,6 +273,8 @@ def _candidate_dependency_integration_status(
             return re.sub(r"[^a-z0-9]", "", value.casefold())
         if target_language == "rust":
             return value.replace("-", "_").casefold()
+        if target_language == "java":
+            return value.rsplit(":", 1)[-1].casefold()
         if target_language in {"go", "javascript", "typescript"}:
             return value
         return value.casefold()
@@ -264,7 +289,19 @@ def _candidate_dependency_integration_status(
             return "NOT_RUN", ["A repository reference without a package identity is not dependency integration proof."]
         if not any(normalize(item) == normalize(package_name) for item in declared):
             return "NOT_RUN", [f"Candidate package '{package_name}' is not proven present in target dependency declarations."]
-        if target_language == "python":
+        java_coordinate = None
+        if target_language == "java":
+            coordinates = [
+                item for item in declared
+                if ":" in item and normalize(item) == normalize(package_name)
+            ]
+            if len(coordinates) != 1:
+                return "NOT_RUN", [f"Java candidate '{package_name}' does not map to exactly one declared Maven coordinate."]
+            java_coordinate = coordinates[0]
+            if project_root is None:
+                return "NOT_RUN", ["Candidate-specific integration evidence requires the generated project root."]
+            import_match = bool(java_candidate_jar_imports(project_root, java_coordinate, observed_imports))
+        elif target_language == "python":
             import_match = any(normalize(item) == normalize(package_name) for item in observed_imports)
         elif target_language in {"javascript", "typescript"}:
             import_match = any(
@@ -276,6 +313,8 @@ def _candidate_dependency_integration_status(
             import_match = any(normalize(item.split("/", 1)[0]) == normalize(package_name) for item in observed_imports)
         elif target_language == "rust":
             import_match = any(normalize(item.split("::", 1)[0]) == normalize(package_name) for item in observed_imports)
+        elif target_language == "java":
+            pass  # Exact class presence in the declared local JAR was checked above.
         else:
             import_match = any(
                 normalize(item) == normalize(package_name)
@@ -298,6 +337,8 @@ def _candidate_dependency_integration_status(
             test_match = any(normalize(item.split("/", 1)[0]) == normalize(package_name) for item in candidate_test_imports)
         elif target_language == "rust":
             test_match = any(normalize(item.split("::", 1)[0]) == normalize(package_name) for item in candidate_test_imports)
+        elif target_language == "java":
+            test_match = bool(java_candidate_jar_imports(project_root, java_coordinate or "", candidate_test_imports))
         else:
             test_match = any(
                 normalize(item) == normalize(package_name) or item.startswith(package_name + "/")
@@ -305,7 +346,38 @@ def _candidate_dependency_integration_status(
             )
         if not test_match:
             return "NOT_RUN", [f"No recognized integration/test file imports candidate package '{package_name}'; generic test success is insufficient."]
+    if target_language == "java":
+        return "PASSED", [
+            "Java candidate class provenance was verified from the declared project-local JAR, production/test imports, and passing target build/integration/behavior gates."
+        ]
     return "PASSED", ["Each candidate package is declared, imported by production code and a recognized test file, and the required target build/integration/behavior gates passed."]
+
+
+def _promote_java_dependency_review_with_candidate_evidence(
+    review, target_language: str, candidate_status: str, candidate_warnings: list[str]
+):
+    """Resolve Java's static coordinate ambiguity only when local-JAR evidence passed."""
+    if (
+        target_language != "java"
+        or candidate_status != "PASSED"
+        or review.status != "UNVERIFIED"
+        or not any("Java candidate class provenance was verified from the declared project-local JAR" in item
+                   for item in candidate_warnings)
+        or not any("Java import-to-Maven/Gradle coordinate mapping is ambiguous" in item
+                   for item in review.warnings)
+    ):
+        return review
+    retained = tuple(
+        item for item in review.warnings
+        if "Java import-to-Maven/Gradle coordinate mapping is ambiguous" not in item
+    )
+    return replace(
+        review,
+        status="PASSED",
+        warnings=retained + (
+            "Java package-to-coordinate ambiguity was resolved by exact class entries in the declared local JAR and passing target build/integration/behavior evidence.",
+        ),
+    )
 
 
 def _security_review_gate_status(result) -> str:
@@ -902,6 +974,11 @@ def main(argv: list[str] | None = None) -> int:
                 library_resolutions, dependency_wiring_result, validation.gates, target_language.id,
                 result.output_root, dependency_warnings=dependency_warnings,
             )
+            dependency_wiring_result = _promote_java_dependency_review_with_candidate_evidence(
+                dependency_wiring_result, target_language.id,
+                dependency_integration_status, dependency_integration_warnings,
+            )
+            validation.gates["dependency_wiring"] = dependency_wiring_result.status
             validation.gates["dependency_integration"] = dependency_integration_status
             gates = validation.gates
             if knowledge_store and library_resolutions:
