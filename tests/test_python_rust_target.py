@@ -140,6 +140,23 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             self._translate("i = 1\nfor i in range(3):\n    print(i)\n")
 
     @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_signed_range_steps_generated_project_builds_and_runs(self):
+        source = "for i in range(0, 5, 2):\n    print(i)\nfor j in range(5, 0, -2):\n    print(j)\n"
+        files = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(
+                ["cargo", "run", "--offline", "--quiet"], cwd=root,
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "0\n2\n4\n5\n3\n1\n")
+
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
     def test_range_loop_generated_project_builds_and_runs(self):
         files = self._translate("for i in range(3):\n    print(i)\n")
         with tempfile.TemporaryDirectory() as tmp:
