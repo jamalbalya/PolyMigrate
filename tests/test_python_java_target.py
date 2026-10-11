@@ -21,6 +21,23 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
         self.assertEqual(artifacts[0].relative_path, "Main.java")
         return artifacts[0].content
 
+    def test_not_expression_preserves_python_truthiness(self):
+        code = self._translate("flag = not False\nx = 0\nprint(flag)\nprint(not x)\n")
+        self.assertIn("!(false)", code)
+        self.assertIn("!(x != 0)", code)
+
+    @unittest.skipUnless(shutil.which("javac") and shutil.which("java"), "JDK is required")
+    def test_not_expression_matches_python_output(self):
+        code = self._translate("flag = not False\nx = 0\nprint(flag)\nprint(not x)\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            java_file = Path(tmp) / "Main.java"
+            java_file.write_text(code, encoding="utf-8")
+            compiled = subprocess.run(["javac", str(java_file)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run(["java", "-cp", tmp, "Main"], capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "True\nTrue\n")
+
     def test_translates_assignments_arithmetic_and_print(self):
         code = self._translate("x = 6\ny = x * 7\nprint(y)\n")
         self.assertIn("int x = 6;", code)
