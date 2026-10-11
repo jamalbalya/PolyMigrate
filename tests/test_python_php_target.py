@@ -47,10 +47,16 @@ class PythonToPHPTranslatorTests(unittest.TestCase):
         )
         self.assertEqual(artifacts[0].relative_path, "src/module.php")
 
-    def test_rejects_unsupported_control_flow_instead_of_guessing(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Unsupported statement syntax: If"):
+    def test_rejects_assignments_inside_branches_instead_of_guessing(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "bodies may contain only print"):
             PythonToPHPTargetAdapter().generate(
-                project_for("value = 1\nif value:\n    print(value)\n"), {}
+                project_for("value = 1\nif value:\n    value = 2\nprint(value)\n"), {}
+            )
+
+    def test_rejects_chained_comparisons(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Chained comparisons"):
+            PythonToPHPTargetAdapter().generate(
+                project_for("value = 1\nif 0 < value < 2:\n    print(value)\n"), {}
             )
 
     def test_rejects_signed_32_bit_overflow(self):
@@ -64,7 +70,7 @@ class PythonToPHPTranslatorTests(unittest.TestCase):
         if php is None:
             self.skipTest("PHP CLI is not installed in this test environment")
         generated = PythonToPHPTargetAdapter().generate(
-            project_for("prefix = 'value='\nnumber = 6 * 7\nprint(prefix, number, True)\n"), {}
+            project_for("prefix = 'value='\nnumber = 6 * 7\nif number > 40:\n    print(prefix, number, True)\nelif number == 0:\n    print('zero')\nelse:\n    print('small')\n"), {}
         )[0]
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / generated.relative_path
