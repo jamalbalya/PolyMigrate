@@ -131,7 +131,7 @@ class PythonToRubyTranslatorTests(unittest.TestCase):
             self.assertEqual(lint.returncode, 0, lint.stderr + lint.stdout)
             run = subprocess.run([ruby, str(path)], capture_output=True, text=True, timeout=10)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "value= 42 True False\n")
+            self.assertEqual(run.stdout, "value= 42 True False\n0\n1\n2\n2\n")
 
 
 if __name__ == "__main__":
