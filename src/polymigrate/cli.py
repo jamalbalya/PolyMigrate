@@ -27,6 +27,7 @@ from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
 from polymigrate.migration.python_go_target import PythonToGoTargetAdapter
 from polymigrate.migration.python_javascript_target import PythonToJavaScriptTargetAdapter
 from polymigrate.migration.python_java_target import PythonToJavaTargetAdapter
+from polymigrate.migration.python_cpp_target import PythonToCppTargetAdapter
 from polymigrate.migration.python_php_target import PythonToPHPTargetAdapter
 from polymigrate.migration.python_rust_target import PythonToRustTargetAdapter
 from polymigrate.migration.python_ruby_target import PythonToRubyTargetAdapter
@@ -435,10 +436,10 @@ def _derive_final_status(
 def _run_deterministic_migration(args, source_language, target_language) -> int:
     """Run an offline deterministic Python-to-target subset and local checks."""
     pair = (source_language.id, target_language.id)
-    if pair not in {("python", "go"), ("python", "javascript"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby")}:
+    if pair not in {("python", "go"), ("python", "javascript"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp")}:
         raise ValueError(
             "The deterministic strategy currently supports --from python --to go, "
-            "javascript, rust, java, php, or ruby"
+            "javascript, rust, java, php, ruby, or cpp"
         )
 
     context = {}
@@ -464,6 +465,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         adapters.register_target(PythonToPHPTargetAdapter())
     elif target_language.id == "ruby":
         adapters.register_target(PythonToRubyTargetAdapter())
+    elif target_language.id == "cpp":
+        adapters.register_target(PythonToCppTargetAdapter())
     else:
         adapters.register_target(PythonToJavaTargetAdapter())
     result = MigrationEngine(adapters).execute(
@@ -548,7 +551,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         executions.append(record)
         return status
 
-    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "Main.java" if target_language.id == "java" else "main.php" if target_language.id == "php" else "main.rb")
+    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "Main.java" if target_language.id == "java" else "main.php" if target_language.id == "php" else "main.rb" if target_language.id == "ruby" else "main.cpp")
     if target_language.id == "go":
         go = shutil.which("go")
         gofmt = shutil.which("gofmt")
@@ -628,6 +631,24 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             main_ruby = result.output_root / "main.rb"
             if gates["target_build"] == "PASSED" and main_ruby.is_file():
                 runtime_status = run_check("target_runtime_smoke", [ruby, str(main_ruby)])
+                if runtime_status != "PASSED":
+                    gates["target_build"] = runtime_status
+        gates["go_vet"] = "NOT_APPLICABLE"
+    elif target_language.id == "cpp":
+        compiler = shutil.which("g++")
+        cpp_files = sorted(result.output_root.rglob("*.cpp"))
+        executable = result.output_root / "polymigrate-runner"
+        if not compiler or len(cpp_files) != 1:
+            gates["target_build"] = "BLOCKED"
+            warnings.append("C++ validation is blocked because g++ must be available and exactly one generated .cpp file must exist.")
+        else:
+            compile_status = run_check(
+                "target_build_cpp",
+                [compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror", str(cpp_files[0]), "-o", str(executable)],
+            )
+            gates["target_build"] = compile_status
+            if compile_status == "PASSED":
+                runtime_status = run_check("target_runtime_smoke", [str(executable)])
                 if runtime_status != "PASSED":
                     gates["target_build"] = runtime_status
         gates["go_vet"] = "NOT_APPLICABLE"
