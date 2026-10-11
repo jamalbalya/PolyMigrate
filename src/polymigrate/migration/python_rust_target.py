@@ -175,7 +175,7 @@ class PythonToRustTargetAdapter:
         # post-loop value outside the target's exact integer range rather than
         # allowing overflow or loss of JavaScript integer precision.
         post_value = start_value + iterations * step_value
-        minimum, maximum =         minimum, maximum = -(2**31), 2**31 - 1
+        minimum, maximum = -(2**31), 2**31 - 1
         if not minimum <= post_value <= maximum:
             raise UnsupportedPythonSyntax("range() step would overflow the target integer range")
         return start_expression, stop_expression, start_value, stop_value, step_expression, step_value
