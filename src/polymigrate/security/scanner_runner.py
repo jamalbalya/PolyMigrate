@@ -147,8 +147,9 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
     """Run required locally installed scanners and record execution evidence.
 
     Semgrep uses a repository-bundled rules file and does not request a remote ruleset.
-    Binary hashes and version output are recorded, but binaries are not authenticated
-    against a trusted distribution; scanner provenance is therefore NOT verified.
+    Scanner binary hashes and the Semgrep rules hash must match operator-managed pins;
+    missing or mismatched pins keep scanner provenance unverified. The scanner set is
+    intentionally limited and does not establish a comprehensive audit.
     Bandit and gosec are additional required scanners for Python and Go respectively.
     """
     if root.is_symlink() or not root.is_dir():
@@ -166,7 +167,15 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
             continue
         try:
             binary_digest = _binary_sha256(Path(executable))
-            rule_digest = _rules_sha256() if scanner_id == "semgrep" else None
+            rule_digest = None
+            if scanner_id == "semgrep":
+                try:
+                    rule_digest = _rules_sha256()
+                except (OSError, ValueError):
+                    provenance_warnings.append(
+                        "Bundled Semgrep rules file is missing, symlinked, or exceeds the size limit."
+                    )
+                    continue
             pin_variable = "POLYMIGRATE_TRUSTED_SCANNER_SHA256_" + scanner_id.upper()
             expected_digest = os.environ.get(pin_variable, "").strip()
             binary_trusted = False
