@@ -176,6 +176,24 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "safe integer range"):
             self._translate("x = 9007199254740991\nx += 1\nprint(x)\n")
 
+    def test_bounded_while_loop_matches_python_output(self):
+        code = self._translate("x = 0\nwhile x < 3:\n    print(x)\n    x += 1\nprint(x)\n")
+        self.assertIn("while ((x < 3)) {", code)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.js"
+            path.write_text(code, encoding="utf-8")
+            run = subprocess.run(["node", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "0\n1\n2\n3\n")
+
+    def test_while_loop_requires_provable_termination(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "does not update its condition variables"):
+            self._translate("x = 0\nwhile x < 1:\n    print(x)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "no progress"):
+            self._translate("x = 0\nwhile x < 1:\n    x += 0\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "integer comparison"):
+            self._translate("while True:\n    print(1)\n")
+
     def test_print_string(self):
         self.assertIn('console.log("hello");', self._translate('print("hello")\n'))
 
