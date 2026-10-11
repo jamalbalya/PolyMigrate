@@ -145,6 +145,93 @@ class PythonToJavaTargetAdapter:
 
         raise UnsupportedPythonSyntax(f"Unsupported expression syntax: {type(node).__name__}")
 
+    def _condition(self, node: ast.expr, assigned: set[str]) -> str:
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return f"!({self._condition(node.operand, assigned)})"
+        if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
+            operator = "&&" if isinstance(node.op, ast.And) else "||"
+            return "(" + f" {operator} ".join(
+                self._condition(item, assigned) for item in node.values
+            ) + ")"
+        if isinstance(node, ast.Compare):
+            if len(node.ops) != 1 or len(node.comparators) != 1:
+                raise UnsupportedPythonSyntax("Chained comparisons are not supported in conditions")
+            left, left_type = self._expr(node.left, assigned)
+            right, right_type = self._expr(node.comparators[0], assigned)
+            if left_type != right_type:
+                raise UnsupportedPythonSyntax("Comparisons require operands of the same known type")
+            operators = {
+                ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<",
+                ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=",
+            }
+            operator = operators.get(type(node.ops[0]))
+            if operator is None:
+                raise UnsupportedPythonSyntax(
+                    "Only ==, !=, <, <=, >, and >= comparisons are supported"
+                )
+            if left_type == "bool" and operator not in {"==", "!="}:
+                raise UnsupportedPythonSyntax("Boolean ordering comparisons are not supported")
+            if left_type == "string":
+                if operator == "==":
+                    return f"{left}.equals({right})"
+                if operator == "!=":
+                    return f"!{left}.equals({right})"
+                raise UnsupportedPythonSyntax("String ordering comparisons are not supported")
+            return f"({left} {operator} {right})"
+        if isinstance(node, ast.Name):
+            value, value_type = self._expr(node, assigned)
+            if value_type == "bool":
+                return value
+            if value_type == "int":
+                return f"({value} != 0)"
+            if value_type == "string":
+                return f"(!{value}.isEmpty())"
+        if isinstance(node, ast.Constant) and type(node.value) is bool:
+            return "true" if node.value else "false"
+        raise UnsupportedPythonSyntax(f"Unsupported condition syntax: {type(node).__name__}")
+
+    def _print_statement(self, node: ast.stmt, assigned: set[str]) -> str:
+        if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+            raise UnsupportedPythonSyntax("Conditional bodies may contain only print() statements")
+        call = node.value
+        if not isinstance(call.func, ast.Name) or call.func.id != "print":
+            raise UnsupportedPythonSyntax("Only calls to print() are supported in conditional bodies")
+        if len(call.args) != 1 or call.keywords:
+            raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
+        expression, expression_type = self._expr(call.args[0], assigned)
+        if expression_type == "bool":
+            return f'System.out.println(({expression}) ? "True" : "False");'
+        return f"System.out.println({expression});"
+
+    def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
+        """Render a bounded if/elif/else chain; branch bodies remain print-only."""
+        rendered: list[str] = []
+        cursor = node
+        depth = 0
+        while True:
+            depth += 1
+            if depth > 20:
+                raise UnsupportedPythonSyntax("Conditional chains are limited to 20 branches")
+            condition = self._condition(cursor.test, assigned)
+            if not cursor.body:
+                raise UnsupportedPythonSyntax("Empty conditional bodies are not supported")
+            body = [self._print_statement(statement, assigned) for statement in cursor.body]
+            prefix = f"if ({condition}) {{" if depth == 1 else f"        }} else if ({condition}) {{"
+            rendered.append(prefix)
+            rendered.extend("            " + line for line in body)
+            if cursor.orelse and len(cursor.orelse) == 1 and isinstance(cursor.orelse[0], ast.If):
+                cursor = cursor.orelse[0]
+                continue
+            if cursor.orelse:
+                alternative = [self._print_statement(statement, assigned) for statement in cursor.orelse]
+                rendered.append("        } else {")
+                rendered.extend("            " + line for line in alternative)
+                rendered.append("        }")
+            else:
+                rendered.append("        }")
+            break
+        return "\n".join(rendered)
+
     def generate(self, project: SourceProject, context: dict[str, object]) -> list[GeneratedArtifact]:
         del context
         if project.language_id != "python":
@@ -204,6 +291,9 @@ class PythonToJavaTargetAdapter:
                     statements.append(f'System.out.println(({expression}) ? "True" : "False");')
                 else:
                     statements.append(f"System.out.println({expression});")
+
+            elif isinstance(node, ast.If):
+                statements.append(self._if_statement(node, assigned))
 
             elif (
                 isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
