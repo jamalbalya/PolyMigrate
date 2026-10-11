@@ -15,6 +15,7 @@ from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject
 _PHP_INT_MIN = -(2**31)
 _PHP_INT_MAX = 2**31 - 1
 _PHP_BUILTINS = {"print", "str", "abs"}
+_PHP_RESERVED_VARIABLES = {"this", "GLOBALS", "_SERVER", "_GET", "_POST", "_FILES", "_COOKIE", "_SESSION", "_REQUEST", "_ENV"}
 
 
 class UnsupportedPythonSyntax(ValueError):
@@ -232,7 +233,7 @@ class PythonToPHPTargetAdapter:
                 if not isinstance(statement.target, ast.Name):
                     raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
                 name = statement.target.id
-                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _PHP_BUILTINS or name == "this":
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _PHP_BUILTINS or name in _PHP_RESERVED_VARIABLES:
                     raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not supported")
                 if name in assigned:
                     raise UnsupportedPythonSyntax("range() loop variables cannot shadow assigned variables")
@@ -322,6 +323,8 @@ class PythonToPHPTargetAdapter:
                     name = node.targets[0].id
                     if name in _PHP_BUILTINS:
                         raise UnsupportedPythonSyntax(f"Variable name '{name}' conflicts with a supported builtin")
+                    if name in _PHP_RESERVED_VARIABLES:
+                        raise UnsupportedPythonSyntax(f"Variable name '{name}' is reserved by PHP")
                     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
                         raise UnsupportedPythonSyntax(f"Variable name '{name}' is not supported")
                     expression, value_type = self._expr(node.value, assigned, types, integer_values, uses_boolean_string)
