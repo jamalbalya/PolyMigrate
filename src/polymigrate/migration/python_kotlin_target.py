@@ -5,6 +5,7 @@ import ast
 import json
 import re
 from pathlib import PurePosixPath
+from typing import Any
 
 from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject
 
