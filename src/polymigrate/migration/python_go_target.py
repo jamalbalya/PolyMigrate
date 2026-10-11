@@ -717,14 +717,14 @@ class PythonToGoTargetAdapter:
         )
         if self._uses_len:
             helper += (
-                "func polymigrateLenString(value string) int {\\n"
-                "\\tcount := len([]rune(value))\\n"
-                "\\tif int64(count) > 2147483647 {\\n"
-                '\\t\\tpanic("len() exceeds the signed 32-bit integer range")\\n'
-                "\\t}\\n"
-                "\\treturn count\\n"
-                "}\\n\\n"
+                "func polymigrateLenString(value string) int {\n"
+                "\tcount := len([]rune(value))\n"
+                "\tif int64(count) > 2147483647 {\n"
+                '\t\tpanic("len() exceeds the signed 32-bit integer range")\n'
+                "\t}\n"
+                "\treturn count\n"
+                "}\n\n"
             )
-        body = "\\n".join(f"\\t{statement}" for statement in statements)
+        body = "\n".join(f"\t{statement}" for statement in statements)
         content = f"package main\n\n{imports}\n{helper}func main() {{\n{body}\n}}\n"
         return [GeneratedArtifact("main.go", content)]
