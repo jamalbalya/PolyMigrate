@@ -355,7 +355,7 @@ class PythonToJavaScriptTargetAdapter:
         self._int_values = dict(facts)
         condition = self._condition(node.test, assigned)
         rendered = [f"while ({condition}) {{", *("    " + line for line in rendered_body), "}"]
-        return "\\n".join(rendered)
+        return "\n".join(rendered)
 
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
         """Render a bounded if/elif/else chain with print calls and same-type assignments to existing variables."""
