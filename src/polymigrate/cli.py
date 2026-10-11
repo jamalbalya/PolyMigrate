@@ -325,7 +325,7 @@ def _candidate_dependency_integration_status(
         if not import_match:
             if target_language == "java":
                 return "NOT_RUN", [
-                    f"Java candidate '{package_name}' has no exact imported-class evidence in its declared project-local system-scope JAR."
+                    f"Java candidate '{package_name}' has no exact imported-and-used class evidence in its declared project-local system-scope JAR."
                 ]
             return "NOT_RUN", [f"Candidate package '{package_name}' is not observed in target source imports."]
         if project_root is None:
@@ -342,7 +342,7 @@ def _candidate_dependency_integration_status(
         elif target_language == "rust":
             test_match = any(normalize(item.split("::", 1)[0]) == normalize(package_name) for item in candidate_test_imports)
         elif target_language == "java":
-            test_match = bool(java_candidate_jar_imports(project_root, java_coordinate or "", candidate_test_imports))
+            test_match = bool(java_candidate_jar_imports(project_root, java_coordinate or "", candidate_test_imports, test_sources=True))
         else:
             test_match = any(
                 normalize(item) == normalize(package_name) or item.startswith(package_name + "/")

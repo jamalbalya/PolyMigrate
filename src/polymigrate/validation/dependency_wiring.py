@@ -270,9 +270,9 @@ def _java_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
 
 
 def java_candidate_jar_imports(
-    root: Path, coordinate: str, imports: tuple[str, ...] | set[str]
+    root: Path, coordinate: str, imports: tuple[str, ...] | set[str], *, test_sources: bool = False
 ) -> set[str]:
-    """Prove imported Java classes exist in a declared, project-local system-scope JAR."""
+    """Prove imported Java classes exist and are used from a declared project-local system-scope JAR."""
     if root.is_symlink() or ":" not in coordinate:
         return set()
     try:
@@ -347,7 +347,51 @@ def java_candidate_jar_imports(
             }
     except (OSError, zipfile.BadZipFile, RuntimeError):
         return set()
-    return {item for item in imports if item in classes}
+
+    test_dirs = {"test", "tests", "integration", "e2e", "spec", "__tests__"}
+    source_paths: list[Path] = []
+    if test_sources:
+        ignored_dirs = {".git", ".venv", "venv", "node_modules", "vendor", "dist", "build", "target"}
+        for current, directories, filenames in os.walk(resolved_root, topdown=True, followlinks=False):
+            current_path = Path(current)
+            directories[:] = sorted(
+                name for name in directories
+                if name not in ignored_dirs and not (current_path / name).is_symlink()
+            )
+            for filename in sorted(filenames):
+                path = current_path / filename
+                if path.is_symlink() or path.suffix.lower() != ".java":
+                    continue
+                relative_path = path.relative_to(resolved_root)
+                is_test = (
+                    any(part.lower() in test_dirs for part in relative_path.parts[:-1])
+                    or filename.lower().startswith("test_")
+                    or filename.lower().endswith("_test.java")
+                )
+                if is_test and path.stat().st_size <= 1_000_000:
+                    source_paths.append(path)
+    else:
+        source_paths, _ = _files(resolved_root, {".java"})
+
+    matched: set[str] = set()
+    import_pattern = r"(?m)^\s*import\s+(?:static\s+)?([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*;"
+    for path in source_paths:
+        source = _read(path)
+        if source is None:
+            continue
+        clean = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+        clean = re.sub(r"(?m)^\s*//.*$", "", clean)
+        file_imports = set(re.findall(import_pattern, clean))
+        code = re.sub(import_pattern, "", clean)
+        code = re.sub(r"(?m)^\s*package\s+[A-Za-z_$][A-Za-z0-9_$.]*\s*;", "", code)
+        code = re.sub(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'', "", code)
+        for item in imports:
+            if item not in classes or item not in file_imports:
+                continue
+            simple_name = item.rsplit(".", 1)[-1]
+            if re.search(r"\b" + re.escape(simple_name) + r"\b", code):
+                matched.add(item)
+    return matched
 
 
 def _kotlin_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:

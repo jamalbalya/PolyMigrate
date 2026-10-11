@@ -548,7 +548,7 @@ func TestDependencyIntegration(t *testing.T) {
                 candidate, review, self.gates, "java", project_root=root
             )
             self.assertEqual(status, "NOT_RUN")
-            self.assertIn("no exact imported-class evidence", warnings[0])
+            self.assertIn("no exact imported-and-used class evidence", warnings[0])
             promoted = _promote_java_dependency_review_with_candidate_evidence(
                 review, "java", status, warnings
             )
