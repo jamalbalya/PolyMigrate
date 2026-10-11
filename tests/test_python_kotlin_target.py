@@ -177,6 +177,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             "for k in range(3):\n    print(k)\n"
             "print(k)\n"
             "score = 1\nif score > 0:\n    score = 2\nelse:\n    score = 3\nprint(score)\n"
+            "word = 'a'\nif score > 0:\n    word += 'b'\nelse:\n    word += 'b'\nprint(word)\n"
             "x = 1\nif x > 0:\n    x += 1\nelse:\n    x += 1\nprint(x + 1)\n"
             "count = 3\nwhile count > 0:\n    count -= 1\n    print(count)\nprint(count)\n"
         )
@@ -196,7 +197,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
                 capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n3\n1\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n2\n3\n2\n1\n0\n0\n")
+            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n3\n1\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n2\nab\n3\n2\n1\n0\n0\n")
 
 
 if __name__ == "__main__":
