@@ -50,6 +50,34 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "32 positional"):
             self._translate("print(" + ", ".join("1" for _ in range(33)) + ")\n")
 
+    def test_str_builtin_converts_integer_and_boolean(self):
+        files = self._translate('x = 42\nprint(str(x))\nprint(str(True))\n')
+        code = files["src/main.rs"]
+        self.assertIn('format!("{}", x)', code)
+        self.assertIn('(if true { "True" } else { "False" }).to_string()', code)
+
+    def test_str_builtin_rejects_shadowing_and_keyword_arguments(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the str"):
+            self._translate('str = "shadowed"\nprint(str(2))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
+            self._translate("print(str(value=2))\n")
+
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_str_builtin_generated_rust_matches_python_output(self):
+        files = self._translate('x = 42\nprint(str(x))\nprint(str(True))\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(
+                ["cargo", "run", "--offline", "--quiet"], cwd=root,
+                capture_output=True, text=True, timeout=90, check=False
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "42\nTrue\n")
+
     def test_emits_minimal_cargo_project(self):
         files = self._translate('x = 6\ny = x * 7\nprint(y)\n')
         self.assertIn('[package]', files["Cargo.toml"])
