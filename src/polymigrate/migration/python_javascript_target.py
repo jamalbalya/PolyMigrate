@@ -265,9 +265,8 @@ class PythonToJavaScriptTargetAdapter:
             raise UnsupportedPythonSyntax("Augmented assignment operands must have the same type")
         if left_type == "bool":
             raise UnsupportedPythonSyntax("Boolean augmented arithmetic is not supported")
-        if left_type == "string":
-            if False or not isinstance(node.op, ast.Add):
-                raise UnsupportedPythonSyntax("String augmented assignment supports only += in this target subset")
+        if left_type == "string" and not isinstance(node.op, ast.Add):
+            raise UnsupportedPythonSyntax("String augmented assignment supports only +="
         if left_type == "int":
             combined = ast.BinOp(left=ast.Name(id=name, ctx=ast.Load()), op=node.op, right=node.value)
             value = self._checked_integer_value(combined, self._int_values)
