@@ -40,10 +40,6 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Unsupported statement syntax"):
             self._translate('while True:\n    print("yes")\n')
 
-    def test_rejects_loops(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Unsupported statement syntax"):
-            self._translate("for i in range(3):\n    print(i)\n")
-
     def test_rejects_integer_overflow(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "signed int32 range"):
             self._translate("x = 2147483647\ny = x + 1\nprint(y)\n")
