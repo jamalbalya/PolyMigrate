@@ -3,7 +3,7 @@
 Supported:
 - Integer and string literals
 - Simple variable assignments
-- print(expr) with exactly one positional argument
+- print() with up to 32 positional arguments
 - Binary +, -, and * expressions
 - Unary + and - on integers
 - Simple if/else conditions with safe comparisons and print-only branches
