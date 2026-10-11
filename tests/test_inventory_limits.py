@@ -20,7 +20,7 @@ class InventoryLimitTests(unittest.TestCase):
             root = Path(tmp)
             (root / "main.py").write_text(
                 "import requests\nfrom project.helpers import parse\n"
-                "class Client:\n    pass\n\ndef fetch(url):\n    return url\n",
+                "class Client:\n    pass\n\ndef fetch(url):\n    return url\n\ndef use_client(client):\n    return client.request(fetch(\"x\"))\n",
                 encoding="utf-8",
             )
             project = InventorySourceAdapter("python", (".py",)).analyze(root)
@@ -29,6 +29,8 @@ class InventoryLimitTests(unittest.TestCase):
             self.assertIn("fetch", unit.symbols)
             self.assertIn("requests", unit.dependencies)
             self.assertIn("project.helpers", unit.dependencies)
+            self.assertIn("fetch", unit.references)
+            self.assertIn("request", unit.references)
 
     def test_python_parse_failure_keeps_source_with_warning(self):
         with tempfile.TemporaryDirectory() as tmp:
