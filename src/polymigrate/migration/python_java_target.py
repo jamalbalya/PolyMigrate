@@ -116,6 +116,16 @@ class PythonToJavaTargetAdapter:
                 raise UnsupportedPythonSyntax(f"Variable '{node.id}' is used before assignment")
             return node.id, self._types[node.id]
 
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "len":
+            if "len" in assigned:
+                raise UnsupportedPythonSyntax("Shadowing the len() builtin is not supported")
+            if len(node.args) != 1 or node.keywords:
+                raise UnsupportedPythonSyntax("len() must have exactly one positional argument")
+            value, value_type = self._expr(node.args[0], assigned)
+            if value_type != "string":
+                raise UnsupportedPythonSyntax("len() currently supports strings only")
+            return f"({value}).codePointCount(0, ({value}).length())", "int"
+
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "str":
             if "str" in assigned:
                 raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
@@ -339,7 +349,12 @@ class PythonToJavaTargetAdapter:
                     assigned.add(name)
                 self._types[name] = inferred_type
                 if inferred_type == "int":
-                    self._int_values[name] = self._checked_integer_value(node.value, self._int_values)
+                    try:
+                        self._int_values[name] = self._checked_integer_value(node.value, self._int_values)
+                    except UnsupportedPythonSyntax as exc:
+                        if "cannot be proven safe" not in str(exc):
+                            raise
+                        self._int_values.pop(name, None)
                 else:
                     self._int_values.pop(name, None)
 

@@ -27,6 +27,35 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
         self.assertIn("int y = (x * 7);", code)
         self.assertIn("System.out.println(y);", code)
 
+    def test_len_builtin_counts_unicode_code_points(self):
+        code = self._translate('text = "A😀B"\nprint(len(text))\n')
+        self.assertIn("codePointCount(0,", code)
+        self.assertIn("length())", code)
+
+    def test_len_builtin_rejects_shadowing_and_non_string_values(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the len"):
+            self._translate('len = 1\nprint(len("text"))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "strings only"):
+            self._translate("print(len(123))\n")
+
+    @unittest.skipUnless(shutil.which("javac") and shutil.which("java"), "JDK is required")
+    def test_len_builtin_generated_java_compiles_and_matches_unicode_output(self):
+        source = 'text = "A😀B"\nprint(len(text))\n'
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_file = root / "Main.java"
+            java_file.write_text(code, encoding="utf-8")
+            compiled = subprocess.run(
+                ["javac", str(java_file)], capture_output=True, text=True, timeout=30, check=False
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            executed = subprocess.run(
+                ["java", "-cp", tmp, "Main"], capture_output=True, text=True, timeout=30, check=False
+            )
+            self.assertEqual(executed.returncode, 0, executed.stderr)
+            self.assertEqual(executed.stdout, "3\n")
+
     def test_str_builtin_converts_integer_and_boolean_to_python_text(self):
         code = self._translate('x = 42\nprint("value=" + str(x))\nprint(str(True))\n')
         self.assertIn("Integer.toString(x)", code)
