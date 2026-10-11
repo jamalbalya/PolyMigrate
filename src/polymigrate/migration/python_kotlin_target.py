@@ -33,7 +33,7 @@ def _kotlin_string(value: str) -> str:
         raise UnsupportedPythonSyntax("Kotlin string literals containing lone Unicode surrogates are rejected")
     if any(ord(char) < 32 and char not in "\n\r\t" for char in value):
         raise UnsupportedPythonSyntax("Kotlin string literals containing unsupported control characters are rejected")
-    return json.dumps(value, ensure_ascii=False)
+    return json.dumps(value, ensure_ascii=False).replace("$", r"\$")
 
 
 class PythonToKotlinTargetAdapter:
