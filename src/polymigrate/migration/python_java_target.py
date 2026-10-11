@@ -1,8 +1,9 @@
 """Deterministic translator for a deliberately small Python-to-Java subset.
 
 Supported: one source file; simple variable assignments; signed 32-bit integer
-expressions (+, -, *); string concatenation; boolean literals/variables; and
-bounded positional print(). Unsupported syntax is rejected rather than guessed.
+expressions (+, -, *); string concatenation; boolean literals/variables;
+bounded positional print(); and str() for supported integer/string/boolean values.
+Unsupported syntax is rejected rather than guessed.
 """
 from __future__ import annotations
 
