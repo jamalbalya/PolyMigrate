@@ -282,9 +282,27 @@ class PythonToRustTargetAdapter:
             raise UnsupportedPythonSyntax("Only calls to print() are supported in conditional bodies")
         return self._render_print_call(call, assigned)
 
+    def _branch_statement(self, node: ast.stmt, assigned: set[str], modified: set[str]) -> str:
+        """Translate print calls or same-type assignments to pre-existing variables."""
+        if isinstance(node, ast.Assign):
+            if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+                raise UnsupportedPythonSyntax("Conditional assignments must target one existing variable")
+            name = node.targets[0].id
+            if name not in assigned:
+                raise UnsupportedPythonSyntax("Conditional assignments must target previously assigned variables")
+            expression, value_type = self._expr(node.value, assigned)
+            if self._types.get(name) != value_type:
+                raise UnsupportedPythonSyntax("Conditional assignments cannot change a variable's type")
+            if value_type == "int":
+                self._checked_integer_value(node.value, self._int_values)
+            modified.add(name)
+            return "{name} = {expression};"
+        return self._print_statement(node, assigned)
+
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
         """Render a bounded if/elif/else chain; branch bodies remain print-only."""
         rendered: list[str] = []
+        modified: set[str] = set()
         cursor = node
         depth = 0
         while True:
@@ -294,7 +312,7 @@ class PythonToRustTargetAdapter:
             condition = self._condition(cursor.test, assigned)
             if not cursor.body:
                 raise UnsupportedPythonSyntax("Empty conditional bodies are not supported")
-            body = [self._print_statement(statement, assigned) for statement in cursor.body]
+            body = [self._branch_statement(statement, assigned, modified) for statement in cursor.body]
             prefix = f"if {condition} {{" if depth == 1 else f"}} else if {condition} {{"
             rendered.append(prefix)
             rendered.extend("    " + line for line in body)
@@ -302,13 +320,15 @@ class PythonToRustTargetAdapter:
                 cursor = cursor.orelse[0]
                 continue
             if cursor.orelse:
-                alternative = [self._print_statement(statement, assigned) for statement in cursor.orelse]
+                alternative = [self._branch_statement(statement, assigned, modified) for statement in cursor.orelse]
                 rendered.append("} else {")
                 rendered.extend("    " + line for line in alternative)
                 rendered.append("}")
             else:
                 rendered.append("}")
             break
+        for name in modified:
+            self._int_values.pop(name, None)
         return "\n".join(rendered)
 
     def generate(self, project: SourceProject, context: dict[str, object]) -> list[GeneratedArtifact]:
