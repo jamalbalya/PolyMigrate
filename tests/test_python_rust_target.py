@@ -80,6 +80,38 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "42\nTrue\n")
 
+    def test_abs_builtin_supports_safe_integer_values(self):
+        files = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
+        code = files["src/main.rs"]
+        self.assertIn("(x).abs()", code)
+        self.assertIn("(7).abs()", code)
+
+    def test_abs_builtin_rejects_shadowing_invalid_types_and_overflow(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the abs"):
+            self._translate('abs = 1\nprint(abs(2))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the abs"):
+            self._translate('print(abs(2))\nabs = 1\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "integer values"):
+            self._translate('print(abs(True))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
+            self._translate("print(abs(value=2))\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "signed Rust i32 range"):
+            self._translate("print(abs(-2147483648))\n")
+
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_abs_builtin_generated_rust_matches_python_output(self):
+        files = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(["cargo", "run", "--offline", "--quiet"], cwd=root,
+                                 capture_output=True, text=True, timeout=90, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "42\n7\n")
+
     def test_emits_minimal_cargo_project(self):
         files = self._translate('x = 6\ny = x * 7\nprint(y)\n')
         self.assertIn('[package]', files["Cargo.toml"])
