@@ -47,6 +47,27 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "32 positional"):
             self._translate("print(" + ", ".join("1" for _ in range(33)) + ")\n")
 
+    def test_str_builtin_converts_integer_and_boolean(self):
+        code = self._translate('x = 42\nprint("value=" + str(x))\nprint(str(True))\n')
+        self.assertIn("String(x)", code)
+        self.assertIn('(true ? "True" : "False")', code)
+
+    def test_str_builtin_rejects_shadowing_and_keyword_arguments(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the str"):
+            self._translate('str = "shadowed"\nprint(str(2))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
+            self._translate("print(str(value=2))\n")
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required")
+    def test_str_builtin_generated_javascript_matches_python_output(self):
+        code = self._translate('x = 42\nprint("value=" + str(x))\nprint(str(True))\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.js"
+            path.write_text(code, encoding="utf-8")
+            run = subprocess.run(["node", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "value=42\nTrue\n")
+
     def test_print_string(self):
         self.assertIn('console.log("hello");', self._translate('print("hello")\n'))
 
