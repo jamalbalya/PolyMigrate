@@ -119,10 +119,10 @@ class LocalScannerRunnerTests(unittest.TestCase):
                     hashlib.sha256(Path(paths["bandit"]).read_bytes()).hexdigest(),
                 "POLYMIGRATE_TRUSTED_SEMGREP_RULES_SHA256": "0" * 64,
             }
-            with patch.dict("os.environ", pins), \\
-                 patch("polymigrate.security.scanner_runner.shutil.which", side_effect=lambda name: paths.get(name)), \\
-                 patch("polymigrate.security.scanner_runner.subprocess.run", side_effect=fake_run):
-                result = run_local_security_scanners(root, "python")
+            with patch.dict("os.environ", pins):
+                with patch("polymigrate.security.scanner_runner.shutil.which", side_effect=lambda name: paths.get(name)):
+                    with patch("polymigrate.security.scanner_runner.subprocess.run", side_effect=fake_run):
+                        result = run_local_security_scanners(root, "python")
         self.assertEqual(result.status, "PASSED")
         self.assertFalse(result.scanner_provenance_verified)
         self.assertEqual(_security_review_gate_status(result), "INCOMPLETE")
