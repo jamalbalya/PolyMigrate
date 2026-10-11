@@ -52,6 +52,7 @@ class LLMTranslationTests(unittest.TestCase):
             result = registry_for(provider).execute(source, "python", "go", output)
             self.assertEqual(result.status, "GENERATED_UNVERIFIED")
             self.assertEqual(result.generated_files, ("main.go",))
+            self.assertIn("Relative target path: main.go", provider.requests[0].prompt)
             self.assertTrue((output / "main.go").is_file())
             self.assertEqual(source_file.read_text(encoding="utf-8"), "print('hello')")
             self.assertTrue(any("not yet passed build" in warning for warning in result.warnings))
