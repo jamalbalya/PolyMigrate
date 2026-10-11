@@ -272,9 +272,9 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "0\n1\n2\n")
 
-    def test_rejects_multiple_print_arguments(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one"):
-            self._translate('print("hello", "world")\n')
+    def test_multiple_print_arguments_are_supported(self):
+        code = self._translate('print("hello", "world")\n')
+        self.assertIn('fmt.Println("hello", "world")', code)
 
     def test_rejects_undefined_name(self):
         with self.assertRaisesRegex(
