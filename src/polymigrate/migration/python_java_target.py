@@ -130,6 +130,16 @@ class PythonToJavaTargetAdapter:
             self._checked_integer_value(node, self._int_values)
             return f"Math.abs({expression})", "int"
 
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "len":
+            if "len" in assigned:
+                raise UnsupportedPythonSyntax("Shadowing the len() builtin is not supported")
+            if len(node.args) != 1 or node.keywords:
+                raise UnsupportedPythonSyntax("len() must have exactly one positional argument")
+            value, value_type = self._expr(node.args[0], assigned)
+            if value_type != "string":
+                raise UnsupportedPythonSyntax("len() currently supports strings only")
+            return f"({value}).codePointCount(0, ({value}).length())", "int"
+
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "str":
             if "str" in assigned:
                 raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
@@ -496,6 +506,17 @@ class PythonToJavaTargetAdapter:
         if has_str_call and assigns_str:
             raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
 
+        has_len_call = any(
+            isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "len"
+            for item in ast.walk(tree)
+        )
+        assigns_len = any(
+            isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "len"
+            for item in ast.walk(tree)
+        )
+        if has_len_call and assigns_len:
+            raise UnsupportedPythonSyntax("Shadowing the len() builtin is not supported")
+
         has_abs_call = any(
             isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "abs"
             for item in ast.walk(tree)
@@ -530,7 +551,12 @@ class PythonToJavaTargetAdapter:
                     assigned.add(name)
                 self._types[name] = inferred_type
                 if inferred_type == "int":
-                    self._int_values[name] = self._checked_integer_value(node.value, self._int_values)
+                    try:
+                        self._int_values[name] = self._checked_integer_value(node.value, self._int_values)
+                    except UnsupportedPythonSyntax as exc:
+                        if "cannot be proven safe" not in str(exc):
+                            raise
+                        self._int_values.pop(name, None)
                 else:
                     self._int_values.pop(name, None)
 
