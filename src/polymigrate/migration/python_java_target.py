@@ -178,7 +178,7 @@ class PythonToJavaTargetAdapter:
 
     def _range_spec(
         self, node: ast.For, assigned: set[str]
-    ) -> tuple[str, str, str, int]:
+    ) -> tuple[str, str, int, int, str, int]:
         call = node.iter
         if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Name) or call.func.id != "range":
             raise UnsupportedPythonSyntax("Only range() loops are supported")
@@ -223,7 +223,7 @@ class PythonToJavaTargetAdapter:
         minimum, maximum = -(2**31), 2**31 - 1
         if not minimum <= post_value <= maximum:
             raise UnsupportedPythonSyntax("range() step would overflow the Java integer range")
-        return start_expression, stop_expression, step_expression, step_value
+        return start_expression, stop_expression, start_value, stop_value, step_expression, step_value
 
     def _condition(self, node: ast.expr, assigned: set[str]) -> str:
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
@@ -559,10 +559,29 @@ class PythonToJavaTargetAdapter:
                     raise UnsupportedPythonSyntax("for/else statements are not supported")
                 if not node.body:
                     raise UnsupportedPythonSyntax("Empty loop bodies are not supported")
-                start_expression, stop_expression, step_expression, step_value = self._range_spec(node, assigned)
+                start_expression, stop_expression, start_value, stop_value, step_expression, step_value = self._range_spec(node, assigned)
                 assigned.add(name)
                 self._types[name] = "int"
-                body = [self._print_statement(statement, assigned) for statement in node.body]
+                base_facts = dict(self._int_values)
+                self._int_values = dict(base_facts)
+                self._int_values[name] = start_value
+                modified: set[str] = set()
+                body: list[str] = []
+                for statement in node.body:
+                    if ((isinstance(statement, ast.Assign) and len(statement.targets) == 1
+                         and isinstance(statement.targets[0], ast.Name) and statement.targets[0].id == name)
+                        or (isinstance(statement, ast.AugAssign) and isinstance(statement.target, ast.Name)
+                            and statement.target.id == name)):
+                        raise UnsupportedPythonSyntax("range() loop variables cannot be modified inside their loop body")
+                    body.append(self._branch_statement(statement, assigned, modified))
+                facts = dict(base_facts)
+                for loop_value in range(start_value, stop_value, step_value):
+                    self._int_values = dict(facts)
+                    self._int_values[name] = loop_value
+                    for statement in node.body:
+                        self._branch_statement(statement, assigned, modified)
+                    facts = {key: value for key, value in self._int_values.items() if key != name}
+                self._int_values = facts
                 assigned.remove(name)
                 self._types.pop(name, None)
                 self._int_values.pop(name, None)
