@@ -124,6 +124,20 @@ class PythonToGoTargetAdapter:
                 )
             return node.id, self._types[node.id]
 
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "str":
+            if "str" in assigned:
+                raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
+            if len(node.args) != 1 or node.keywords:
+                raise UnsupportedPythonSyntax("str() must have exactly one positional argument")
+            expression, value_type = self._expr(node.args[0], assigned)
+            if value_type == "string":
+                return expression, "string"
+            if value_type == "int":
+                return f"fmt.Sprint({expression})", "string"
+            if value_type == "bool":
+                return f'map[bool]string{{true: "True", false: "False"}}[{expression}]', "string"
+            raise UnsupportedPythonSyntax("str() supports only integer, string, and boolean values")
+
         if isinstance(node, ast.BinOp) and isinstance(
             node.op, (ast.Add, ast.Sub, ast.Mult)
         ):
