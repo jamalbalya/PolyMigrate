@@ -130,6 +130,8 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
         self._translate("for i in range(0, 10001, 2):\n    print(i)\n")
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "step cannot be zero"):
             self._translate("for i in range(0, 5, 0):\n    print(i)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "overflow the target integer range"):
+            self._translate("for i in range(2147483646, 2147483647, 2):\n    print(i)\n")
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000-iteration"):
             self._translate("for i in range(0, 20002, 2):\n    print(i)\n")
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000-iteration"):
