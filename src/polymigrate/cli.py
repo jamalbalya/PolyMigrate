@@ -323,6 +323,10 @@ def _candidate_dependency_integration_status(
                 for item in observed_imports
             )
         if not import_match:
+            if target_language == "java":
+                return "NOT_RUN", [
+                    f"Java candidate '{package_name}' has no exact imported-class evidence in its declared project-local system-scope JAR."
+                ]
             return "NOT_RUN", [f"Candidate package '{package_name}' is not observed in target source imports."]
         if project_root is None:
             return "NOT_RUN", ["Candidate-specific integration evidence requires the generated project root."]

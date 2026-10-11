@@ -521,22 +521,38 @@ func TestDependencyIntegration(t *testing.T) {
             self.assertEqual(promoted.status, "PASSED")
             self.assertTrue(any("resolved by exact class entries" in item for item in promoted.warnings))
 
-    def test_java_candidate_proof_remains_not_run_until_real_resolution_is_supported(self):
-        review = SimpleNamespace(
-            status="PASSED",
-            declared_dependencies=("com.vendor:widget-sdk",),
-            observed_imports=("com.vendor.Widget",),
-        )
-        candidate = [{
-            "decision_type": "candidate",
-            "selected_package": {"name": "widget-sdk", "registry": "maven-central"},
-        }]
+    def test_public_maven_candidate_stays_not_run_without_exact_local_jar_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
-            status, warnings = _candidate_dependency_integration_status(
-                candidate, review, self.gates, "java", project_root=Path(tmp)
+            root = Path(tmp)
+            (root / "Main.java").write_text(
+                "import com.vendor.Widget;\nclass Main { Widget widget; }\n", encoding="utf-8"
             )
-        self.assertEqual(status, "NOT_RUN")
-        self.assertIn("not implemented for target language java", warnings[0])
+            (root / "pom.xml").write_text(
+                "<project><dependencies><dependency><groupId>com.vendor</groupId>"
+                "<artifactId>widget-sdk</artifactId><version>1.0</version><scope>compile</scope>"
+                "</dependency></dependencies></project>",
+                encoding="utf-8",
+            )
+            integration_dir = root / "tests" / "integration"
+            integration_dir.mkdir(parents=True)
+            (integration_dir / "IntegrationTest.java").write_text(
+                "import com.vendor.Widget;\nclass IntegrationTest { Widget widget; }\n",
+                encoding="utf-8",
+            )
+            review = review_dependency_wiring(root, "java")
+            candidate = [{
+                "decision_type": "candidate",
+                "selected_package": {"name": "widget-sdk", "registry": "maven-central"},
+            }]
+            status, warnings = _candidate_dependency_integration_status(
+                candidate, review, self.gates, "java", project_root=root
+            )
+            self.assertEqual(status, "NOT_RUN")
+            self.assertIn("no exact imported-class evidence", warnings[0])
+            promoted = _promote_java_dependency_review_with_candidate_evidence(
+                review, "java", status, warnings
+            )
+            self.assertEqual(promoted.status, "UNVERIFIED")
 
     def test_repository_reference_is_not_a_package_integration_proof(self):
         candidate = {
