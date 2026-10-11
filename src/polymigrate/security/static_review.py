@@ -70,7 +70,6 @@ _RULES: tuple[tuple[str, str, str, re.Pattern[str]], ...] = (
      re.compile(r"(?m)\bsystem\s*\(")),
     ("MANIFEST_LIFECYCLE_HOOK", "HIGH", "A dependency manifest contains an executable lifecycle or build hook.",
      re.compile(r"(?i)(?:\"(?:preinstall|postinstall|prepare|install)\"\s*:|<exec\b|<plugin\b|build\.rs|execute_process\s*\()")),
-)
     ("PY_TEMPFILE_MKTEMP", "HIGH", "tempfile.mktemp can introduce a race between choosing and opening a temporary path.",
      re.compile(r"(?m)\btempfile\.mktemp\s*\(")),
     ("PY_INSECURE_RANDOM", "LOW", "The standard random module is not suitable for security-sensitive tokens or secrets.",
@@ -89,6 +88,7 @@ _RULES: tuple[tuple[str, str, str, re.Pattern[str]], ...] = (
      re.compile(r"(?m)\bstd::process::Command::new\s*\(")),
     ("SWIFT_PROCESS_LAUNCH", "MEDIUM", "Swift process launching is security-sensitive when executable or arguments are untrusted.",
      re.compile(r"(?m)\bProcess\s*\(\s*\)")),
+)
 _RULES_BY_EXTENSION: dict[str, set[str]] = {
     ".py": {"SECRET_PRIVATE_KEY", "SECRET_TOKEN_LITERAL", "PY_DYNAMIC_EVAL", "PY_UNSAFE_DESERIALIZATION",
             "SUBPROCESS_SHELL_TRUE", "OS_SYSTEM_COMMAND", "UNSAFE_YAML_LOAD", "TLS_VERIFY_DISABLED", "WEAK_HASH",
