@@ -277,7 +277,7 @@ class PythonToJavaScriptTargetAdapter:
     def _branch_statement(self, node: ast.stmt, assigned: set[str], modified: set[str]) -> str:
         """Translate print calls or same-type assignments to pre-existing variables."""
         if isinstance(node, ast.AugAssign):
-            statement = self._augmented_assignment_statement(node, assigned, update_integer_facts=False)
+            statement = self._augmented_assignment_statement(node, assigned, update_integer_facts=True)
             modified.add(node.target.id)
             return statement
         if isinstance(node, ast.Assign):
@@ -290,13 +290,21 @@ class PythonToJavaScriptTargetAdapter:
             if self._types.get(name) != value_type:
                 raise UnsupportedPythonSyntax("Conditional assignments cannot change a variable's type")
             if value_type == "int":
-                self._checked_integer_value(node.value, self._int_values)
+                self._int_values[name] = self._checked_integer_value(node.value, self._int_values)
+            else:
+                self._int_values.pop(name, None)
             modified.add(name)
             return f"{name} = {expression};"
         return self._print_statement(node, assigned)
 
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
         """Render a bounded if/elif/else chain with print calls and same-type assignments to existing variables."""
+        base_integer_facts = dict(self._int_values)
+
+        def render_branch(statements: list[ast.stmt]) -> list[str]:
+            self._int_values = dict(base_integer_facts)
+            return [self._branch_statement(statement, assigned, modified) for statement in statements]
+
         rendered: list[str] = []
         modified: set[str] = set()
         cursor = node
@@ -308,7 +316,7 @@ class PythonToJavaScriptTargetAdapter:
             condition = self._condition(cursor.test, assigned)
             if not cursor.body:
                 raise UnsupportedPythonSyntax("Empty conditional bodies are not supported")
-            body = [self._branch_statement(statement, assigned, modified) for statement in cursor.body]
+            body = render_branch(cursor.body)
             prefix = f"if ({condition}) {{" if depth == 1 else f"}} else if ({condition}) {{"
             rendered.append(prefix)
             rendered.extend("    " + line for line in body)
@@ -316,13 +324,14 @@ class PythonToJavaScriptTargetAdapter:
                 cursor = cursor.orelse[0]
                 continue
             if cursor.orelse:
-                alternative = [self._branch_statement(statement, assigned, modified) for statement in cursor.orelse]
+                alternative = render_branch(cursor.orelse)
                 rendered.append("} else {")
                 rendered.extend("    " + line for line in alternative)
                 rendered.append("}")
             else:
                 rendered.append("}")
             break
+        self._int_values = dict(base_integer_facts)
         for name in modified:
             self._int_values.pop(name, None)
         return "\n".join(rendered)
