@@ -1,9 +1,10 @@
 """Java import/manifest consistency tests; mapping ambiguity must not be promoted."""
 import tempfile
+import zipfile
 import unittest
 from pathlib import Path
 
-from polymigrate.validation.dependency_wiring import review_dependency_wiring
+from polymigrate.validation.dependency_wiring import java_candidate_jar_imports, review_dependency_wiring
 
 
 class JavaDependencyWiringTests(unittest.TestCase):
@@ -92,6 +93,35 @@ class JavaDependencyWiringTests(unittest.TestCase):
             result = review_dependency_wiring(root, "java")
         self.assertEqual(result.status, "UNVERIFIED")
         self.assertEqual(result.declared_dependencies, ("org.example:client-sdk",))
+
+    def test_declared_jar_class_import_must_be_used_not_merely_imported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "lib").mkdir()
+            jar_path = root / "lib" / "widget-sdk.jar"
+            with zipfile.ZipFile(jar_path, "w") as archive:
+                archive.writestr("com/vendor/Widget.class", b"class-name-fixture")
+            (root / "pom.xml").write_text(
+                "<project><dependencies><dependency><groupId>com.vendor</groupId>"
+                "<artifactId>widget-sdk</artifactId><version>1.0</version><scope>system</scope>"
+                "<systemPath>$" "{project.basedir}/lib/widget-sdk.jar</systemPath>"
+                "</dependency></dependencies></project>",
+                encoding="utf-8",
+            )
+            (root / "Main.java").write_text(
+                "import com.vendor.Widget;\nclass Main {}\n", encoding="utf-8"
+            )
+            self.assertEqual(
+                java_candidate_jar_imports(root, "com.vendor:widget-sdk", {"com.vendor.Widget"}),
+                set(),
+            )
+            (root / "Main.java").write_text(
+                "import com.vendor.Widget;\nclass Main { Widget value; }\n", encoding="utf-8"
+            )
+            self.assertEqual(
+                java_candidate_jar_imports(root, "com.vendor:widget-sdk", {"com.vendor.Widget"}),
+                {"com.vendor.Widget"},
+            )
 
     def test_malformed_maven_manifest_is_not_treated_as_clean(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from polymigrate.cli import _candidate_dependency_integration_status
+from polymigrate.cli import _candidate_dependency_integration_status, _promote_java_dependency_review_with_candidate_evidence
 from polymigrate.validation.dependency_wiring import review_dependency_wiring
 
 
@@ -434,22 +434,125 @@ func TestDependencyIntegration(t *testing.T) {
             )
             self.assertEqual(status, "PASSED")
 
-    def test_java_candidate_proof_remains_not_run_until_real_resolution_is_supported(self):
-        review = SimpleNamespace(
-            status="PASSED",
-            declared_dependencies=("com.vendor:widget-sdk",),
-            observed_imports=("com.vendor.Widget",),
-        )
-        candidate = [{
-            "decision_type": "candidate",
-            "selected_package": {"name": "widget-sdk", "registry": "maven-central"},
-        }]
+    @unittest.skipUnless(
+        shutil.which("javac") and shutil.which("jar") and shutil.which("java"),
+        "JDK tools are required",
+    )
+    def test_java_candidate_is_proven_by_declared_local_jar_and_real_build_integration_behavior(self):
         with tempfile.TemporaryDirectory() as tmp:
-            status, warnings = _candidate_dependency_integration_status(
-                candidate, review, self.gates, "java", project_root=Path(tmp)
+            root = Path(tmp)
+            library_source = root / "library-src" / "com" / "vendor" / "Widget.java"
+            library_source.parent.mkdir(parents=True)
+            library_source.write_text(
+                'package com.vendor; public final class Widget { public static String value() { return "verified"; } }',
+                encoding="utf-8",
             )
-        self.assertEqual(status, "NOT_RUN")
-        self.assertIn("not implemented for target language java", warnings[0])
+            library_classes = root / "library-classes"
+            library_classes.mkdir()
+            compiled_library = subprocess.run(
+                ["javac", "-d", str(library_classes), str(library_source)],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(compiled_library.returncode, 0, compiled_library.stderr)
+            jar_path = root / "lib" / "widget-sdk.jar"
+            jar_path.parent.mkdir()
+            jarred = subprocess.run(
+                ["jar", "cf", str(jar_path), "-C", str(library_classes), "."],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(jarred.returncode, 0, jarred.stderr)
+
+            (root / "pom.xml").write_text(
+                "<project><dependencies><dependency><groupId>com.vendor</groupId>"
+                "<artifactId>widget-sdk</artifactId><version>1.0</version><scope>system</scope>"
+                "<systemPath>$" "{project.basedir}/lib/widget-sdk.jar</systemPath>"
+                "</dependency></dependencies></project>",
+                encoding="utf-8",
+            )
+            main = root / "Main.java"
+            main.write_text(
+                'import com.vendor.Widget; public class Main { public static void main(String[] args) { System.out.println(Widget.value()); } }',
+                encoding="utf-8",
+            )
+            integration_dir = root / "tests" / "integration"
+            integration_dir.mkdir(parents=True)
+            integration = integration_dir / "IntegrationTest.java"
+            integration.write_text(
+                'import com.vendor.Widget; public class IntegrationTest { public static void main(String[] args) { if (!"verified".equals(Widget.value())) throw new AssertionError(); } }',
+                encoding="utf-8",
+            )
+            classes = root / "classes"
+            classes.mkdir()
+            classpath = str(jar_path)
+            compiled_app = subprocess.run(
+                ["javac", "-cp", classpath, "-d", str(classes), str(main), str(integration)],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(compiled_app.returncode, 0, compiled_app.stderr)
+            runtime_classpath = os.pathsep.join((str(classes), classpath))
+            integration_run = subprocess.run(
+                ["java", "-cp", runtime_classpath, "IntegrationTest"],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(integration_run.returncode, 0, integration_run.stderr)
+            behavior = subprocess.run(
+                ["java", "-cp", runtime_classpath, "Main"],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            self.assertEqual(behavior.returncode, 0, behavior.stderr)
+            self.assertEqual(behavior.stdout, "verified\n")
+
+            review = review_dependency_wiring(root, "java")
+            self.assertEqual(review.status, "UNVERIFIED")
+            candidate = [{
+                "decision_type": "candidate",
+                "selected_package": {"name": "widget-sdk", "registry": "maven-central"},
+            }]
+            status, warnings = _candidate_dependency_integration_status(
+                candidate, review,
+                {"target_build": "PASSED", "integration_tests": "PASSED",
+                 "behavior_comparison": "PASSED"},
+                "java", project_root=root,
+            )
+            self.assertEqual(status, "PASSED", warnings)
+            promoted = _promote_java_dependency_review_with_candidate_evidence(
+                review, "java", status, warnings
+            )
+            self.assertEqual(promoted.status, "PASSED")
+            self.assertTrue(any("resolved by exact class entries" in item for item in promoted.warnings))
+
+    def test_public_maven_candidate_stays_not_run_without_exact_local_jar_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Main.java").write_text(
+                "import com.vendor.Widget;\nclass Main { Widget widget; }\n", encoding="utf-8"
+            )
+            (root / "pom.xml").write_text(
+                "<project><dependencies><dependency><groupId>com.vendor</groupId>"
+                "<artifactId>widget-sdk</artifactId><version>1.0</version><scope>compile</scope>"
+                "</dependency></dependencies></project>",
+                encoding="utf-8",
+            )
+            integration_dir = root / "tests" / "integration"
+            integration_dir.mkdir(parents=True)
+            (integration_dir / "IntegrationTest.java").write_text(
+                "import com.vendor.Widget;\nclass IntegrationTest { Widget widget; }\n",
+                encoding="utf-8",
+            )
+            review = review_dependency_wiring(root, "java")
+            candidate = [{
+                "decision_type": "candidate",
+                "selected_package": {"name": "widget-sdk", "registry": "maven-central"},
+            }]
+            status, warnings = _candidate_dependency_integration_status(
+                candidate, review, self.gates, "java", project_root=root
+            )
+            self.assertEqual(status, "NOT_RUN")
+            self.assertIn("no exact imported-and-used class evidence", warnings[0])
+            promoted = _promote_java_dependency_review_with_candidate_evidence(
+                review, "java", status, warnings
+            )
+            self.assertEqual(promoted.status, "UNVERIFIED")
 
     def test_repository_reference_is_not_a_package_integration_proof(self):
         candidate = {
