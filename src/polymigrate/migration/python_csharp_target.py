@@ -240,7 +240,8 @@ class PythonToCSharpTargetAdapter:
 
     def _for_statement(self, node: ast.For, assigned: set[str], types: dict[str, str],
                        integer_values: dict[str, int], uses_boolean_string: list[bool],
-                       referenced_counts: dict[str, int]) -> str | None:
+                       referenced_counts: dict[str, int], source_names: set[str],
+                       loop_index: int) -> str | None:
         if not isinstance(node.target, ast.Name):
             raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
         name = node.target.id
@@ -289,28 +290,52 @@ class PythonToCSharpTargetAdapter:
         if not node.body:
             raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported")
 
-        assigned.add(name)
-        types[name] = "int"
-        integer_values[name] = start_value
+        counter_index = loop_index
+        counter_name = f"polymigrateRangeCounter{counter_index}"
+        while counter_name in source_names or counter_name in assigned:
+            counter_index += 1
+            counter_name = f"polymigrateRangeCounter{counter_index}"
+        name_loads_inside = sum(
+            1 for child in ast.walk(node)
+            if isinstance(child, ast.Name) and child.id == name and isinstance(child.ctx, ast.Load)
+        )
+        referenced_after = referenced_counts.get(name, 0) - name_loads_inside > 0
+
+        loop_name_nodes = [
+            child for statement in node.body for child in ast.walk(statement)
+            if isinstance(child, ast.Name) and child.id == name and isinstance(child.ctx, ast.Load)
+        ]
+        for child in loop_name_nodes:
+            child.id = counter_name
+        assigned.add(counter_name)
+        types[counter_name] = "int"
+        integer_values[counter_name] = start_value
         validation_values = list(actual_range) if count else [start_value]
         rendered_body: list[str] | None = None
-        for loop_value in validation_values:
-            integer_values[name] = loop_value
-            body_lines: list[str] = []
-            for child in node.body:
-                if isinstance(child, ast.Expr) and isinstance(child.value, ast.Call):
-                    body_lines.append(self._print_call(
-                        child.value, assigned, types, integer_values, uses_boolean_string
-                    ))
-                elif (isinstance(child, ast.Expr) and isinstance(child.value, ast.Constant)
-                      and isinstance(child.value.value, str)):
-                    continue
-                else:
-                    raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
-            if not body_lines:
-                raise UnsupportedPythonSyntax("range() loop bodies must contain at least one print() statement")
-            if rendered_body is None:
-                rendered_body = body_lines
+        try:
+            for loop_value in validation_values:
+                integer_values[counter_name] = loop_value
+                body_lines: list[str] = []
+                for child in node.body:
+                    if isinstance(child, ast.Expr) and isinstance(child.value, ast.Call):
+                        body_lines.append(self._print_call(
+                            child.value, assigned, types, integer_values, uses_boolean_string
+                        ))
+                    elif (isinstance(child, ast.Expr) and isinstance(child.value, ast.Constant)
+                          and isinstance(child.value.value, str)):
+                        continue
+                    else:
+                        raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
+                if not body_lines:
+                    raise UnsupportedPythonSyntax("range() loop bodies must contain at least one print() statement")
+                if rendered_body is None:
+                    rendered_body = body_lines
+        finally:
+            for child in loop_name_nodes:
+                child.id = name
+            assigned.discard(counter_name)
+            types.pop(counter_name, None)
+            integer_values.pop(counter_name, None)
 
         if count == 0:
             # The loop has no runtime effect. Remove references from its entire
@@ -318,9 +343,6 @@ class PythonToCSharpTargetAdapter:
             for child in ast.walk(node):
                 if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load):
                     referenced_counts[child.id] = referenced_counts.get(child.id, 0) - 1
-            assigned.remove(name)
-            types.pop(name, None)
-            integer_values.pop(name, None)
             return None
 
         last_value = actual_range[-1]
@@ -328,15 +350,10 @@ class PythonToCSharpTargetAdapter:
         if not _CSHARP_INT_MIN <= next_value <= _CSHARP_INT_MAX:
             raise UnsupportedPythonSyntax("range() loop counter could overflow the signed 32-bit C# integer range")
         operator = "<" if step_value > 0 else ">"
-        name_loads_inside = sum(
-            1 for child in ast.walk(node)
-            if isinstance(child, ast.Name) and child.id == name and isinstance(child.ctx, ast.Load)
-        )
-        referenced_after = referenced_counts.get(name, 0) - name_loads_inside > 0
         body = "\n".join("            " + line for line in (rendered_body or []))
         rendered = [
             "{",
-            f"        for (int {name} = {start_expr}; {name} {operator} {stop_expr}; {name} += {step_expr}) {{",
+            f"        for (int {counter_name} = {start_expr}; {counter_name} {operator} {stop_expr}; {counter_name} += {step_expr}) {{",
             body,
             "        }",
             "        }",
@@ -346,10 +363,6 @@ class PythonToCSharpTargetAdapter:
             integer_values[name] = last_value
             assigned.add(name)
             types[name] = "int"
-        else:
-            types.pop(name, None)
-            integer_values.pop(name, None)
-            assigned.remove(name)
         return "\n".join(rendered)
 
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
@@ -372,12 +385,13 @@ class PythonToCSharpTargetAdapter:
         uses_boolean_string = [False]
         statements: list[str] = []
         referenced_counts: dict[str, int] = {}
+        source_names = {reference.id for reference in ast.walk(tree) if isinstance(reference, ast.Name)}
         for reference in ast.walk(tree):
             if isinstance(reference, ast.Name) and isinstance(reference.ctx, ast.Load):
                 referenced_counts[reference.id] = referenced_counts.get(reference.id, 0) + 1
         declarations = {"int": "int", "string": "string", "bool": "bool"}
 
-        for node in tree.body:
+        for statement_index, node in enumerate(tree.body):
             if isinstance(node, ast.Assign):
                 if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
                     raise UnsupportedPythonSyntax("Only assignments to one simple variable are supported")
@@ -409,7 +423,8 @@ class PythonToCSharpTargetAdapter:
                 ))
             elif isinstance(node, ast.For):
                 loop_statement = self._for_statement(
-                    node, assigned, types, integer_values, uses_boolean_string, referenced_counts
+                    node, assigned, types, integer_values, uses_boolean_string,
+                    referenced_counts, source_names, statement_index
                 )
                 if loop_statement is not None:
                     statements.append(loop_statement)
