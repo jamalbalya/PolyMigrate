@@ -319,7 +319,7 @@ class PythonToJavaTargetAdapter:
         return self._print_statement(node, assigned)
 
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
-        """Render a bounded if/elif/else chain; branch bodies remain print-only."""
+        """Render a bounded if/elif/else chain with print calls and same-type assignments to existing variables."""
         rendered: list[str] = []
         modified: set[str] = set()
         cursor = node
@@ -358,7 +358,7 @@ class PythonToJavaTargetAdapter:
             raise UnsupportedPythonSyntax("This adapter currently accepts exactly one source file")
 
         self.warnings = [
-            "Python-to-Java translation supports assignments, bounded integer expressions, string concatenation, booleans, one-argument print(), bounded range() loops, and print-only conditionals.",
+            "Python-to-Java translation supports assignments, bounded integer expressions, string concatenation, booleans, bounded positional print(), abs()/str() builtins, bounded range() loops, and bounded conditionals with print or same-type assignments to existing variables.",
             "while loops, nested control flow, functions, imports, classes, I/O beyond print(), and project manifests are not translated.",
             "Generated output must pass build, test, security, dependency, and behavior checks.",
         ]
