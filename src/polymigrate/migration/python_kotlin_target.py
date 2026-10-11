@@ -212,42 +212,106 @@ class PythonToKotlinTargetAdapter:
 
     def _if_statement(self, node: ast.If, assigned: set[str], types: dict[str, str],
                       integer_values: dict[str, int], string_values: dict[str, str] | None = None) -> str:
-        def render_body(body: list[ast.stmt]) -> list[str]:
+        base_integer_values = dict(integer_values)
+        base_string_values = dict(string_values or {})
+        branches: list[tuple[str, list[str], dict[str, int], dict[str, str]]] = []
+
+        def render_body(body: list[ast.stmt]) -> tuple[list[str], dict[str, int], dict[str, str]]:
+            local_integers = dict(base_integer_values)
+            local_strings = dict(base_string_values)
             rendered: list[str] = []
             for statement in body:
-                if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
-                    rendered.append(self._print_call(statement.value, assigned, types, integer_values, string_values))
+                if isinstance(statement, ast.Assign):
+                    if len(statement.targets) != 1 or not isinstance(statement.targets[0], ast.Name):
+                        raise UnsupportedPythonSyntax("Conditional assignments must target one existing variable")
+                    name = statement.targets[0].id
+                    if name not in assigned:
+                        raise UnsupportedPythonSyntax("Conditional assignments must target previously assigned variables")
+                    expression, value_type = self._expr(
+                        statement.value, assigned, types, local_integers, local_strings
+                    )
+                    if types.get(name) != value_type:
+                        raise UnsupportedPythonSyntax("Conditional assignments cannot change a variable's type")
+                    if value_type == "int":
+                        local_integers[name] = self._int_value(statement.value, local_integers, local_strings)
+                    else:
+                        local_integers.pop(name, None)
+                    if value_type == "string":
+                        try:
+                            local_strings[name] = _string_value(statement.value, local_strings)
+                        except UnsupportedPythonSyntax:
+                            local_strings.pop(name, None)
+                    else:
+                        local_strings.pop(name, None)
+                    rendered.append(f"{name} = {expression}")
+                elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    rendered.append(self._print_call(
+                        statement.value, assigned, types, local_integers, local_strings
+                    ))
                 elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
                       and isinstance(statement.value.value, str)):
                     continue
                 else:
-                    raise UnsupportedPythonSyntax("Kotlin conditional bodies may contain only print() statements")
+                    raise UnsupportedPythonSyntax(
+                        "Conditional bodies may contain only print() calls and same-type assignments to existing variables"
+                    )
             if not rendered:
-                raise UnsupportedPythonSyntax("Conditional bodies must contain at least one print() statement")
-            return rendered
+                raise UnsupportedPythonSyntax("Conditional bodies must contain at least one supported statement")
+            return rendered, local_integers, local_strings
 
-        rendered: list[str] = []
         cursor = node
         depth = 0
+        has_else = False
+        rendered: list[str] = []
         while True:
             depth += 1
             if depth > 20:
                 raise UnsupportedPythonSyntax("if/elif chains are limited to 20 branches")
-            condition = self._condition(cursor.test, assigned, types, integer_values, string_values)
-            keyword = "if" if depth == 1 else "} else if"
-            rendered.append(f"{keyword} ({condition}) {{")
-            rendered.extend("    " + line for line in render_body(cursor.body))
+            condition = self._condition(
+                cursor.test, assigned, types, base_integer_values, base_string_values
+            )
+            body, branch_integers, branch_strings = render_body(cursor.body)
+            branches.append((condition, body, branch_integers, branch_strings))
             if cursor.orelse and len(cursor.orelse) == 1 and isinstance(cursor.orelse[0], ast.If):
                 cursor = cursor.orelse[0]
                 continue
             if cursor.orelse:
-                rendered.append("} else {")
-                rendered.extend("    " + line for line in render_body(cursor.orelse))
-            rendered.append("}")
+                else_body, else_integers, else_strings = render_body(cursor.orelse)
+                branches.append(("else", else_body, else_integers, else_strings))
+                has_else = True
             break
+
+        for index, (condition, body, _, _) in enumerate(branches):
+            if condition == "else":
+                rendered.append("} else {")
+            elif index == 0:
+                rendered.append(f"if ({condition}) {{")
+            else:
+                rendered.append(f"}} else if ({condition}) {{")
+            rendered.extend("    " + line for line in body)
+        rendered.append("}")
+
+        possible_integer_states = [item[2] for item in branches]
+        possible_string_states = [item[3] for item in branches]
+        if not has_else:
+            possible_integer_states.append(base_integer_values)
+            possible_string_states.append(base_string_values)
+
+        def merge_facts(states: list[dict[str, Any]]) -> dict[str, Any]:
+            common = set(states[0])
+            for state in states[1:]:
+                common.intersection_update(state)
+            return {
+                name: states[0][name] for name in common
+                if all(state[name] == states[0][name] for state in states[1:])
+            }
+
+        integer_values.clear()
+        integer_values.update(merge_facts(possible_integer_states))
+        if string_values is not None:
+            string_values.clear()
+            string_values.update(merge_facts(possible_string_states))
         return "\n".join(rendered)
-
-
 
     def _while_condition_value(self, node: ast.expr, assigned: set[str], types: dict[str, str],
                                integer_values: dict[str, int], string_values: dict[str, str]) -> bool:
@@ -457,7 +521,7 @@ class PythonToKotlinTargetAdapter:
         if len(project.units) != 1:
             raise UnsupportedPythonSyntax("This adapter currently accepts exactly one source file")
         self.warnings = [
-            "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), len(string), print(), print-only if/elif/else chains, bounded range() loops, and while loops with statically proven termination.",
+            "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), len(string), print(), if/elif/else chains with print and same-type assignments to existing variables, bounded range() loops, and while loops with statically proven termination.",
             "Assignments inside branches or range loops, nested control flow, unbounded while loops, functions, imports, classes, collections, and full project migration are not supported by this subset."
         ]
         try:
