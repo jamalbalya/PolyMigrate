@@ -106,6 +106,16 @@ class PythonToPHPTranslatorTests(unittest.TestCase):
                 project_for("for i in range(10001):\n    print(i)\n"), {}
             )
 
+    def test_rejects_range_counter_overflow_and_boolean_bounds(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "counter could overflow"):
+            PythonToPHPTargetAdapter().generate(
+                project_for("for i in range(2147483646, 2147483647, 2):\n    print(i)\n"), {}
+            )
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "arguments must be integers"):
+            PythonToPHPTargetAdapter().generate(
+                project_for("for i in range(True):\n    print(i)\n"), {}
+            )
+
     def test_zero_iteration_loop_does_not_define_loop_variable(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "used before assignment"):
             PythonToPHPTargetAdapter().generate(
