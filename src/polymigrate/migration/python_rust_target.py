@@ -282,8 +282,37 @@ class PythonToRustTargetAdapter:
             raise UnsupportedPythonSyntax("Only calls to print() are supported in conditional bodies")
         return self._render_print_call(call, assigned)
 
+    def _augmented_assignment_statement(self, node: ast.AugAssign, assigned: set[str], *,
+                                        update_integer_facts: bool) -> str:
+        if not isinstance(node.target, ast.Name) or node.target.id not in assigned:
+            raise UnsupportedPythonSyntax("Augmented assignments must target a previously assigned variable")
+        name = node.target.id
+        operators = {ast.Add: "+=", ast.Sub: "-=", ast.Mult: "*="}
+        operator = operators.get(type(node.op))
+        if operator is None:
+            raise UnsupportedPythonSyntax("Only +=, -=, and *= augmented assignments are supported")
+        left_type = self._types[name]
+        expression, right_type = self._expr(node.value, assigned)
+        if left_type != right_type:
+            raise UnsupportedPythonSyntax("Augmented assignment operands must have the same type")
+        if left_type == "bool":
+            raise UnsupportedPythonSyntax("Boolean augmented arithmetic is not supported")
+        if left_type == "string":
+            if True or not isinstance(node.op, ast.Add):
+                raise UnsupportedPythonSyntax("String augmented assignment supports only += in this target subset")
+        if left_type == "int":
+            combined = ast.BinOp(left=ast.Name(id=name, ctx=ast.Load()), op=node.op, right=node.value)
+            value = self._checked_integer_value(combined, self._int_values)
+            if update_integer_facts:
+                self._int_values[name] = value
+        return f"{name} {operator} {expression};"
+
     def _branch_statement(self, node: ast.stmt, assigned: set[str], modified: set[str]) -> str:
         """Translate print calls or same-type assignments to pre-existing variables."""
+        if isinstance(node, ast.AugAssign):
+            statement = self._augmented_assignment_statement(node, assigned, update_integer_facts=False)
+            modified.add(node.target.id)
+            return statement
         if isinstance(node, ast.Assign):
             if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
                 raise UnsupportedPythonSyntax("Conditional assignments must target one existing variable")
@@ -403,6 +432,9 @@ class PythonToRustTargetAdapter:
                 if not isinstance(call.func, ast.Name) or call.func.id != "print":
                     raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
                 statements.append(self._render_print_call(call, assigned))
+            elif isinstance(node, ast.AugAssign):
+                statements.append(self._augmented_assignment_statement(node, assigned, update_integer_facts=True))
+
             elif isinstance(node, ast.For):
                 if not isinstance(node.target, ast.Name):
                     raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
