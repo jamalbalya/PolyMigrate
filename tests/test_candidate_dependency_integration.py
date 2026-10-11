@@ -57,6 +57,14 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
         self.assertEqual(status, "UNVERIFIED")
         self.assertIn("custom/architectural implementation", warnings[0])
 
+    def test_unresolved_gap_blocks_proof_even_when_another_candidate_is_selected(self):
+        status, warnings = _candidate_dependency_integration_status(
+            [self.candidate, {"decision_type": "unresolved", "strategy": "unresolved"}],
+            self.review, self.gates, "go",
+        )
+        self.assertEqual(status, "UNVERIFIED")
+        self.assertIn("One or more library gaps remain unresolved", warnings[0])
+
     def test_generic_green_gates_do_not_replace_candidate_specific_test_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             status, warnings = _candidate_dependency_integration_status(
