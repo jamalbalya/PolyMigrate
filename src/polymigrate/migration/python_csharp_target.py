@@ -213,6 +213,8 @@ class PythonToCSharpTargetAdapter:
                     continue
                 else:
                     raise UnsupportedPythonSyntax("C# conditional bodies may contain only print() statements")
+            if not rendered:
+                raise UnsupportedPythonSyntax("Conditional bodies must contain at least one print() statement")
             return rendered
 
         rendered: list[str] = []
@@ -223,22 +225,12 @@ class PythonToCSharpTargetAdapter:
             if depth > 20:
                 raise UnsupportedPythonSyntax("if/elif chains are limited to 20 branches")
             condition = self._condition(cursor.test, assigned, types, integer_values, uses_boolean_string)
-            if not cursor.body:
-                raise UnsupportedPythonSyntax("Empty conditional bodies are not supported")
-            rendered.append(f"if ({condition}) {{")
+            keyword = "if" if depth == 1 else "} else if"
+            rendered.append(f"{keyword} ({condition}) {{")
             rendered.extend("            " + line for line in render_body(cursor.body))
             if cursor.orelse and len(cursor.orelse) == 1 and isinstance(cursor.orelse[0], ast.If):
                 cursor = cursor.orelse[0]
-                rendered.append(f"        }} else if ({self._condition(cursor.test, assigned, types, integer_values, uses_boolean_string)}) {{")
-                rendered.extend("            " + line for line in render_body(cursor.body))
-                if cursor.orelse and len(cursor.orelse) == 1 and isinstance(cursor.orelse[0], ast.If):
-                    # Continue the chain without re-rendering the current condition.
-                    continue
-                if cursor.orelse:
-                    rendered.append("        } else {")
-                    rendered.extend("            " + line for line in render_body(cursor.orelse))
-                rendered.append("        }")
-                break
+                continue
             if cursor.orelse:
                 rendered.append("        } else {")
                 rendered.extend("            " + line for line in render_body(cursor.orelse))
