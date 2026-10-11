@@ -258,7 +258,7 @@ class PythonToKotlinTargetAdapter:
                 if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
                     raise UnsupportedPythonSyntax("Only assignments to one simple variable are supported")
                 name = node.targets[0].id
-                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _KOTLIN_RESERVED or name in {"print", "str", "abs"}:
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _KOTLIN_RESERVED or name in {"print", "str", "abs", "pyString", "println", "Math", "Int", "String", "Boolean", "Any", "listOf"}:
                     raise UnsupportedPythonSyntax(f"Variable name '{name}' is not supported in Kotlin")
                 expression, value_type = self._expr(node.value, assigned, types, integer_values)
                 if name in assigned:
