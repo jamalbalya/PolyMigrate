@@ -170,6 +170,53 @@ class LocalScannerRunnerTests(unittest.TestCase):
             "Errors": [], "GolangErrors": [], "Issues": []
         }), ([], True))
 
+    def test_gitleaks_and_osv_reports_are_parsed_without_echoing_sensitive_values(self):
+        self.assertEqual(
+            _parse_report("gitleaks", [{"RuleID": "generic-api-key", "Secret": "must-not-escape"}]),
+            ([{"severity": "HIGH", "rule_id": "GITLEAKS:generic-api-key"}], True),
+        )
+        self.assertEqual(
+            _parse_report("osv-scanner", {"results": [{
+                "packages": [{"vulnerabilities": [{"id": "GHSA-test-1234"}]}]
+            }]}),
+            ([{"severity": "HIGH", "rule_id": "OSV:GHSA-test-1234"}], True),
+        )
+        self.assertEqual(_parse_report("gitleaks", []), ([], True))
+        self.assertEqual(_parse_report("osv-scanner", {"results": []}), ([], True))
+        self.assertEqual(_parse_report("gitleaks", [{"Secret": "bad"}]), ([], False))
+        self.assertEqual(_parse_report("osv-scanner", {"results": [{"packages": [{"vulnerabilities": [{"aliases": []}]}]}]}), ([], False))
+
+    def test_detected_secret_blocks_security_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "output"
+            root.mkdir()
+            tools_root = Path(tmp) / "tools"
+            tools_root.mkdir()
+            paths, fake_run = self._fake_tools(
+                tools_root, gitleaks_findings=[{"RuleID": "generic-api-key", "Secret": "redacted"}]
+            )
+            with patch("polymigrate.security.scanner_runner.shutil.which", side_effect=lambda name: paths.get(name)), \
+                 patch("polymigrate.security.scanner_runner.subprocess.run", side_effect=fake_run):
+                result = run_local_security_scanners(root, "python")
+        self.assertEqual(result.status, "FAILED")
+        self.assertEqual(result.findings[0]["rule_id"], "GITLEAKS:generic-api-key")
+        self.assertNotIn("redacted", json.dumps(result.to_dict()))
+
+    def test_known_dependency_vulnerability_blocks_security_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "output"
+            root.mkdir()
+            tools_root = Path(tmp) / "tools"
+            tools_root.mkdir()
+            paths, fake_run = self._fake_tools(
+                tools_root, osv_findings=[{"id": "GHSA-test-1234"}]
+            )
+            with patch("polymigrate.security.scanner_runner.shutil.which", side_effect=lambda name: paths.get(name)), \
+                 patch("polymigrate.security.scanner_runner.subprocess.run", side_effect=fake_run):
+                result = run_local_security_scanners(root, "python")
+        self.assertEqual(result.status, "FAILED")
+        self.assertEqual(result.findings[0]["rule_id"], "OSV:GHSA-test-1234")
+
     def test_untrusted_or_malformed_scanner_output_cannot_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "output"
