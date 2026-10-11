@@ -82,6 +82,10 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
         self.assertIn("func polymigrateLenString(value string) int", code)
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the len"):
             self._translate('len = 1\nprint(len("text"))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the len"):
+            self._translate('print(len("text"))\nlen = 1\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "generated len helper name"):
+            self._translate('text = "a"\nn = len(text)\npolymigrateLenString = 1\nprint(n, polymigrateLenString)\n')
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "strings only"):
             self._translate("print(len(123))\n")
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
