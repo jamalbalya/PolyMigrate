@@ -160,6 +160,7 @@ class PythonToJavaTargetAdapter:
 
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
             return f"!({self._condition(node.operand, assigned)})", "bool"
+
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
             if (
                 isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant)
