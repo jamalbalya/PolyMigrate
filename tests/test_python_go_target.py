@@ -186,6 +186,10 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "ab\n")
 
+    def test_sequential_branch_augmented_assignment_overflow_is_rejected(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "portable Go int32 range"):
+            self._translate("x = 2147483646\nif x > 0:\n    x += 1\n    x += 1\nprint(x)\n")
+
     def test_augmented_assignment_rejects_type_mismatch_boolean_and_overflow(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "same type"):
             self._translate('x = 1\nx += "a"\nprint(x)\n')
