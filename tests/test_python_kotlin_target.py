@@ -56,7 +56,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             ("x = 1\nx = 'text'\nprint(x)\n", "Changing the type of 'x'"),
             ("print([1, 2, 3])\n", "Unsupported expression syntax: List"),
             ("x = 2147483647 + 1\nprint(x)\n", "signed 32-bit Kotlin Int range"),
-            ("x = 1\nif x:\n    x = 2\n", "conditional bodies may contain only print"),
+            ("x = 1\nif x:\n    y = 2\n", "previously assigned variables"),
             ("when = 1\nprint(when)\n", "not supported in Kotlin"),
             ("pyString = 1\nprint(pyString)\n", "not supported in Kotlin"),
         )
