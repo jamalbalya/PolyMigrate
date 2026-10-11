@@ -116,7 +116,7 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
         files = self._translate("flag = not False\nx = 0\nprint(flag)\nprint(not x)\n")
         code = files["src/main.rs"]
         self.assertIn("!(false)", code)
-        self.assertIn("!(x != 0)", code)
+        self.assertIn("!((x != 0))", code)
 
     @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
     def test_not_expression_matches_python_output(self):
