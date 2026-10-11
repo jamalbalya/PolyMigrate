@@ -434,6 +434,23 @@ func TestDependencyIntegration(t *testing.T) {
             )
             self.assertEqual(status, "PASSED")
 
+    def test_java_candidate_proof_remains_not_run_until_real_resolution_is_supported(self):
+        review = SimpleNamespace(
+            status="PASSED",
+            declared_dependencies=("com.vendor:widget-sdk",),
+            observed_imports=("com.vendor.Widget",),
+        )
+        candidate = [{
+            "decision_type": "candidate",
+            "selected_package": {"name": "widget-sdk", "registry": "maven-central"},
+        }]
+        with tempfile.TemporaryDirectory() as tmp:
+            status, warnings = _candidate_dependency_integration_status(
+                candidate, review, self.gates, "java", project_root=Path(tmp)
+            )
+        self.assertEqual(status, "NOT_RUN")
+        self.assertIn("not implemented for target language java", warnings[0])
+
     def test_repository_reference_is_not_a_package_integration_proof(self):
         candidate = {
             "decision_type": "candidate",
