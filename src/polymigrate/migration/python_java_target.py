@@ -2,7 +2,7 @@
 
 Supported: one source file; simple variable assignments; signed 32-bit integer
 expressions (+, -, *); string concatenation; boolean literals/variables;
-bounded positional print(); and str() for supported integer/string/boolean values.
+bounded positional print(), abs() for safe integer values, and str() for supported integer/string/boolean values.
 Unsupported syntax is rejected rather than guessed.
 """
 from __future__ import annotations
