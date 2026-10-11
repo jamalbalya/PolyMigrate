@@ -298,8 +298,7 @@ class PythonToRustTargetAdapter:
         if left_type == "bool":
             raise UnsupportedPythonSyntax("Boolean augmented arithmetic is not supported")
         if left_type == "string":
-            if True or not isinstance(node.op, ast.Add):
-                raise UnsupportedPythonSyntax("String augmented assignment supports only += in this target subset")
+            raise UnsupportedPythonSyntax("String augmented assignments are not supported in the Rust subset")
         if left_type == "int":
             combined = ast.BinOp(left=ast.Name(id=name, ctx=ast.Load()), op=node.op, right=node.value)
             value = self._checked_integer_value(combined, self._int_values)
