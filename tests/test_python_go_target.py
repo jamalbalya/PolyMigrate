@@ -124,6 +124,23 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "True\nTrue\n")
 
+    def test_conditional_assignments_to_existing_variables(self):
+        code = self._translate("x = 1\nif x > 0:\n    x = 2\nelse:\n    x = 3\nprint(x)\n")
+        self.assertIn("x = 2", code)
+        self.assertIn("x = 3", code)
+
+    @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
+    def test_conditional_assignments_match_python_output(self):
+        code = self._translate("x = 1\nif x > 0:\n    x = 2\nelse:\n    x = 3\nprint(x)\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.go"
+            path.write_text(code, encoding="utf-8")
+            fmt = subprocess.run(["gofmt", "-w", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(fmt.returncode, 0, fmt.stderr)
+            run = subprocess.run(["go", "run", str(path)], capture_output=True, text=True, timeout=60)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "2\n")
+
     def test_print_string(self):
         code = self._translate('print("hello")\n')
         self.assertIn('import "fmt"', code)
