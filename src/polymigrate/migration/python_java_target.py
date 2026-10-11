@@ -315,7 +315,7 @@ class PythonToJavaTargetAdapter:
             if value_type == "int":
                 self._checked_integer_value(node.value, self._int_values)
             modified.add(name)
-            return "{name} = {expression};"
+            return f"{name} = {expression};"
         return self._print_statement(node, assigned)
 
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
