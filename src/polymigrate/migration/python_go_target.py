@@ -260,16 +260,26 @@ class PythonToGoTargetAdapter:
             return f'fmt.Println(map[bool]string{{true: "True", false: "False"}}[{expression}])'
         return f"fmt.Println({expression})"
 
+    def _render_print_call(self, call: ast.Call, assigned: set[str]) -> str:
+        if call.keywords:
+            raise UnsupportedPythonSyntax("print() keyword arguments such as sep/end are not supported")
+        if len(call.args) > 32:
+            raise UnsupportedPythonSyntax("print() is limited to 32 positional arguments")
+        values = []
+        for argument in call.args:
+            expression, value_type = self._expr(argument, assigned)
+            if value_type == "bool":
+                expression = f'map[bool]string{{true: "True", false: "False"}}[{expression}]'
+            values.append(expression)
+        return "fmt.Println(" + ", ".join(values) + ")"
+
     def _print_statement(self, node: ast.stmt, assigned: set[str]) -> str:
         if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
             raise UnsupportedPythonSyntax("Control-flow bodies may contain only print() statements")
         call = node.value
         if not isinstance(call.func, ast.Name) or call.func.id != "print":
             raise UnsupportedPythonSyntax("Only calls to print() are supported in conditional bodies")
-        if len(call.args) != 1 or call.keywords:
-            raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
-        expression, value_type = self._expr(call.args[0], assigned)
-        return self._print_expression(expression, value_type)
+        return self._render_print_call(call, assigned)
 
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
         """Render a bounded if/elif/else chain; branch bodies remain print-only."""
@@ -388,12 +398,7 @@ class PythonToGoTargetAdapter:
                     raise UnsupportedPythonSyntax(
                         "Only calls to print() are supported as expression statements"
                     )
-                if len(call.args) != 1 or call.keywords:
-                    raise UnsupportedPythonSyntax(
-                        "print() must have exactly one positional argument"
-                    )
-                expr, expr_type = self._expr(call.args[0], assigned)
-                statements.append(self._print_expression(expr, expr_type))
+                statements.append(self._render_print_call(call, assigned))
                 used_fmt = True
 
             elif isinstance(node, ast.For):
