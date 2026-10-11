@@ -29,6 +29,7 @@ def build_source_project_index(
             "sha256": unit.content_sha256[:64],
             "symbols": [item[:120] for item in unit.symbols[:max_symbols_per_file]],
             "dependencies": [item[:120] for item in unit.dependencies[:max_dependencies_per_file]],
+            "references": [item[:120] for item in unit.references[:max_dependencies_per_file]],
         })
 
     parser_backends = project.metadata.get("parser_backends", [])
