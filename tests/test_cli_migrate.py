@@ -14,9 +14,12 @@ from polymigrate.cli import main
 
 class FakeTranslationProvider:
     provider_id = "fake"
+    def __init__(self):
+        self.requests = []
     def get_capabilities(self):
         return ProviderCapabilities()
     def generate(self, request: ModelRequest):
+        self.requests.append(request)
         return ModelResponse(json.dumps({
             "content": "package main\nfunc main() {}\n",
             "assumptions": [],
@@ -47,6 +50,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
             self.assertEqual(report["validation_gates"]["dependency_integration"], "NOT_RUN")
             self.assertTrue(any("Dependency-gap planning emitted warnings" in warning for warning in report["warnings"]))
             self.assertTrue((output / "main.go").is_file())
+            self.assertIn("source_project_index", self.registry.get("fake").requests[0].prompt)
             self.assertEqual(source_file.read_text(encoding="utf-8"), "print('hello')")
 
     def test_deterministic_migration_never_initializes_ai_provider(self):
