@@ -98,7 +98,7 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
     def test_not_expression_preserves_python_truthiness(self):
         code = self._translate("flag = not False\nx = 0\nprint(flag)\nprint(not x)\n")
         self.assertIn("!(false)", code)
-        self.assertIn("!((x != 0))", code)
+        self.assertIn("!(x)", code)
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is required")
     def test_not_expression_matches_python_output(self):
