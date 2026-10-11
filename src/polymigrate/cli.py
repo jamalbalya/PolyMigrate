@@ -216,13 +216,14 @@ def _candidate_dependency_integration_status(
     project_root: Path | None = None,
     dependency_warnings: list[str] | tuple[str, ...] = (),
 ) -> tuple[str, list[str]]:
-    """Require candidate dependencies to be proven; unresolved planning never counts as a pass."""
-    candidates = [item for item in library_resolutions if item.get("decision_type") == "candidate"]
+    """Require every reported library gap to be resolved before candidate proof can pass."""
+    unresolved = [item for item in library_resolutions if item.get("decision_type") != "candidate"]
+    if unresolved:
+        return "UNVERIFIED", [
+            "One or more library gaps remain unresolved or require a custom/architectural implementation; dependency integration cannot be marked PASSED."
+        ]
+    candidates = list(library_resolutions)
     if not candidates:
-        if library_resolutions:
-            return "UNVERIFIED", [
-                "Library gaps remain unresolved or require a custom/architectural implementation; dependency integration cannot be marked PASSED."
-            ]
         if dependency_warnings:
             return "NOT_RUN", [
                 "Dependency-gap planning emitted warnings; absence of candidate records is not proof that dependency integration is unnecessary."
