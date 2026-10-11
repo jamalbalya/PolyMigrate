@@ -109,3 +109,4 @@
 
 - [x] T089 Extend deterministic Python-to-Java `print()` to support up to 32 positional values with Python-style space separators/boolean text and empty calls; reject unsupported keyword arguments and verify generated Java compilation/runtime output.
 - [x] T090 Extend deterministic Python-to-Go, JavaScript, and Rust `print()` to support up to 32 positional values and empty calls, preserve Python-style boolean output, reject unsupported keyword arguments, and validate target runtime output.
+- [x] T091 Add safe deterministic Python `str()` conversion for integer/string/boolean values in Go, JavaScript, and Rust; reject builtin shadowing and unsupported call forms, and verify generated target runtime output.
