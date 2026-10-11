@@ -296,7 +296,7 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self._translate("print = 1\nprint(2)\n")
 
     def test_rejects_loop_statement(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "While"):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "integer comparison"):
             self._translate("while True:\n    print('yes')\n")
 
     def test_if_else_comparison_is_translated(self):
