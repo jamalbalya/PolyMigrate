@@ -56,7 +56,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             ("x = 1\nx = 'text'\nprint(x)\n", "Changing the type of 'x'"),
             ("print([1, 2, 3])\n", "Unsupported expression syntax: List"),
             ("x = 2147483647 + 1\nprint(x)\n", "signed 32-bit Kotlin Int range"),
-            ("x = 1\nif x:\n    x = 2\n", "conditional bodies may contain only print"),
+            ("x = 1\nif x:\n    y = 2\n", "previously assigned variables"),
             ("when = 1\nprint(when)\n", "not supported in Kotlin"),
             ("pyString = 1\nprint(pyString)\n", "not supported in Kotlin"),
         )
@@ -74,6 +74,31 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             ("print(len(3))\n", "len\\(\\) supports string values only"),
             ("len = 1\nprint(len('x'))\n", "Shadowing the len\\(\\) builtin is not supported"),
             ("print(len('a', 'b'))\n", "supports exactly one positional argument"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
+    def test_conditional_assignments_merge_static_facts(self):
+        code = self._translate(
+            "x = 1\nif x > 0:\n    x = 2\nelse:\n    x = 2\nprint(x + 1)\n"
+        )
+        self.assertIn("if ((x > 0))", code)
+        self.assertIn("x = 2", code)
+        self.assertIn("var x: Int = 1", code)
+
+    def test_conditional_assignments_preserve_runtime_branch_values(self):
+        code = self._translate(
+            "x = 1\nif x > 0:\n    x = 2\nelse:\n    x = 3\nprint(x)\n"
+        )
+        self.assertIn("} else {", code)
+        self.assertIn("x = 3", code)
+
+    def test_conditional_assignments_reject_new_variables_type_changes_and_nested_control(self):
+        cases = (
+            ("x = 1\nif x > 0:\n    y = 2\n", "previously assigned variables"),
+            ("x = 1\nif x > 0:\n    x = 'wrong'\n", "cannot change a variable's type"),
+            ("x = 1\nif x > 0:\n    if x > 1:\n        print(x)\n", "Conditional bodies may contain only print"),
         )
         for source, message in cases:
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
@@ -135,6 +160,8 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             "for j in range(5, 0, -2):\n    print(j)\n"
             "for k in range(3):\n    print(k)\n"
             "print(k)\n"
+            "score = 1\nif score > 0:\n    score = 2\nelse:\n    score = 3\nprint(score)\n"
+            "x = 1\nif x > 0:\n    x = 2\nelse:\n    x = 2\nprint(x + 1)\n"
             "count = 3\nwhile count > 0:\n    count = count - 1\n    print(count)\nprint(count)\n"
         )
         code = self._translate(source)
@@ -153,7 +180,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
                 capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n3\n1\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n2\n1\n0\n0\n")
+            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n3\n1\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n2\n3\n2\n1\n0\n0\n")
 
 
 if __name__ == "__main__":
