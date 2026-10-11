@@ -12,6 +12,7 @@ class SourceUnit:
     content_sha256: str
     symbols: tuple[str, ...] = ()
     dependencies: tuple[str, ...] = ()
+    references: tuple[str, ...] = ()
 
 @dataclass(frozen=True)
 class SourceProject:
