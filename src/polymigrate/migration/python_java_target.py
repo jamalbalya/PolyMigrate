@@ -2,7 +2,7 @@
 
 Supported: one source file; simple variable assignments; signed 32-bit integer
 expressions (+, -, *); string concatenation; boolean literals/variables; and
-single-argument print(). Unsupported syntax is rejected rather than guessed.
+bounded positional print(). Unsupported syntax is rejected rather than guessed.
 """
 from __future__ import annotations
 
@@ -253,18 +253,31 @@ class PythonToJavaTargetAdapter:
             return "true" if node.value else "false"
         raise UnsupportedPythonSyntax(f"Unsupported condition syntax: {type(node).__name__}")
 
+    def _render_print_call(self, call: ast.Call, assigned: set[str]) -> str:
+        """Render Python print() with bounded positional arguments and Python text values."""
+        if call.keywords:
+            raise UnsupportedPythonSyntax("print() keyword arguments such as sep/end are not supported")
+        if len(call.args) > 32:
+            raise UnsupportedPythonSyntax("print() is limited to 32 positional arguments")
+        if not call.args:
+            return "System.out.println();"
+        rendered: list[str] = []
+        for argument in call.args:
+            expression, expression_type = self._expr(argument, assigned)
+            if expression_type == "bool":
+                expression = f'(({expression}) ? "True" : "False")'
+            elif expression_type == "int":
+                expression = f"Integer.toString({expression})"
+            rendered.append(expression)
+        return "System.out.println(" + ' + " " + '.join(rendered) + ");"
+
     def _print_statement(self, node: ast.stmt, assigned: set[str]) -> str:
         if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
             raise UnsupportedPythonSyntax("Conditional bodies may contain only print() statements")
         call = node.value
         if not isinstance(call.func, ast.Name) or call.func.id != "print":
             raise UnsupportedPythonSyntax("Only calls to print() are supported in conditional bodies")
-        if len(call.args) != 1 or call.keywords:
-            raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
-        expression, expression_type = self._expr(call.args[0], assigned)
-        if expression_type == "bool":
-            return f'System.out.println(({expression}) ? "True" : "False");'
-        return f"System.out.println({expression});"
+        return self._render_print_call(call, assigned)
 
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
         """Render a bounded if/elif/else chain; branch bodies remain print-only."""
@@ -347,13 +360,7 @@ class PythonToJavaTargetAdapter:
                 call = node.value
                 if not isinstance(call.func, ast.Name) or call.func.id != "print":
                     raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
-                if len(call.args) != 1 or call.keywords:
-                    raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
-                expression, expression_type = self._expr(call.args[0], assigned)
-                if expression_type == "bool":
-                    statements.append(f'System.out.println(({expression}) ? "True" : "False");')
-                else:
-                    statements.append(f"System.out.println({expression});")
+                statements.append(self._render_print_call(call, assigned))
 
             elif isinstance(node, ast.For):
                 if not isinstance(node.target, ast.Name):
