@@ -292,6 +292,7 @@ class PythonToGoTargetAdapter:
         return f"fmt.Println({expression})"
 
     def _render_print_call(self, call: ast.Call, assigned: set[str]) -> str:
+        self._uses_fmt = True
         if call.keywords:
             raise UnsupportedPythonSyntax("print() keyword arguments such as sep/end are not supported")
         if len(call.args) > 32:
@@ -362,6 +363,66 @@ class PythonToGoTargetAdapter:
             return f"{name} = {expression}"
         return self._print_statement(node, assigned)
 
+    def _while_condition_value(self, node: ast.expr, assigned: set[str], facts: dict[str, int]) -> bool:
+        if not isinstance(node, ast.Compare) or len(node.ops) != 1 or len(node.comparators) != 1:
+            raise UnsupportedPythonSyntax("while conditions must be one bounded integer comparison")
+        self._int_values = dict(facts)
+        _, left_type = self._expr(node.left, assigned)
+        _, right_type = self._expr(node.comparators[0], assigned)
+        if left_type != "int" or right_type != "int":
+            raise UnsupportedPythonSyntax("while conditions support only integer comparisons")
+        left = self._checked_integer_value(node.left, facts)
+        right = self._checked_integer_value(node.comparators[0], facts)
+        operator = node.ops[0]
+        if isinstance(operator, ast.Lt):
+            return left < right
+        if isinstance(operator, ast.LtE):
+            return left <= right
+        if isinstance(operator, ast.Gt):
+            return left > right
+        if isinstance(operator, ast.GtE):
+            return left >= right
+        if isinstance(operator, ast.Eq):
+            return left == right
+        if isinstance(operator, ast.NotEq):
+            return left != right
+        raise UnsupportedPythonSyntax("while conditions support only <, <=, >, >=, ==, and !=")
+
+    def _while_statement(self, node: ast.While, assigned: set[str]) -> str:
+        """Translate a while loop only when bounded integer simulation proves termination."""
+        if node.orelse:
+            raise UnsupportedPythonSyntax("while/else is not supported")
+        if not node.body:
+            raise UnsupportedPythonSyntax("Empty while bodies are not supported")
+        base_facts = dict(self._int_values)
+        modified: set[str] = set()
+        self._int_values = dict(base_facts)
+        rendered_body: list[str] = []
+        for statement in node.body:
+            if isinstance(statement, (ast.Assign, ast.AugAssign)):
+                target = statement.targets[0] if isinstance(statement, ast.Assign) and len(statement.targets) == 1 else statement.target if isinstance(statement, ast.AugAssign) else None
+                if not isinstance(target, ast.Name) or target.id not in assigned or self._types.get(target.id) != "int":
+                    raise UnsupportedPythonSyntax("while bodies may only update previously assigned integer variables")
+            elif not (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call)
+                      and isinstance(statement.value.func, ast.Name) and statement.value.func.id == "print"):
+                raise UnsupportedPythonSyntax("while bodies may contain only print() or integer assignments")
+            rendered_body.append(self._branch_statement(statement, assigned, modified))
+        facts = dict(base_facts)
+        iterations = 0
+        while self._while_condition_value(node.test, assigned, facts):
+            if iterations >= 10_000:
+                self._int_values = dict(base_facts)
+                raise UnsupportedPythonSyntax("while loop could not be proven to terminate within 10000 iterations")
+            self._int_values = dict(facts)
+            for statement in node.body:
+                self._branch_statement(statement, assigned, modified)
+            facts = dict(self._int_values)
+            iterations += 1
+        self._int_values = dict(facts)
+        condition = self._condition(node.test, assigned)
+        rendered = [f"for {condition} {{", *("\t" + line for line in rendered_body), "}"]
+        return "\\n".join(rendered)
+
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
         """Render a bounded if/elif/else chain with print calls and same-type assignments to existing variables."""
         base_integer_facts = dict(self._int_values)
@@ -424,6 +485,7 @@ class PythonToGoTargetAdapter:
         self._types = {}
         self._int_values = {}
         self._uses_abs = False
+        self._uses_fmt = False
         statements: list[str] = []
         used_fmt = False
 
@@ -524,6 +586,9 @@ class PythonToGoTargetAdapter:
             elif isinstance(node, ast.AugAssign):
                 statements.append(self._augmented_assignment_statement(node, assigned, update_integer_facts=True))
 
+            elif isinstance(node, ast.While):
+                statements.append(self._while_statement(node, assigned))
+
             elif isinstance(node, ast.For):
                 if not isinstance(node.target, ast.Name):
                     raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
@@ -575,7 +640,7 @@ class PythonToGoTargetAdapter:
                 "Assigned variable(s) are never used: " + ", ".join(unused_names)
             )
 
-        imports = 'import "fmt"\n' if used_fmt else ""
+        imports = 'import "fmt"\n' if used_fmt or self._uses_fmt else ""
         helper = (
             "func polymigrateAbsInt32(value int) int {\n"
             "\tif value < 0 {\n\t\treturn -value\n\t}\n"
