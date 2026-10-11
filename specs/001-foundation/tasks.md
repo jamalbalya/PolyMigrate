@@ -82,6 +82,7 @@
 
 - [x] T072 Extend the deterministic Python-to-Rust subset with bounded if/else conditions, boolean combinations, and integer/string truthiness mappings, verified by offline Cargo execution.
 
-- [x] T073 Extend deterministic Python-to-Go/JavaScript/Rust subsets with bounded `range()` loops over statically known bounds, enforce a 10,000-iteration cap, reject explicit steps and loop-body assignments, and verify generated runtime output for all three targets.
+- [x] T073 Extend deterministic Python-to-Go/JavaScript/Rust subsets with bounded `range()` loops over statically known bounds, enforce a 10,000-iteration cap, and reject loop-body assignments; verify generated runtime output for all three targets.
 - [x] T074 Add bounded Python `if`/`elif`/`else` chain support to deterministic Go, JavaScript, and Rust translators; cap chains at 20 branches and verify generated runtime output.
+- [x] T076 Support statically known positive and negative non-zero `range()` steps in deterministic Go, JavaScript, and Rust translators; cap actual iteration count and reject target-integer overflow, with runtime-equivalence tests.
 - [x] T075 Fail closed when dependency-gap planning fails or library decisions remain unresolved/custom; do not treat an empty candidate list as proof that dependency integration passed.
