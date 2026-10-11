@@ -63,6 +63,8 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
     def test_str_builtin_cannot_be_shadowed_or_called_with_keywords(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the str"):
             self._translate('str = "shadowed"\nprint(str(2))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the str"):
+            self._translate('print(str(2))\nstr = "shadowed"\n')
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
             self._translate("print(str(value=2))\n")
 
