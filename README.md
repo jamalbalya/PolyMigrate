@@ -128,15 +128,15 @@ Run it without `--provider` or `--allow-source-upload`:
 
     polymigrate migrate --source ./sample-python-project --from python --to go --output ./migration-output --strategy deterministic
 
-Currently supported syntax:
-- Integer and string literals.
-- Simple assignments to one variable.
+Currently supported syntax is intentionally constrained:
+- Integer, string, and boolean literals; simple assignments to one variable.
 - `print()` with up to 32 positional arguments or no arguments; keyword arguments such as `sep` and `end` are rejected.
-- Integer arithmetic with `+`, `-`, and `*`.
-- String concatenation with `+`.
-- Unary `+` and `-` on integers.
+- Integer arithmetic with `+`, `-`, and `*`, string concatenation with `+`, and unary `+`/`-` on integers.
+- Supported `str()` and `abs()` calls, `not`, boolean conditions, and bounded `+=`, `-=`, and `*=` with type and overflow checks.
+- Bounded `if`/`elif`/`else` chains and `range()` loops with statically known bounds/steps and at most 10,000 iterations. Supported branch and loop bodies may print or update previously assigned variables without changing types.
+- `while` loops only when static integer simulation proves termination within 10,000 iterations.
 
-The adapter rejects unsupported statements and expressions rather than attempting speculative translation. It accepts exactly one inventoried Python source file. It does not translate general control flow, functions, classes, imports, project dependencies, frameworks, or multi-file applications.
+The adapter rejects unsupported statements and expressions rather than attempting speculative translation. It accepts exactly one inventoried Python source file. Functions, classes, imports, project dependencies, frameworks, nested control flow, and multi-file applications are not translated.
 
 Integer values and integer arithmetic are conservatively restricted to the signed 32-bit range (-2147483648 through 2147483647). Integer literals and statically evaluated arithmetic that exceed this range are rejected rather than translated with potentially different Go integer behavior. Expressions whose integer safety cannot be proven are also rejected.
 
