@@ -51,7 +51,7 @@ class PythonToCppTranslatorTests(unittest.TestCase):
             )
 
     def test_rejects_reserved_and_implementation_reserved_identifiers(self):
-        for name in ("class", "std", "__hidden", "_Hidden"):
+        for name in ("class", "std", "__hidden", "_Hidden", "NULL", "INT32_MAX"):
             with self.subTest(name=name), self.assertRaises(UnsupportedPythonSyntax):
                 PythonToCppTargetAdapter().generate(
                     project_for(f"{name} = 1" + chr(10) + f"print({name})" + chr(10)), {}
