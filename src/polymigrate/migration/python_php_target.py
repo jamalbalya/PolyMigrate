@@ -122,6 +122,44 @@ class PythonToPHPTargetAdapter:
             return ("+" if isinstance(node.op, ast.UAdd) else "-") + expression, "int"
         raise UnsupportedPythonSyntax(f"Unsupported expression syntax: {type(node).__name__}")
 
+    def _condition(self, node: ast.expr, assigned: set[str], types: dict[str, str],
+                   integer_values: dict[str, int], uses_boolean_string: list[bool]) -> str:
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return "!(" + self._condition(node.operand, assigned, types, integer_values, uses_boolean_string) + ")"
+        if isinstance(node, ast.Compare):
+            if len(node.ops) != 1 or len(node.comparators) != 1:
+                raise UnsupportedPythonSyntax("Chained comparisons are not supported")
+            left, left_type = self._expr(node.left, assigned, types, integer_values, uses_boolean_string)
+            right, right_type = self._expr(node.comparators[0], assigned, types, integer_values, uses_boolean_string)
+            if left_type != right_type:
+                raise UnsupportedPythonSyntax("Comparisons require operands of the same inferred type")
+            operator_node = node.ops[0]
+            if isinstance(operator_node, ast.Eq):
+                operator = "==="
+            elif isinstance(operator_node, ast.NotEq):
+                operator = "!=="
+            elif isinstance(operator_node, ast.Lt):
+                operator = "<"
+            elif isinstance(operator_node, ast.LtE):
+                operator = "<="
+            elif isinstance(operator_node, ast.Gt):
+                operator = ">"
+            elif isinstance(operator_node, ast.GtE):
+                operator = ">="
+            else:
+                raise UnsupportedPythonSyntax("Only simple equality and integer ordering comparisons are supported")
+            if left_type in {"string", "bool"} and not isinstance(operator_node, (ast.Eq, ast.NotEq)):
+                raise UnsupportedPythonSyntax("String and boolean ordering comparisons are not supported")
+            return f"({left} {operator} {right})"
+        expression, value_type = self._expr(node, assigned, types, integer_values, uses_boolean_string)
+        if value_type == "bool":
+            return expression
+        if value_type == "int":
+            return f"({expression} !== 0)"
+        if value_type == "string":
+            return f"({expression} !== '')"
+        raise UnsupportedPythonSyntax("Condition type is not supported")
+
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         if project.language_id != "python":
             raise ValueError("Python-to-PHP adapter requires a Python source project")
@@ -129,8 +167,8 @@ class PythonToPHPTargetAdapter:
             raise UnsupportedPythonSyntax("No Python source units were supplied")
         artifacts: list[GeneratedArtifact] = []
         self.warnings = [
-            "Deterministic Python-to-PHP translation supports only simple assignments, bounded integer/string/boolean expressions, str(), abs(), and positional print().",
-            "Control flow, functions, imports, classes, collections, and project manifest reconstruction are not supported by this deterministic subset.",
+            "Deterministic Python-to-PHP translation supports simple assignments, bounded integer/string/boolean expressions, str(), abs(), positional print(), and print-only if/elif/else chains.",
+            "Functions, imports, classes, collections, assignments inside branches, and project manifest reconstruction are not supported by this deterministic subset.",
         ]
         for unit in project.units:
             try:
@@ -144,6 +182,50 @@ class PythonToPHPTargetAdapter:
             statements: list[str] = []
             referenced = {node.id for node in ast.walk(tree)
                           if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
+
+            def render_print(call: ast.Call) -> str:
+                if not isinstance(call.func, ast.Name) or call.func.id != "print":
+                    raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
+                if call.keywords or len(call.args) > 32:
+                    raise UnsupportedPythonSyntax("print() supports at most 32 positional arguments and no keywords")
+                expressions = [
+                    self._expr(arg, assigned, types, integer_values, uses_boolean_string)
+                    for arg in call.args
+                ]
+                if not expressions:
+                    return "echo PHP_EOL;"
+                uses_boolean_string[0] = True
+                values = ", ".join(expression for expression, _ in expressions)
+                return "echo implode(' ', array_map('polymigrateString', [" + values + "])) . PHP_EOL;"
+
+            def render_body(body: list[ast.stmt], indent: int) -> list[str]:
+                rendered: list[str] = []
+                for statement in body:
+                    if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                        rendered.append(" " * indent + render_print(statement.value))
+                    elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str):
+                        continue
+                    else:
+                        raise UnsupportedPythonSyntax("if/elif/else bodies may contain only print() statements")
+                if not rendered:
+                    raise UnsupportedPythonSyntax("Empty if/elif/else bodies are not supported")
+                return rendered
+
+            def render_if(statement: ast.If, indent: int = 0, depth: int = 1) -> list[str]:
+                if depth > 20:
+                    raise UnsupportedPythonSyntax("if/elif chains are limited to 20 branches")
+                condition = self._condition(statement.test, assigned, types, integer_values, uses_boolean_string)
+                rendered = [" " * indent + f"if ({condition}) {{"]
+                rendered.extend(render_body(statement.body, indent + 4))
+                rendered.append(" " * indent + "}")
+                if statement.orelse:
+                    rendered.append(" " * indent + "else {")
+                    if len(statement.orelse) == 1 and isinstance(statement.orelse[0], ast.If):
+                        rendered.extend(render_if(statement.orelse[0], indent + 4, depth + 1))
+                    else:
+                        rendered.extend(render_body(statement.orelse, indent + 4))
+                    rendered.append(" " * indent + "}")
+                return rendered
             for node in tree.body:
                 if isinstance(node, ast.Assign):
                     if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
@@ -167,23 +249,9 @@ class PythonToPHPTargetAdapter:
                     else:
                         integer_values.pop(name, None)
                 elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
-                    call = node.value
-                    if not isinstance(call.func, ast.Name) or call.func.id != "print":
-                        raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
-                    if call.keywords or len(call.args) > 32:
-                        raise UnsupportedPythonSyntax("print() supports at most 32 positional arguments and no keywords")
-                    expressions = [
-                        self._expr(arg, assigned, types, integer_values, uses_boolean_string)
-                        for arg in call.args
-                    ]
-                    values = ", ".join(expression for expression, _ in expressions)
-                    if not expressions:
-                        statements.append("echo PHP_EOL;")
-                    else:
-                        uses_boolean_string[0] = True
-                        statements.append(
-                            "echo implode(' ', array_map('polymigrateString', [" + values + "])) . PHP_EOL;"
-                        )
+                    statements.append(render_print(node.value))
+                elif isinstance(node, ast.If):
+                    statements.extend(render_if(node))
                 elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                     continue
                 else:
