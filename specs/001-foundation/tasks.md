@@ -123,4 +123,4 @@
 
 - [x] T101 Add Unicode-code-point-aware `len(string)` support to deterministic Python-to-Go, JavaScript, Rust, and Java translators; reject builtin shadowing, invalid argument forms, and non-string values, enforce target integer bounds, and compare generated runtime output with Python fixtures.
 
-- [x] T102 Add an offline deterministic Python-to-PHP translator for simple assignments, bounded signed-32-bit integer expressions, strings/booleans, `str()`, `abs()`, and positional `print()`; reject unsupported syntax, test PHP runtime behavior when the interpreter is available, and keep T023 open because general parser/generator coverage across all language pairs remains incomplete.
+- [x] T102 Add an offline deterministic Python-to-PHP translator for simple assignments, bounded signed-32-bit integer expressions, strings/booleans, `str()`, `abs()`, and positional `print()`; reject unsupported syntax, add a dedicated CI job that installs PHP CLI and verifies lint plus runtime output, and keep T023 open because general parser/generator coverage across all language pairs remains incomplete.
