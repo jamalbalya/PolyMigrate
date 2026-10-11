@@ -96,3 +96,5 @@
 - [x] T082 Add an offline deterministic Python-to-Java translator for a strict single-file assignment/expression/print subset; reject unsupported control flow, run `javac` and a runtime smoke check when available, and cover the target with explicit output fixtures. This expands one pair only and does not complete T023.
 
 - [x] T083 Extend the strict Python-to-Java subset with bounded `if`/`elif`/`else` chains, safe numeric/boolean comparisons, Java string equality, and print-only branches; reject chained comparisons and branch assignments and verify generated Java output with a real JDK.
+
+- [x] T084 Add bounded Python `range()` loops to the strict Java subset with statically known bounds, non-zero signed steps, a 10,000-iteration cap, overflow checks, print-only bodies, and actual JDK runtime fixtures.
