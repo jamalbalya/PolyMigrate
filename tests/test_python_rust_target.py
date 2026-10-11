@@ -132,6 +132,20 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "True\nTrue\n")
 
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_conditional_augmented_assignments_match_python_output(self):
+        files = self._translate("x = 1\nif x > 0:\n    x += 1\nelse:\n    x -= 1\nprint(x)\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(["cargo", "run", "--offline", "--quiet"], cwd=root,
+                                 capture_output=True, text=True, timeout=90, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "2\n")
+
     def test_conditional_assignments_to_existing_variables(self):
         files = self._translate("x = 1\nif x > 0:\n    x = 2\nelse:\n    x = 3\nprint(x)\n")
         code = files["src/main.rs"]
