@@ -86,3 +86,4 @@
 - [x] T074 Add bounded Python `if`/`elif`/`else` chain support to deterministic Go, JavaScript, and Rust translators; cap chains at 20 branches and verify generated runtime output.
 - [x] T075 Fail closed when dependency-gap planning fails or library decisions remain unresolved/custom; do not treat an empty candidate list as proof that dependency integration passed.
 - [x] T076 Support statically known positive and negative non-zero `range()` steps in deterministic Go, JavaScript, and Rust translators; cap actual iteration count and reject target-integer overflow, with runtime-equivalence tests.
+- [x] T077 Support boolean literals/variables in deterministic Go, JavaScript, and Rust subsets, preserve Python-style boolean output, and reject boolean arithmetic or ordering comparisons; verify target runtime behavior.

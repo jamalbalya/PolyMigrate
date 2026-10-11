@@ -113,6 +113,29 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "two\n")
 
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_boolean_literals_and_output_match_python(self):
+        source = 'flag = True\nother = False\nif flag and not other:\n    print("condition")\nprint(flag)\nprint(other)\nif flag == True:\n    print("equal")\n'
+        files = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(
+                ["cargo", "run", "--offline", "--quiet"], cwd=root,
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "condition\nTrue\nFalse\nequal\n")
+
+    def test_boolean_arithmetic_and_ordering_are_rejected(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Boolean arithmetic"):
+            self._translate("flag = True\nprint(flag + True)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Boolean ordering"):
+            self._translate('flag = True\nif flag < False:\n    print("no")\n')
+
     def test_range_loop_is_translated(self):
         files = self._translate("for i in range(3):\n    print(i)\n")
         self.assertIn("for i in 0..3 {", files["src/main.rs"])
