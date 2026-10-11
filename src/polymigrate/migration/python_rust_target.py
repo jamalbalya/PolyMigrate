@@ -115,7 +115,7 @@ class PythonToRustTargetAdapter:
             if value_type != "int":
                 raise UnsupportedPythonSyntax("abs() supports only integer values")
             self._checked_integer_value(node, self._int_values)
-            return f"({expression}).abs()", "int"
+            return f"({expression} as i32).abs()", "int"
 
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "str":
             if "str" in assigned:
