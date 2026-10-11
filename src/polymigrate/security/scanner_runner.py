@@ -218,7 +218,7 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
                         "Bundled Semgrep rules file is missing, symlinked, or exceeds the size limit."
                     )
                     continue
-            pin_variable = "POLYMIGRATE_TRUSTED_SCANNER_SHA256_" + scanner_id.upper()
+            pin_variable = "POLYMIGRATE_TRUSTED_SCANNER_SHA256_" + scanner_id.upper().replace("-", "_")
             expected_digest = os.environ.get(pin_variable, "").strip()
             binary_trusted = False
             if not expected_digest or not _SHA256.fullmatch(expected_digest):
