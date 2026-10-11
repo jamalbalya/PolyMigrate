@@ -46,11 +46,63 @@ class PythonToCSharpTranslatorTests(unittest.TestCase):
         )
         self.assertIn("src/module.cs", [item.relative_path for item in artifacts])
 
-    def test_rejects_unsupported_control_flow(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Unsupported statement syntax: If"):
-            PythonToCSharpTargetAdapter().generate(
-                project_for("value = 1\nif value:\n    print(value)\n"), {}
+    def test_translates_print_only_if_elif_else_conditions(self):
+        generated = PythonToCSharpTargetAdapter().generate(
+            project_for(
+                "count = 3\nlabel = 'ready'\n"
+                "if count > 5:\n    print('high')\n"
+                "elif count > 0 and label:\n    print('positive', count)\n"
+                "else:\n    print('zero')\n"
+            ), {}
+        )[0].content
+        self.assertIn("if ((count > 5)) {", generated)
+        self.assertIn("} else if (((count > 0) && (!string.IsNullOrEmpty(label)))) {", generated)
+        self.assertIn('Console.WriteLine(string.Join(" ", new string[] { PolymigrateString("positive"), PolymigrateString(count) }));', generated)
+        self.assertIn("} else {", generated)
+
+    def test_rejects_conditional_assignments_nested_control_and_chained_comparisons(self):
+        cases = (
+            ("x = 1\nif x:\n    x = 2\nprint(x)\n", "conditional bodies may contain only print"),
+            ("x = 1\nif x:\n    if x:\n        print(x)\n", "conditional bodies may contain only print"),
+            ("x = 1\nif 0 < x < 2:\n    print(x)\n", "Chained comparisons are not supported"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                PythonToCSharpTargetAdapter().generate(project_for(source), {})
+
+    def test_generated_conditional_project_matches_python_output_when_dotnet_is_installed(self):
+        dotnet = shutil.which("dotnet")
+        if dotnet is None:
+            self.skipTest(".NET SDK is not installed in this test environment")
+        source = (
+            "count = 3\nlabel = 'ready'\n"
+            "if count > 5:\n    print('high')\n"
+            "elif count > 0 and label:\n    print('positive', count)\n"
+            "else:\n    print('zero')\n"
+        )
+        artifacts = PythonToCSharpTargetAdapter().generate(project_for(source), {})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for artifact in artifacts:
+                path = root / artifact.relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(artifact.content, encoding="utf-8")
+            build = subprocess.run(
+                [dotnet, "build", str(root / "PolyMigrate.csproj"), "--configuration", "Release", "--nologo", "--verbosity", "quiet"],
+                capture_output=True, text=True, timeout=120,
             )
+            self.assertEqual(build.returncode, 0, build.stderr + build.stdout)
+            assembly = root / "bin" / "Release" / "net8.0" / "PolyMigrate.dll"
+            run = subprocess.run([dotnet, str(assembly)], capture_output=True, text=True, timeout=20)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "positive 3\n")
+
+    def test_supports_print_only_conditional_control_flow(self):
+        generated = PythonToCSharpTargetAdapter().generate(
+            project_for("value = 1\nif value:\n    print(value)\n"), {}
+        )[0].content
+        self.assertIn("if ((value != 0)) {", generated)
+        self.assertIn('Console.WriteLine(string.Join(" ", new string[] { PolymigrateString(value) }));', generated)
 
     def test_rejects_reserved_and_builtin_identifiers(self):
         for name in ("class", "var", "Console", "PolymigrateString"):

@@ -138,6 +138,106 @@ class PythonToCSharpTargetAdapter:
             return ("+" if isinstance(node.op, ast.UAdd) else "-") + expression, "int"
         raise UnsupportedPythonSyntax(f"Unsupported expression syntax: {type(node).__name__}")
 
+    def _condition(self, node: ast.expr, assigned: set[str], types: dict[str, str],
+                   integer_values: dict[str, int], uses_boolean_string: list[bool]) -> str:
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return "!(" + self._condition(node.operand, assigned, types, integer_values, uses_boolean_string) + ")"
+        if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
+            operator = "&&" if isinstance(node.op, ast.And) else "||"
+            return "(" + f" {operator} ".join(
+                self._condition(item, assigned, types, integer_values, uses_boolean_string)
+                for item in node.values
+            ) + ")"
+        if isinstance(node, ast.Compare):
+            if len(node.ops) != 1 or len(node.comparators) != 1:
+                raise UnsupportedPythonSyntax("Chained comparisons are not supported in conditions")
+            left, left_type = self._expr(node.left, assigned, types, integer_values, uses_boolean_string)
+            right, right_type = self._expr(node.comparators[0], assigned, types, integer_values, uses_boolean_string)
+            if left_type != right_type:
+                raise UnsupportedPythonSyntax("Comparisons require operands of the same known type")
+            operator_node = node.ops[0]
+            operators = {
+                ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<",
+                ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=",
+            }
+            operator = operators.get(type(operator_node))
+            if operator is None:
+                raise UnsupportedPythonSyntax("Only ==, !=, <, <=, >, and >= comparisons are supported")
+            if left_type == "bool" and operator not in {"==", "!="}:
+                raise UnsupportedPythonSyntax("Boolean ordering comparisons are not supported")
+            if left_type == "string":
+                if operator == "==":
+                    return f"string.Equals({left}, {right}, StringComparison.Ordinal)"
+                if operator == "!=":
+                    return f"!string.Equals({left}, {right}, StringComparison.Ordinal)"
+                raise UnsupportedPythonSyntax("String ordering comparisons are not supported")
+            return f"({left} {operator} {right})"
+        expression, value_type = self._expr(node, assigned, types, integer_values, uses_boolean_string)
+        if value_type == "bool":
+            return expression
+        if value_type == "int":
+            return f"({expression} != 0)"
+        if value_type == "string":
+            return f"(!string.IsNullOrEmpty({expression}))"
+        raise UnsupportedPythonSyntax("Condition type is not supported")
+
+    def _print_call(self, call: ast.Call, assigned: set[str], types: dict[str, str],
+                    integer_values: dict[str, int], uses_boolean_string: list[bool]) -> str:
+        if not isinstance(call.func, ast.Name) or call.func.id != "print":
+            raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
+        if call.keywords or len(call.args) > 32:
+            raise UnsupportedPythonSyntax("print() supports at most 32 positional arguments and no keywords")
+        expressions = [
+            self._expr(arg, assigned, types, integer_values, uses_boolean_string)
+            for arg in call.args
+        ]
+        if not expressions:
+            return "Console.WriteLine();"
+        uses_boolean_string[0] = True
+        values = ", ".join(f"PolymigrateString({expression})" for expression, _ in expressions)
+        return f'Console.WriteLine(string.Join(" ", new string[] {{ {values} }}));'
+
+    def _if_statement(self, node: ast.If, assigned: set[str], types: dict[str, str],
+                      integer_values: dict[str, int], uses_boolean_string: list[bool]) -> str:
+        def render_body(body: list[ast.stmt]) -> list[str]:
+            if not body:
+                raise UnsupportedPythonSyntax("Empty conditional bodies are not supported")
+            rendered: list[str] = []
+            for statement in body:
+                if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    rendered.append(self._print_call(
+                        statement.value, assigned, types, integer_values, uses_boolean_string
+                    ))
+                elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
+                      and isinstance(statement.value.value, str)):
+                    continue
+                else:
+                    raise UnsupportedPythonSyntax("C# conditional bodies may contain only print() statements")
+            if not rendered:
+                raise UnsupportedPythonSyntax("Conditional bodies must contain at least one print() statement")
+            return rendered
+
+        rendered: list[str] = []
+        cursor = node
+        depth = 0
+        while True:
+            depth += 1
+            if depth > 20:
+                raise UnsupportedPythonSyntax("if/elif chains are limited to 20 branches")
+            condition = self._condition(cursor.test, assigned, types, integer_values, uses_boolean_string)
+            keyword = "if" if depth == 1 else "} else if"
+            rendered.append(f"{keyword} ({condition}) {{")
+            rendered.extend("            " + line for line in render_body(cursor.body))
+            if cursor.orelse and len(cursor.orelse) == 1 and isinstance(cursor.orelse[0], ast.If):
+                cursor = cursor.orelse[0]
+                continue
+            if cursor.orelse:
+                rendered.append("        } else {")
+                rendered.extend("            " + line for line in render_body(cursor.orelse))
+            rendered.append("        }")
+            break
+        return "\n".join(rendered)
+
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         if project.language_id != "python":
             raise ValueError("Python-to-C# adapter requires a Python source project")
@@ -148,6 +248,10 @@ class PythonToCSharpTargetAdapter:
             tree = ast.parse(unit.source_text, filename=unit.relative_path)
         except (SyntaxError, ValueError, RecursionError) as exc:
             raise UnsupportedPythonSyntax(f"Cannot parse {unit.relative_path}: {type(exc).__name__}") from None
+        self.warnings = [
+            "Deterministic Python-to-C# translation supports single-file assignments, bounded integer/string/boolean expressions, str(), abs(), positional print(), and print-only if/elif/else chains.",
+            "Loops, branch assignments, nested control flow, functions, imports, classes, collections, and full project migration are not supported by this subset.",
+        ]
         assigned: set[str] = set()
         types: dict[str, str] = {}
         integer_values: dict[str, int] = {}
@@ -180,21 +284,13 @@ class PythonToCSharpTargetAdapter:
                 else:
                     integer_values.pop(name, None)
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
-                call = node.value
-                if not isinstance(call.func, ast.Name) or call.func.id != "print":
-                    raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
-                if call.keywords or len(call.args) > 32:
-                    raise UnsupportedPythonSyntax("print() supports at most 32 positional arguments and no keywords")
-                expressions = [
-                    self._expr(arg, assigned, types, integer_values, uses_boolean_string)
-                    for arg in call.args
-                ]
-                if not expressions:
-                    statements.append("Console.WriteLine();")
-                else:
-                    uses_boolean_string[0] = True
-                    values = ", ".join(f"PolymigrateString({expression})" for expression, _ in expressions)
-                    statements.append(f"Console.WriteLine(string.Join(\" \", new string[] {{ {values} }}));")
+                statements.append(self._print_call(
+                    node.value, assigned, types, integer_values, uses_boolean_string
+                ))
+            elif isinstance(node, ast.If):
+                statements.append(self._if_statement(
+                    node, assigned, types, integer_values, uses_boolean_string
+                ))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
             else:
