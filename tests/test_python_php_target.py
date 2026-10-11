@@ -93,7 +93,7 @@ class PythonToPHPTranslatorTests(unittest.TestCase):
         for name in ("this", "GLOBALS", "_SERVER"):
             with self.subTest(name=name), self.assertRaisesRegex(UnsupportedPythonSyntax, "reserved by PHP"):
                 PythonToPHPTargetAdapter().generate(
-                    project_for(f"{name} = 1" + chr(10) + f"print({name})" + chr(10)), {})
+                    project_for(f"{name} = 1" + chr(10) + f"print({name})" + chr(10)), {}
                 )
 
     def test_rejects_zero_step_and_excessive_range(self):
