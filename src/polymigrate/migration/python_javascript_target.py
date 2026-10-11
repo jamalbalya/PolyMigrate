@@ -66,6 +66,8 @@ class PythonToJavaScriptTargetAdapter:
 
     def _expr(self, node: ast.expr, assigned: set[str]) -> tuple[str, str]:
         if isinstance(node, ast.Constant):
+            if type(node.value) is bool:
+                return ("true" if node.value else "false"), "bool"
             if type(node.value) is int:
                 self._checked_integer_value(node, self._int_values)
                 return str(node.value), "int"
@@ -83,6 +85,8 @@ class PythonToJavaScriptTargetAdapter:
             right, right_type = self._expr(node.right, assigned)
             if left_type != right_type:
                 raise UnsupportedPythonSyntax("Mixed or unknown operand types are not supported")
+            if left_type == "bool":
+                raise UnsupportedPythonSyntax("Boolean arithmetic is not supported")
             if left_type == "string" and not isinstance(node.op, ast.Add):
                 raise UnsupportedPythonSyntax("Strings support only concatenation with '+'")
             if left_type == "int":
@@ -173,16 +177,23 @@ class PythonToJavaScriptTargetAdapter:
             operator = operator_types.get(type(node.ops[0]))
             if operator is None:
                 raise UnsupportedPythonSyntax("Only ==, !=, <, <=, >, and >= comparisons are supported")
+            if left_type == "bool" and operator not in {"===", "!=="}:
+                raise UnsupportedPythonSyntax("Boolean ordering comparisons are not supported")
             if left_type == "string" and operator not in {"===", "!=="}:
                 raise UnsupportedPythonSyntax("String ordering comparisons are not supported because runtimes differ")
             return f"({left} {operator} {right})"
         if isinstance(node, ast.Name):
             value, value_type = self._expr(node, assigned)
-            if value_type in {"int", "string"}:
+            if value_type in {"int", "string", "bool"}:
                 return value
         if isinstance(node, ast.Constant) and type(node.value) is bool:
             return "true" if node.value else "false"
         raise UnsupportedPythonSyntax(f"Unsupported condition syntax: {type(node).__name__}")
+
+    def _print_expression(self, expression: str, value_type: str) -> str:
+        if value_type == "bool":
+            return f'console.log({expression} ? "True" : "False");'
+        return f"console.log({expression});"
 
     def _print_statement(self, node: ast.stmt, assigned: set[str]) -> str:
         if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
@@ -192,8 +203,8 @@ class PythonToJavaScriptTargetAdapter:
             raise UnsupportedPythonSyntax("Only calls to print() are supported in conditional bodies")
         if len(call.args) != 1 or call.keywords:
             raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
-        expression, _ = self._expr(call.args[0], assigned)
-        return f"console.log({expression});"
+        expression, value_type = self._expr(call.args[0], assigned)
+        return self._print_expression(expression, value_type)
 
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
         """Render a bounded if/elif/else chain; branch bodies remain print-only."""
@@ -274,8 +285,8 @@ class PythonToJavaScriptTargetAdapter:
                     raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
                 if len(call.args) != 1 or call.keywords:
                     raise UnsupportedPythonSyntax("print() must have exactly one positional argument")
-                expr, _ = self._expr(call.args[0], assigned)
-                statements.append(f"console.log({expr});")
+                expr, expr_type = self._expr(call.args[0], assigned)
+                statements.append(self._print_expression(expr, expr_type))
             elif isinstance(node, ast.For):
                 if not isinstance(node.target, ast.Name):
                     raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
