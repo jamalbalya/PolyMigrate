@@ -17,6 +17,7 @@ def make_project(count=4):
             content_sha256=hashlib.sha256(source.encode()).hexdigest(),
             symbols=(f"function_{index}", "Client"),
             dependencies=("requests", "project.helpers"),
+            references=(f"call_{index}", "fetch"),
         ))
     return SourceProject(
         source_root=__import__("pathlib").Path("/tmp/source"),
@@ -37,6 +38,7 @@ class SourceProjectIndexTests(unittest.TestCase):
         self.assertEqual(first["files"][0]["path"], "src/file_0.py")
         self.assertIn("function_0", first["files"][0]["symbols"])
         self.assertIn("requests", first["files"][0]["dependencies"])
+        self.assertIn("call_0", first["files"][0]["references"])
         self.assertNotIn("source_text", json.dumps(first))
         self.assertNotIn("def function_0", json.dumps(first))
 
