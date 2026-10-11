@@ -247,11 +247,9 @@ def _candidate_dependency_integration_status(
         and dependency_review.status == "UNVERIFIED"
         and any("Java import-to-Maven/Gradle coordinate mapping is ambiguous" in item
                 for item in dependency_review.warnings)
-        and not any(
-            "could not be parsed" in item.lower()
-            or "could not read" in item.lower()
-            or "stopped at" in item.lower()
-            or item.startswith("Missing ")
+        and all(
+            "Java import-to-Maven/Gradle coordinate mapping is ambiguous" in item
+            or "Static import/manifest consistency" in item
             for item in dependency_review.warnings
         )
     )

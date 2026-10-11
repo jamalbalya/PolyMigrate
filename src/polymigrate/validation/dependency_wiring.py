@@ -284,8 +284,13 @@ def java_candidate_jar_imports(
     pom = resolved_root / "pom.xml"
     if pom.is_symlink() or not pom.is_file():
         return set()
+    try:
+        if pom.stat().st_size > 1_000_000:
+            return set()
+    except OSError:
+        return set()
     pom_text = _read(pom)
-    if pom_text is None:
+    if pom_text is None or "<!DOCTYPE" in pom_text.upper() or "<!ENTITY" in pom_text.upper():
         return set()
     try:
         xml_root = ET.fromstring(pom_text)
@@ -352,6 +357,8 @@ def java_candidate_jar_imports(
     source_paths: list[Path] = []
     if test_sources:
         ignored_dirs = {".git", ".venv", "venv", "node_modules", "vendor", "dist", "build", "target"}
+        scanned_files = 0
+        total_bytes = 0
         for current, directories, filenames in os.walk(resolved_root, topdown=True, followlinks=False):
             current_path = Path(current)
             directories[:] = sorted(
@@ -368,10 +375,22 @@ def java_candidate_jar_imports(
                     or filename.lower().startswith("test_")
                     or filename.lower().endswith("_test.java")
                 )
-                if is_test and path.stat().st_size <= 1_000_000:
+                if is_test:
+                    try:
+                        size = path.stat().st_size
+                    except OSError:
+                        return set()
+                    if size > 1_000_000:
+                        return set()
+                    scanned_files += 1
+                    total_bytes += size
+                    if scanned_files > 10_000 or total_bytes > 20_000_000:
+                        return set()
                     source_paths.append(path)
     else:
-        source_paths, _ = _files(resolved_root, {".java"})
+        source_paths, scan_warnings = _files(resolved_root, {".java"})
+        if scan_warnings:
+            return set()
 
     matched: set[str] = set()
     import_pattern = r"(?m)^\s*import\s+(?:static\s+)?([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*;"
