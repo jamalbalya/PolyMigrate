@@ -350,12 +350,12 @@ class PythonToCSharpTargetAdapter:
         if not _CSHARP_INT_MIN <= next_value <= _CSHARP_INT_MAX:
             raise UnsupportedPythonSyntax("range() loop counter could overflow the signed 32-bit C# integer range")
         operator = "<" if step_value > 0 else ">"
-        body = "\n".join("            " + line for line in (rendered_body or []))
+        body = "\n".join("                " + line for line in (rendered_body or []))
         rendered = [
             "{",
-            f"        for (int {counter_name} = {start_expr}; {counter_name} {operator} {stop_expr}; {counter_name} += {step_expr}) {{",
+            f"            for (int {counter_name} = {start_expr}; {counter_name} {operator} {stop_expr}; {counter_name} += {step_expr}) {{",
             body,
-            "        }",
+            "            }",
             "        }",
         ]
         if referenced_after:
@@ -376,8 +376,8 @@ class PythonToCSharpTargetAdapter:
         except (SyntaxError, ValueError, RecursionError) as exc:
             raise UnsupportedPythonSyntax(f"Cannot parse {unit.relative_path}: {type(exc).__name__}") from None
         self.warnings = [
-            "Deterministic Python-to-C# translation supports single-file assignments, bounded integer/string/boolean expressions, str(), abs(), positional print(), and print-only if/elif/else chains.",
-            "Loops, branch assignments, nested control flow, functions, imports, classes, collections, and full project migration are not supported by this subset.",
+            "Deterministic Python-to-C# translation supports single-file assignments, bounded integer/string/boolean expressions, str(), abs(), positional print(), print-only if/elif/else chains, and bounded print-only range() loops.",
+            "While loops, branch assignments, nested control flow, functions, imports, classes, collections, and full project migration are not supported by this subset.",
         ]
         assigned: set[str] = set()
         types: dict[str, str] = {}
