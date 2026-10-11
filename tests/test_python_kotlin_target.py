@@ -72,6 +72,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             "elif x > 0 and label:\n    print('positive', x)\n"
             "else:\n    print('zero')\n"
             "print(-3 // 2, -3 % 2)\n"
+            "print('$value')\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
@@ -89,7 +90,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
                 capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "positive 3\n-2 1\n")
+            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n")
 
 
 if __name__ == "__main__":
