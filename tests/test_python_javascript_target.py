@@ -24,6 +24,29 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
         self.assertEqual(artifacts[0].relative_path, "main.js")
         return artifacts[0].content
 
+    def test_print_multiple_arguments_and_empty_call(self):
+        code = self._translate('print(42, "hello", True)\nprint()\n')
+        self.assertIn('console.log([String(42), "hello", (true ? "True" : "False")].join(" "));', code)
+        self.assertIn('console.log([].join(" "));', code)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required")
+    def test_multi_argument_print_matches_python_output(self):
+        code = self._translate('print(42, "hello", True)\nprint()\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.js"
+            path.write_text(code, encoding="utf-8")
+            checked = subprocess.run(["node", "--check", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(checked.returncode, 0, checked.stderr)
+            run = subprocess.run(["node", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "42 hello True\n\n")
+
+    def test_print_rejects_keywords_and_too_many_arguments(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "keyword arguments"):
+            self._translate('print("a", sep=",")\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "32 positional"):
+            self._translate("print(" + ", ".join("1" for _ in range(33)) + ")\n")
+
     def test_print_string(self):
         self.assertIn('console.log("hello");', self._translate('print("hello")\n'))
 
