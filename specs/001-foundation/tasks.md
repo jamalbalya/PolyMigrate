@@ -19,7 +19,7 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; the latest verified run `38151698136` on commit `31731533` completed 533 tests per Python version with 6 environment-dependent skips and no failures, verified all 6 packaged skill assets, passed 8 PHP translator/CLI tests against a real PHP CLI, and passed 2 sandboxed Docker behavior E2E tests.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; verified run `38157679794` on commit `7bbcf461` passed 605 tests per Python version with 6 environment-dependent skips, verified all 6 packaged skill assets, and passed the dedicated Kotlin compiler/runtime suite (11 tests), C# (18), PHP (15), Ruby (14), C++ (15), TypeScript (7), and sandboxed Docker behavior comparisons (2).
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
@@ -144,4 +144,6 @@
 
 - [x] T112 Add a fail-closed deterministic Python-to-TypeScript subset using the fixed int/string/boolean model, strict TypeScript compiler validation, bounded expressions/control flow, runtime-equivalence fixtures, and a clear unsupported-syntax boundary; Python 3.11–3.13 CI and the dedicated strict `tsc` plus Node runtime fixtures pass.
 
-- [ ] T113 Add a fail-closed deterministic Python-to-Kotlin subset with explicit supported expression/control-flow rules, real Kotlin compiler/runtime fixtures, and documented unsupported syntax.
+- [x] T113 Add a fail-closed deterministic Python-to-Kotlin subset with explicit supported expression/control-flow rules, Kotlin compiler/runtime and CLI fixtures, correct Kotlin string-template escaping, and documented unsupported syntax; the pinned Kotlin CI job passed all 8 translator/CLI tests, including runtime comparison with Python.
+
+- [x] T114 Add bounded Python `range()` loops to the Kotlin subset, preserving positive/negative step and post-loop variable semantics; enforce a 10,000-iteration budget and reject zero steps, unsafe integer expressions, empty-range undefined loop-variable reads, nested control flow, and unsupported bodies. The pinned Kotlin compiler/runtime suite passes 11 translator/CLI tests, including output comparison against Python.
