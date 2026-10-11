@@ -246,7 +246,7 @@ class MigrateCLIE2ETests(unittest.TestCase):
             with redirect_stderr(stderr):
                 code = main([
                     "migrate", "--source", str(source), "--from", "python",
-                    "--to", "ruby", "--output", str(output),
+                    "--to", "csharp", "--output", str(output),
                     "--strategy", "deterministic",
                 ])
             self.assertEqual(code, 2)
