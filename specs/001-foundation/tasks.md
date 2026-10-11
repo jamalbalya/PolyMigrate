@@ -111,3 +111,4 @@
 - [x] T090 Extend deterministic Python-to-Go, JavaScript, and Rust `print()` to support up to 32 positional values and empty calls, preserve Python-style boolean output, reject unsupported keyword arguments, and validate target runtime output.
 - [x] T091 Add safe deterministic Python `str()` conversion for integer/string/boolean values in Go, JavaScript, and Rust; reject builtin shadowing and unsupported call forms, and verify generated target runtime output.
 - [x] T092 Add deterministic `abs()` support for safe integer expressions across Python-to-Go, JavaScript, Rust, and Java; reject shadowing, invalid call forms, non-integer values, and overflow, with target-runtime fixtures.
+- [x] T093 Support Python `not` expressions as boolean values in all four deterministic targets, reuse the constrained truthiness/comparison translator, and verify target runtime output for boolean and integer truthiness.
