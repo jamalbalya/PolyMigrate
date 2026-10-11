@@ -152,6 +152,10 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "2\n")
 
+    def test_rejects_conditional_type_changes(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "cannot change a variable's type"):
+            self._translate('x = 1\nif x > 0:\n    x = "two"\nprint(x)\n')
+
     def test_emits_minimal_cargo_project(self):
         files = self._translate('x = 6\ny = x * 7\nprint(y)\n')
         self.assertIn('[package]', files["Cargo.toml"])
