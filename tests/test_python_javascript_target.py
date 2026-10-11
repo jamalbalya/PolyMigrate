@@ -55,6 +55,8 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
     def test_str_builtin_rejects_shadowing_and_keyword_arguments(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the str"):
             self._translate('str = "shadowed"\nprint(str(2))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the str"):
+            self._translate('print(str(2))\nstr = "shadowed"\n')
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
             self._translate("print(str(value=2))\n")
 
