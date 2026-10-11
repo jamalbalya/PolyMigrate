@@ -76,6 +76,33 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "value=42\nTrue\n")
 
+    def test_len_builtin_counts_unicode_code_points_and_rejects_invalid_calls(self):
+        code = self._translate('text = "A😀B"\nn = len(text)\nprint(n)\n')
+        self.assertIn("polymigrateLenString(text)", code)
+        self.assertIn("func polymigrateLenString(value string) int", code)
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the len"):
+            self._translate('len = 1\nprint(len("text"))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the len"):
+            self._translate('print(len("text"))\nlen = 1\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "generated len helper name"):
+            self._translate('text = "a"\nn = len(text)\npolymigrateLenString = 1\nprint(n, polymigrateLenString)\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "strings only"):
+            self._translate("print(len(123))\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
+            self._translate('print(len(value="text"))\n')
+
+    @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
+    def test_len_builtin_generated_go_matches_python_code_point_count(self):
+        code = self._translate('text = "A😀B"\nn = len(text)\nprint(n)\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.go"
+            path.write_text(code, encoding="utf-8")
+            fmt = subprocess.run(["gofmt", "-w", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(fmt.returncode, 0, fmt.stderr)
+            run = subprocess.run(["go", "run", str(path)], capture_output=True, text=True, timeout=60)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "3\n")
+
     def test_abs_builtin_supports_safe_integer_values(self):
         code = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
         self.assertIn("polymigrateAbsInt32(x)", code)

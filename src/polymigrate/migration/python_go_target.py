@@ -138,6 +138,17 @@ class PythonToGoTargetAdapter:
             self._uses_abs = True
             return f"polymigrateAbsInt32({expression})", "int"
 
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "len":
+            if "len" in assigned:
+                raise UnsupportedPythonSyntax("Shadowing the len() builtin is not supported")
+            if len(node.args) != 1 or node.keywords:
+                raise UnsupportedPythonSyntax("len() must have exactly one positional argument")
+            expression, value_type = self._expr(node.args[0], assigned)
+            if value_type != "string":
+                raise UnsupportedPythonSyntax("len() currently supports strings only")
+            self._uses_len = True
+            return f"polymigrateLenString({expression})", "int"
+
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "str":
             if "str" in assigned:
                 raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
@@ -503,6 +514,7 @@ class PythonToGoTargetAdapter:
         self._int_values = {}
         self._uses_abs = False
         self._uses_fmt = False
+        self._uses_len = False
         statements: list[str] = []
         used_fmt = False
 
@@ -523,6 +535,23 @@ class PythonToGoTargetAdapter:
         )
         if has_str_call and assigns_str:
             raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
+
+        has_len_call = any(
+            isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "len"
+            for item in ast.walk(tree)
+        )
+        assigns_len = any(
+            isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "len"
+            for item in ast.walk(tree)
+        )
+        if has_len_call and assigns_len:
+            raise UnsupportedPythonSyntax("Shadowing the len() builtin is not supported")
+        assigns_len_helper = any(
+            isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "polymigrateLenString"
+            for item in ast.walk(tree)
+        )
+        if has_len_call and assigns_len_helper:
+            raise UnsupportedPythonSyntax("Source variable conflicts with the generated len helper name")
 
         has_abs_call = any(
             isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "abs"
@@ -585,9 +614,12 @@ class PythonToGoTargetAdapter:
                     assigned.add(name)
                 self._types[name] = inferred_type
                 if inferred_type == "int":
-                    self._int_values[name] = self._checked_integer_value(
-                        node.value, self._int_values
-                    )
+                    try:
+                        self._int_values[name] = self._checked_integer_value(node.value, self._int_values)
+                    except UnsupportedPythonSyntax as exc:
+                        if "cannot be proven safe" not in str(exc):
+                            raise
+                        self._int_values.pop(name, None)
                 else:
                     self._int_values.pop(name, None)
 
@@ -683,6 +715,16 @@ class PythonToGoTargetAdapter:
             "\treturn value\n}\n\n"
             if self._uses_abs else ""
         )
+        if self._uses_len:
+            helper += (
+                "func polymigrateLenString(value string) int {\n"
+                "\tcount := len([]rune(value))\n"
+                "\tif int64(count) > 2147483647 {\n"
+                '\t\tpanic("len() exceeds the signed 32-bit integer range")\n'
+                "\t}\n"
+                "\treturn count\n"
+                "}\n\n"
+            )
         body = "\n".join(f"\t{statement}" for statement in statements)
         content = f"package main\n\n{imports}\n{helper}func main() {{\n{body}\n}}\n"
         return [GeneratedArtifact("main.go", content)]
