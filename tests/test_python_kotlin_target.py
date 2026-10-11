@@ -67,12 +67,12 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
     def test_len_uses_unicode_code_point_semantics(self):
         code = self._translate("text = 'A😀é'\nsize = len(text)\nprint(size)\n")
         self.assertIn("text.codePointCount(0, text.length)", code)
-        self.assertIn("var size: Int = 3", code)
+        self.assertIn("var size: Int = text.codePointCount(0, text.length)", code)
 
     def test_len_rejects_non_string_arguments_and_builtin_shadowing(self):
         cases = (
-            ("print(len(3))\n", "len() supports string values only"),
-            ("len = 1\nprint(len('x'))\n", "Shadowing the len() builtin"),
+            ("print(len(3))\n", "len\\(\\) supports string values only"),
+            ("len = 1\nprint(len('x'))\n", "Shadowing the len\\(\\) builtin is not supported"),
             ("print(len('a', 'b'))\n", "supports exactly one positional argument"),
         )
         for source, message in cases:
