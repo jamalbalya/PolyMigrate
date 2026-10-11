@@ -146,7 +146,7 @@ class PythonToCppTranslatorTests(unittest.TestCase):
             self.assertEqual(compile_result.returncode, 0, compile_result.stderr + compile_result.stdout)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "value= 42 True False\n")
+            self.assertEqual(run.stdout, "value= 42 True False\n0\n1\n2\n2\n")
 
 
 if __name__ == "__main__":
