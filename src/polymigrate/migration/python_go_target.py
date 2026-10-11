@@ -408,16 +408,33 @@ class PythonToGoTargetAdapter:
                 raise UnsupportedPythonSyntax("while bodies may contain only print() or integer assignments")
             rendered_body.append(self._branch_statement(statement, assigned, modified))
         facts = dict(base_facts)
+        if self._while_condition_value(node.test, assigned, facts):
+            condition_names = {item.id for item in ast.walk(node.test) if isinstance(item, ast.Name)}
+            modified_names = {
+                statement.targets[0].id if isinstance(statement, ast.Assign) and len(statement.targets) == 1
+                and isinstance(statement.targets[0], ast.Name) else statement.target.id
+                for statement in node.body
+                if (isinstance(statement, ast.Assign) and len(statement.targets) == 1
+                    and isinstance(statement.targets[0], ast.Name))
+                or (isinstance(statement, ast.AugAssign) and isinstance(statement.target, ast.Name))
+            }
+            if not condition_names.intersection(modified_names):
+                self._int_values = dict(base_facts)
+                raise UnsupportedPythonSyntax("while loop does not update its condition variables and cannot be proven to terminate")
         iterations = 0
         while self._while_condition_value(node.test, assigned, facts):
             if iterations >= 10_000:
                 self._int_values = dict(base_facts)
                 raise UnsupportedPythonSyntax("while loop could not be proven to terminate within 10000 iterations")
+            previous_facts = dict(facts)
             self._int_values = dict(facts)
             for statement in node.body:
                 self._branch_statement(statement, assigned, modified)
             facts = dict(self._int_values)
             iterations += 1
+            if facts == previous_facts and self._while_condition_value(node.test, assigned, facts):
+                self._int_values = dict(base_facts)
+                raise UnsupportedPythonSyntax("while loop made no progress toward termination")
         self._int_values = dict(facts)
         condition = self._condition(node.test, assigned)
         rendered = [f"for {condition} {{", *("\t" + line for line in rendered_body), "}"]
