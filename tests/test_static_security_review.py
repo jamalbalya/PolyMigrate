@@ -96,6 +96,64 @@ class StaticSecurityReviewTests(unittest.TestCase):
         self.assertEqual(result.status, "FAILED")
         self.assertIn("NATIVE_SYSTEM_COMMAND", {item.rule_id for item in result.findings})
 
+    def test_python_unsafe_tempfile_creation_fails_scan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "temp.py").write_text("path = tempfile.mktemp()\\n", encoding="utf-8")
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "FAILED")
+        self.assertIn("PY_TEMPFILE_MKTEMP", {item.rule_id for item in result.findings})
+
+    def test_dynamic_sql_interpolation_requires_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "query.py").write_text(
+                'cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")\\n',
+                encoding="utf-8",
+            )
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "REVIEW_REQUIRED")
+        self.assertIn("DYNAMIC_SQL_QUERY", {item.rule_id for item in result.findings})
+
+    def test_javascript_sql_template_interpolation_requires_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "query.js").write_text(
+                "db.query(" + chr(96) + "SELECT * FROM users WHERE id = $" + "{userId}" + chr(96) + ");\\n",
+                encoding="utf-8",
+            )
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "REVIEW_REQUIRED")
+        self.assertIn("DYNAMIC_SQL_TEMPLATE_QUERY", {item.rule_id for item in result.findings})
+
+    def test_disabled_node_tls_and_go_tls_are_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "client.js").write_text(
+                "process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';\\n", encoding="utf-8",
+            )
+            (root / "client.go").write_text(
+                "tls.Config{InsecureSkipVerify: true}\\n", encoding="utf-8",
+            )
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "FAILED")
+        rule_ids = {item.rule_id for item in result.findings}
+        self.assertIn("JS_TLS_DISABLED", rule_ids)
+        self.assertIn("GO_TLS_INSECURE_SKIP_VERIFY", rule_ids)
+
+    def test_rust_unsafe_and_process_launch_require_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.rs").write_text(
+                'unsafe { do_work(); }\\nstd::process::Command::new("sh");\\n',
+                encoding="utf-8",
+            )
+            result = review_generated_output(root)
+        self.assertEqual(result.status, "REVIEW_REQUIRED")
+        rule_ids = {item.rule_id for item in result.findings}
+        self.assertIn("RUST_UNSAFE_BLOCK", rule_ids)
+        self.assertIn("RUST_PROCESS_COMMAND", rule_ids)
+
     def test_symlink_root_is_blocked(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
