@@ -248,6 +248,108 @@ class PythonToKotlinTargetAdapter:
         return "\n".join(rendered)
 
 
+
+    def _while_condition_value(self, node: ast.expr, assigned: set[str], types: dict[str, str],
+                               integer_values: dict[str, int], string_values: dict[str, str]) -> bool:
+        if not isinstance(node, ast.Compare) or len(node.ops) != 1 or len(node.comparators) != 1:
+            raise UnsupportedPythonSyntax("while conditions must be one simple integer comparison")
+        _, left_type = self._expr(node.left, assigned, types, integer_values, string_values)
+        _, right_type = self._expr(node.comparators[0], assigned, types, integer_values, string_values)
+        if left_type != "int" or right_type != "int":
+            raise UnsupportedPythonSyntax("while conditions support only integer comparisons")
+        left = self._int_value(node.left, integer_values, string_values)
+        right = self._int_value(node.comparators[0], integer_values, string_values)
+        operator = node.ops[0]
+        if isinstance(operator, ast.Lt):
+            return left < right
+        if isinstance(operator, ast.LtE):
+            return left <= right
+        if isinstance(operator, ast.Gt):
+            return left > right
+        if isinstance(operator, ast.GtE):
+            return left >= right
+        if isinstance(operator, ast.Eq):
+            return left == right
+        if isinstance(operator, ast.NotEq):
+            return left != right
+        raise UnsupportedPythonSyntax("while conditions support only <, <=, >, >=, ==, and !=")
+
+    def _while_statement(self, node: ast.While, assigned: set[str], types: dict[str, str],
+                         integer_values: dict[str, int], string_values: dict[str, str]) -> str:
+        """Translate a while loop only when bounded integer simulation proves termination."""
+        if node.orelse:
+            raise UnsupportedPythonSyntax("while/else is not supported in Kotlin")
+        if not node.body:
+            raise UnsupportedPythonSyntax("Empty while bodies are not supported")
+        base_facts = dict(integer_values)
+        modified_names: set[str] = set()
+        for statement in node.body:
+            if isinstance(statement, ast.Assign):
+                if len(statement.targets) != 1 or not isinstance(statement.targets[0], ast.Name):
+                    raise UnsupportedPythonSyntax("while assignments must target one existing integer variable")
+                name = statement.targets[0].id
+                if name not in assigned or types.get(name) != "int":
+                    raise UnsupportedPythonSyntax("while bodies may only update previously assigned integer variables")
+                modified_names.add(name)
+            elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                if not isinstance(statement.value.func, ast.Name) or statement.value.func.id != "print":
+                    raise UnsupportedPythonSyntax("while bodies may contain only print() or integer assignments")
+            elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str):
+                continue
+            else:
+                raise UnsupportedPythonSyntax("while bodies may contain only print() or integer assignments")
+
+        condition_names = {
+            item.id for item in ast.walk(node.test)
+            if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load)
+        }
+        facts = dict(base_facts)
+        initial_condition = self._while_condition_value(node.test, assigned, types, facts, string_values)
+        if initial_condition and not condition_names.intersection(modified_names):
+            raise UnsupportedPythonSyntax("while loop does not update its condition variables and cannot be proven to terminate")
+
+        def render_body(values: dict[str, int]) -> list[str]:
+            rendered: list[str] = []
+            for statement in node.body:
+                if isinstance(statement, ast.Assign):
+                    name = statement.targets[0].id
+                    expression, value_type = self._expr(statement.value, assigned, types, values, string_values)
+                    if value_type != "int":
+                        raise UnsupportedPythonSyntax("while assignments must remain integer-valued")
+                    self._int_value(statement.value, values, string_values)
+                    rendered.append(f"{name} = {expression}")
+                elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    rendered.append(self._print_call(statement.value, assigned, types, values, string_values))
+                elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str):
+                    continue
+            if not rendered:
+                raise UnsupportedPythonSyntax("while bodies must contain at least one print() or integer assignment")
+            return rendered
+
+        rendered_body = render_body(base_facts)
+        iterations = 0
+        while self._while_condition_value(node.test, assigned, types, facts, string_values):
+            if iterations >= 10_000:
+                raise UnsupportedPythonSyntax("while loop could not be proven to terminate within 10000 iterations")
+            previous_facts = dict(facts)
+            for statement in node.body:
+                if isinstance(statement, ast.Assign):
+                    name = statement.targets[0].id
+                    _, value_type = self._expr(statement.value, assigned, types, facts, string_values)
+                    if value_type != "int":
+                        raise UnsupportedPythonSyntax("while assignments must remain integer-valued")
+                    facts[name] = self._int_value(statement.value, facts, string_values)
+                elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    self._print_call(statement.value, assigned, types, facts, string_values)
+            iterations += 1
+            if facts == previous_facts and self._while_condition_value(node.test, assigned, types, facts, string_values):
+                raise UnsupportedPythonSyntax("while loop made no progress toward termination")
+        integer_values.clear()
+        integer_values.update(facts)
+        condition = self._condition(node.test, assigned, types, integer_values, string_values)
+        body = "\n".join("    " + line for line in rendered_body)
+        return f"while ({condition}) {{\n{body}\n}}"
+
     def _for_statement(self, node: ast.For, assigned: set[str], types: dict[str, str],
                        integer_values: dict[str, int], referenced_after: bool,
                        string_values: dict[str, str] | None = None) -> str | None:
@@ -354,8 +456,8 @@ class PythonToKotlinTargetAdapter:
         if len(project.units) != 1:
             raise UnsupportedPythonSyntax("This adapter currently accepts exactly one source file")
         self.warnings = [
-            "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), len(string), print(), print-only if/elif/else chains, and statically bounded print-only range() loops.",
-            "Assignments inside branches or loops, nested control flow, while loops, functions, imports, classes, collections, and full project migration are not supported by this subset."
+            "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), len(string), print(), print-only if/elif/else chains, bounded range() loops, and while loops with statically proven termination.",
+            "Assignments inside branches or range loops, nested control flow, unbounded while loops, functions, imports, classes, collections, and full project migration are not supported by this subset."
         ]
         try:
             tree = ast.parse(project.units[0].source_text)
@@ -414,6 +516,8 @@ class PythonToKotlinTargetAdapter:
                 statements.append(self._print_call(node.value, assigned, types, integer_values, string_values))
             elif isinstance(node, ast.If):
                 statements.append(self._if_statement(node, assigned, types, integer_values, string_values))
+            elif isinstance(node, ast.While):
+                statements.append(self._while_statement(node, assigned, types, integer_values, string_values))
             elif isinstance(node, ast.For):
                 referenced_after = any(
                     isinstance(child, ast.Name) and child.id == node.target.id and isinstance(child.ctx, ast.Load)
