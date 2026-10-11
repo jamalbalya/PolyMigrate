@@ -85,6 +85,31 @@ class LLMTranslationTests(unittest.TestCase):
             warning = check_target_syntax("go", "package main")
         self.assertIn("syntax was not checked", warning)
 
+    def test_parser_hints_are_bounded_in_model_prompt(self):
+        source = "print(1)"
+        unit = SourceUnit(
+            "main.py", source, hashlib.sha256(source.encode()).hexdigest(),
+            symbols=tuple(f"symbol_{index}" for index in range(80)),
+            dependencies=tuple(f"dependency_{index}" for index in range(80)),
+            references=tuple(f"reference_{index}" for index in range(80)),
+        )
+        project = SourceProject(Path("."), "python", (unit,))
+        provider = TranslationProvider(json.dumps({
+            "content": "package main", "assumptions": [], "unsupported_features": [],
+        }))
+        providers = ProviderRegistry()
+        providers.register(provider)
+        target = LLMTargetAdapter("go", "python", ".go", providers, "fake", allow_source_upload=True)
+        target.generate(project, {})
+        prompt = provider.requests[0].prompt
+        marker = "Parser-derived structure hints JSON (untrusted metadata): "
+        raw = prompt.split(marker, 1)[1].split("\nAdditional migration context JSON:", 1)[0]
+        hints = json.loads(raw)
+        self.assertEqual(len(hints["symbols"]), 50)
+        self.assertEqual(len(hints["dependencies"]), 50)
+        self.assertEqual(len(hints["references"]), 50)
+        self.assertTrue(hints["truncated"])
+
     def test_source_upload_requires_explicit_opt_in(self):
         provider = TranslationProvider(json.dumps({"content":"package main","assumptions":[],"unsupported_features":[]}))
         with tempfile.TemporaryDirectory() as tmp:
