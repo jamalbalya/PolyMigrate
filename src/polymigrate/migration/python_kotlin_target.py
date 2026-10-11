@@ -36,6 +36,18 @@ def _kotlin_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False).replace("$", r"\$")
 
 
+
+def _string_value(node: ast.expr, string_values: dict[str, str]) -> str:
+    """Evaluate only strings whose value is statically known without executing code."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name) and node.id in string_values:
+        return string_values[node.id]
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _string_value(node.left, string_values) + _string_value(node.right, string_values)
+    raise UnsupportedPythonSyntax("len() requires a statically known string value in the Kotlin subset")
+
+
 class PythonToKotlinTargetAdapter:
     """Translate one Python file into a minimal Kotlin/JVM console program."""
 
@@ -44,17 +56,18 @@ class PythonToKotlinTargetAdapter:
     def __init__(self) -> None:
         self.warnings: list[str] = []
 
-    def _int_value(self, node: ast.expr, integer_values: dict[str, int]) -> int:
+    def _int_value(self, node: ast.expr, integer_values: dict[str, int],
+                   string_values: dict[str, str] | None = None) -> int:
         if isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool):
             value = node.value
         elif isinstance(node, ast.Name) and node.id in integer_values:
             value = integer_values[node.id]
         elif isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
-            operand = self._int_value(node.operand, integer_values)
+            operand = self._int_value(node.operand, integer_values, string_values)
             value = -operand if isinstance(node.op, ast.USub) else operand
         elif isinstance(node, ast.BinOp):
-            left = self._int_value(node.left, integer_values)
-            right = self._int_value(node.right, integer_values)
+            left = self._int_value(node.left, integer_values, string_values)
+            right = self._int_value(node.right, integer_values, string_values)
             if isinstance(node.op, ast.Add):
                 value = left + right
             elif isinstance(node.op, ast.Sub):
@@ -74,7 +87,11 @@ class PythonToKotlinTargetAdapter:
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "abs":
             if len(node.args) != 1 or node.keywords:
                 raise UnsupportedPythonSyntax("abs() supports exactly one positional argument")
-            value = abs(self._int_value(node.args[0], integer_values))
+            value = abs(self._int_value(node.args[0], integer_values, string_values))
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "len":
+            if len(node.args) != 1 or node.keywords:
+                raise UnsupportedPythonSyntax("len() supports exactly one positional argument")
+            value = len(_string_value(node.args[0], string_values or {}))
         else:
             raise UnsupportedPythonSyntax("Integer expression cannot be proven safe in the Kotlin subset")
         if not _INT_MIN <= value <= _INT_MAX:
@@ -82,7 +99,7 @@ class PythonToKotlinTargetAdapter:
         return value
 
     def _expr(self, node: ast.expr, assigned: set[str], types: dict[str, str],
-              integer_values: dict[str, int]) -> tuple[str, str]:
+              integer_values: dict[str, int], string_values: dict[str, str] | None = None) -> tuple[str, str]:
         if isinstance(node, ast.Constant):
             if isinstance(node.value, bool):
                 return ("true" if node.value else "false"), "bool"
@@ -98,19 +115,19 @@ class PythonToKotlinTargetAdapter:
                 raise UnsupportedPythonSyntax(f"Variable '{node.id}' is used before assignment")
             return node.id, types[node.id]
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
-            expression, value_type = self._expr(node.operand, assigned, types, integer_values)
+            expression, value_type = self._expr(node.operand, assigned, types, integer_values, string_values)
             if value_type != "int":
                 raise UnsupportedPythonSyntax("Unary numeric operators require an integer")
-            self._int_value(node, integer_values)
+            self._int_value(node, integer_values, string_values)
             return ("-" if isinstance(node.op, ast.USub) else "+") + expression, "int"
         if isinstance(node, ast.BinOp):
-            left, left_type = self._expr(node.left, assigned, types, integer_values)
-            right, right_type = self._expr(node.right, assigned, types, integer_values)
+            left, left_type = self._expr(node.left, assigned, types, integer_values, string_values)
+            right, right_type = self._expr(node.right, assigned, types, integer_values, string_values)
             if isinstance(node.op, ast.Add) and left_type == right_type == "string":
                 return f"({left} + {right})", "string"
             if left_type != "int" or right_type != "int":
                 raise UnsupportedPythonSyntax("Kotlin arithmetic supports only integers, except string concatenation with +")
-            self._int_value(node, integer_values)
+            self._int_value(node, integer_values, string_values)
             operators = {
                 ast.Add: "+", ast.Sub: "-", ast.Mult: "*",
                 ast.FloorDiv: "Math.floorDiv", ast.Mod: "Math.floorMod",
@@ -126,30 +143,36 @@ class PythonToKotlinTargetAdapter:
             if node.keywords or len(node.args) != 1:
                 raise UnsupportedPythonSyntax(f"{name}() supports exactly one positional argument")
             if name == "str":
-                expression, _ = self._expr(node.args[0], assigned, types, integer_values)
+                expression, _ = self._expr(node.args[0], assigned, types, integer_values, string_values)
                 return f"pyString({expression})", "string"
             if name == "abs":
-                expression, value_type = self._expr(node.args[0], assigned, types, integer_values)
+                expression, value_type = self._expr(node.args[0], assigned, types, integer_values, string_values)
                 if value_type != "int":
                     raise UnsupportedPythonSyntax("abs() supports integer values only")
-                self._int_value(node, integer_values)
+                self._int_value(node, integer_values, string_values)
                 return f"kotlin.math.abs({expression})", "int"
+            if name == "len":
+                expression, value_type = self._expr(node.args[0], assigned, types, integer_values, string_values)
+                if value_type != "string":
+                    raise UnsupportedPythonSyntax("len() supports string values only")
+                self._int_value(node, integer_values, string_values)
+                return f"{expression}.codePointCount(0, {expression}.length)", "int"
         raise UnsupportedPythonSyntax(f"Unsupported expression syntax: {type(node).__name__}")
 
     def _condition(self, node: ast.expr, assigned: set[str], types: dict[str, str],
-                   integer_values: dict[str, int]) -> str:
+                   integer_values: dict[str, int], string_values: dict[str, str] | None = None) -> str:
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-            return "!(" + self._condition(node.operand, assigned, types, integer_values) + ")"
+            return "!(" + self._condition(node.operand, assigned, types, integer_values, string_values) + ")"
         if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
             operator = "&&" if isinstance(node.op, ast.And) else "||"
             return "(" + f" {operator} ".join(
-                self._condition(item, assigned, types, integer_values) for item in node.values
+                self._condition(item, assigned, types, integer_values, string_values) for item in node.values
             ) + ")"
         if isinstance(node, ast.Compare):
             if len(node.ops) != 1 or len(node.comparators) != 1:
                 raise UnsupportedPythonSyntax("Chained comparisons are not supported in Kotlin conditions")
-            left, left_type = self._expr(node.left, assigned, types, integer_values)
-            right, right_type = self._expr(node.comparators[0], assigned, types, integer_values)
+            left, left_type = self._expr(node.left, assigned, types, integer_values, string_values)
+            right, right_type = self._expr(node.comparators[0], assigned, types, integer_values, string_values)
             if left_type != right_type:
                 raise UnsupportedPythonSyntax("Kotlin comparisons require operands of the same known type")
             operators = {
@@ -164,7 +187,7 @@ class PythonToKotlinTargetAdapter:
             if left_type == "bool" and operator not in {"==", "!="}:
                 raise UnsupportedPythonSyntax("Boolean ordering comparisons are not supported")
             return f"({left} {operator} {right})"
-        expression, value_type = self._expr(node, assigned, types, integer_values)
+        expression, value_type = self._expr(node, assigned, types, integer_values, string_values)
         if value_type == "bool":
             return expression
         if value_type == "int":
@@ -174,13 +197,13 @@ class PythonToKotlinTargetAdapter:
         raise UnsupportedPythonSyntax("Condition type is not supported")
 
     def _print_call(self, call: ast.Call, assigned: set[str], types: dict[str, str],
-                    integer_values: dict[str, int]) -> str:
+                    integer_values: dict[str, int], string_values: dict[str, str] | None = None) -> str:
         if not isinstance(call.func, ast.Name) or call.func.id != "print":
             raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
         if call.keywords or len(call.args) > 32:
             raise UnsupportedPythonSyntax("print() supports at most 32 positional arguments and no keywords")
         expressions = [
-            self._expr(arg, assigned, types, integer_values) for arg in call.args
+            self._expr(arg, assigned, types, integer_values, string_values) for arg in call.args
         ]
         if not expressions:
             return "println()"
@@ -188,12 +211,12 @@ class PythonToKotlinTargetAdapter:
         return f"println(listOf<Any>({values}).joinToString(\" \") {{ pyString(it) }})"
 
     def _if_statement(self, node: ast.If, assigned: set[str], types: dict[str, str],
-                      integer_values: dict[str, int]) -> str:
+                      integer_values: dict[str, int], string_values: dict[str, str] | None = None) -> str:
         def render_body(body: list[ast.stmt]) -> list[str]:
             rendered: list[str] = []
             for statement in body:
                 if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
-                    rendered.append(self._print_call(statement.value, assigned, types, integer_values))
+                    rendered.append(self._print_call(statement.value, assigned, types, integer_values, string_values))
                 elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
                       and isinstance(statement.value.value, str)):
                     continue
@@ -210,7 +233,7 @@ class PythonToKotlinTargetAdapter:
             depth += 1
             if depth > 20:
                 raise UnsupportedPythonSyntax("if/elif chains are limited to 20 branches")
-            condition = self._condition(cursor.test, assigned, types, integer_values)
+            condition = self._condition(cursor.test, assigned, types, integer_values, string_values)
             keyword = "if" if depth == 1 else "} else if"
             rendered.append(f"{keyword} ({condition}) {{")
             rendered.extend("    " + line for line in render_body(cursor.body))
@@ -226,12 +249,13 @@ class PythonToKotlinTargetAdapter:
 
 
     def _for_statement(self, node: ast.For, assigned: set[str], types: dict[str, str],
-                       integer_values: dict[str, int], referenced_after: bool) -> str | None:
+                       integer_values: dict[str, int], referenced_after: bool,
+                       string_values: dict[str, str] | None = None) -> str | None:
         if not isinstance(node.target, ast.Name):
             raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
         name = node.target.id
         if (not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _KOTLIN_RESERVED
-                or name in {"print", "str", "abs", "range", "pyString", "println", "Math",
+                or name in {"print", "str", "abs", "len", "range", "pyString", "println", "Math",
                             "Int", "String", "Boolean", "Any", "listOf"}):
             raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not a supported Kotlin identifier")
         if name in assigned:
@@ -248,11 +272,11 @@ class PythonToKotlinTargetAdapter:
         rendered_args: list[str] = []
         values: list[int] = []
         for argument in call.args:
-            expression, value_type = self._expr(argument, assigned, types, integer_values)
+            expression, value_type = self._expr(argument, assigned, types, integer_values, string_values)
             if value_type != "int":
                 raise UnsupportedPythonSyntax("range() arguments must be statically known integers")
             rendered_args.append(expression)
-            values.append(self._int_value(argument, integer_values))
+            values.append(self._int_value(argument, integer_values, string_values))
         if len(values) == 1:
             start_expr, start_value = "0", 0
             stop_expr, stop_value = rendered_args[0], values[0]
@@ -286,7 +310,7 @@ class PythonToKotlinTargetAdapter:
                 body_lines: list[str] = []
                 for statement in node.body:
                     if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
-                        body_lines.append(self._print_call(statement.value, assigned, types, integer_values))
+                        body_lines.append(self._print_call(statement.value, assigned, types, integer_values, string_values))
                     elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
                           and isinstance(statement.value.value, str)):
                         continue
@@ -330,7 +354,7 @@ class PythonToKotlinTargetAdapter:
         if len(project.units) != 1:
             raise UnsupportedPythonSyntax("This adapter currently accepts exactly one source file")
         self.warnings = [
-            "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), print(), print-only if/elif/else chains, and statically bounded print-only range() loops.",
+            "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), len(string), print(), print-only if/elif/else chains, and statically bounded print-only range() loops.",
             "Assignments inside branches or loops, nested control flow, while loops, functions, imports, classes, collections, and full project migration are not supported by this subset."
         ]
         try:
@@ -340,16 +364,20 @@ class PythonToKotlinTargetAdapter:
         has_str_call = any(isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "str" for item in ast.walk(tree))
         has_abs_call = any(isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "abs" for item in ast.walk(tree))
         has_range_call = any(isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "range" for item in ast.walk(tree))
+        has_len_call = any(isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "len" for item in ast.walk(tree))
         if has_str_call and any(isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "str" for item in ast.walk(tree)):
             raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
         if has_abs_call and any(isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "abs" for item in ast.walk(tree)):
             raise UnsupportedPythonSyntax("Shadowing the abs() builtin is not supported")
         if has_range_call and any(isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "range" for item in ast.walk(tree)):
             raise UnsupportedPythonSyntax("Shadowing the range() builtin is not supported")
+        if has_len_call and any(isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "len" for item in ast.walk(tree)):
+            raise UnsupportedPythonSyntax("Shadowing the len() builtin is not supported")
 
         assigned: set[str] = set()
         types: dict[str, str] = {}
         integer_values: dict[str, int] = {}
+        string_values: dict[str, str] = {}
         statements: list[str] = []
         referenced = {
             item.id for item in ast.walk(tree)
@@ -360,9 +388,9 @@ class PythonToKotlinTargetAdapter:
                 if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
                     raise UnsupportedPythonSyntax("Only assignments to one simple variable are supported")
                 name = node.targets[0].id
-                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _KOTLIN_RESERVED or name in {"print", "str", "abs", "pyString", "println", "Math", "Int", "String", "Boolean", "Any", "listOf"}:
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in _KOTLIN_RESERVED or name in {"print", "str", "abs", "len", "range", "pyString", "println", "Math", "Int", "String", "Boolean", "Any", "listOf"}:
                     raise UnsupportedPythonSyntax(f"Variable name '{name}' is not supported in Kotlin")
-                expression, value_type = self._expr(node.value, assigned, types, integer_values)
+                expression, value_type = self._expr(node.value, assigned, types, integer_values, string_values)
                 if name in assigned:
                     if types[name] != value_type:
                         raise UnsupportedPythonSyntax(f"Changing the type of '{name}' is not supported")
@@ -372,20 +400,27 @@ class PythonToKotlinTargetAdapter:
                     assigned.add(name)
                 types[name] = value_type
                 if value_type == "int":
-                    integer_values[name] = self._int_value(node.value, integer_values)
+                    integer_values[name] = self._int_value(node.value, integer_values, string_values)
                 else:
                     integer_values.pop(name, None)
+                if value_type == "string":
+                    try:
+                        string_values[name] = _string_value(node.value, string_values)
+                    except UnsupportedPythonSyntax:
+                        string_values.pop(name, None)
+                else:
+                    string_values.pop(name, None)
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
-                statements.append(self._print_call(node.value, assigned, types, integer_values))
+                statements.append(self._print_call(node.value, assigned, types, integer_values, string_values))
             elif isinstance(node, ast.If):
-                statements.append(self._if_statement(node, assigned, types, integer_values))
+                statements.append(self._if_statement(node, assigned, types, integer_values, string_values))
             elif isinstance(node, ast.For):
                 referenced_after = any(
                     isinstance(child, ast.Name) and child.id == node.target.id and isinstance(child.ctx, ast.Load)
                     for later in tree.body[node_index + 1:] for child in ast.walk(later)
                 ) if isinstance(node.target, ast.Name) else False
                 rendered_loop = self._for_statement(
-                    node, assigned, types, integer_values, referenced_after
+                    node, assigned, types, integer_values, referenced_after, string_values
                 )
                 if rendered_loop is not None:
                     statements.append(rendered_loop)

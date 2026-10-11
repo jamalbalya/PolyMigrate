@@ -64,6 +64,21 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
                 self._translate(source)
 
+    def test_len_uses_unicode_code_point_semantics(self):
+        code = self._translate("text = 'A😀é'\nsize = len(text)\nprint(size)\n")
+        self.assertIn("text.codePointCount(0, text.length)", code)
+        self.assertIn("var size: Int = text.codePointCount(0, text.length)", code)
+
+    def test_len_rejects_non_string_arguments_and_builtin_shadowing(self):
+        cases = (
+            ("print(len(3))\n", "len\\(\\) supports string values only"),
+            ("len = 1\nprint(len('x'))\n", "Shadowing the len\\(\\) builtin is not supported"),
+            ("print(len('a', 'b'))\n", "supports exactly one positional argument"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
     def test_bounded_range_loops_preserve_positive_and_negative_steps(self):
         code = self._translate(
             "for i in range(0, 5, 2):\n    print(i)\n"
@@ -98,6 +113,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             "else:\n    print('zero')\n"
             "print(-3 // 2, -3 % 2)\n"
             "print('$value')\n"
+            "text = 'A😀é'\nprint(len(text))\nprint(len('😀'))\n"
             "for i in range(0, 5, 2):\n    print(i)\n"
             "for j in range(5, 0, -2):\n    print(j)\n"
             "for k in range(3):\n    print(k)\n"
@@ -119,7 +135,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
                 capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n")
+            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n3\n1\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n")
 
 
 if __name__ == "__main__":
