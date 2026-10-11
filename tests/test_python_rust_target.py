@@ -22,6 +22,34 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             artifacts = PythonToRustTargetAdapter().generate(project, {})
         return {item.relative_path: item.content for item in artifacts}
 
+    def test_print_multiple_arguments_and_empty_call(self):
+        files = self._translate('print(42, "hello", True)\nprint()\n')
+        code = files["src/main.rs"]
+        self.assertIn('println!("{} {} {}", 42, "hello", if true { "True" } else { "False" });', code)
+        self.assertIn("println!();", code)
+
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_multi_argument_print_matches_python_output(self):
+        files = self._translate('print(42, "hello", True)\nprint()\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(
+                ["cargo", "run", "--offline", "--quiet"], cwd=root,
+                capture_output=True, text=True, timeout=90, check=False
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "42 hello True\n\n")
+
+    def test_print_rejects_keywords_and_too_many_arguments(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "keyword arguments"):
+            self._translate('print("a", sep=",")\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "32 positional"):
+            self._translate("print(" + ", ".join("1" for _ in range(33)) + ")\n")
+
     def test_emits_minimal_cargo_project(self):
         files = self._translate('x = 6\ny = x * 7\nprint(y)\n')
         self.assertIn('[package]', files["Cargo.toml"])
