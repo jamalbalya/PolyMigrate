@@ -88,3 +88,5 @@
 - [x] T076 Support statically known positive and negative non-zero `range()` steps in deterministic Go, JavaScript, and Rust translators; cap actual iteration count and reject target-integer overflow, with runtime-equivalence tests.
 - [x] T077 Support boolean literals/variables in deterministic Go, JavaScript, and Rust subsets, preserve Python-style boolean output, and reject boolean arithmetic or ordering comparisons; verify target runtime behavior.
 - [x] T078 Expand bounded static security heuristics for dynamic SQL interpolation, unsafe temporary paths, disabled TLS verification, Rust unsafe blocks, and process launching; keep the overall security gate explicitly non-comprehensive.
+
+- [x] T079 Require an operator-managed SHA-256 pin for the bundled Semgrep rules file before scanner provenance is trusted; regression-test missing, malformed, and mismatched rules pins. This authenticates configured inputs only and does not close the comprehensive security audit gate T059.
