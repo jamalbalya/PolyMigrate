@@ -335,7 +335,7 @@ def _extract_references(language_id: str, source_text: str) -> tuple[str, ...]:
     }.get(language_id, set())
     stack = [tree.root_node]
     visited = 0
-    call_pattern = re.compile(r"([A-Za-z_$][A-Za-z0-9_$]*(?:(?:\\.|::|->)[A-Za-z_$][A-Za-z0-9_$]*)*)\\s*\\(")
+    call_pattern = re.compile(r"([A-Za-z_$][A-Za-z0-9_$]*(?:(?:\.|::|->)[A-Za-z_$][A-Za-z0-9_$]*)*)\s*\(")
     while stack and visited < 100_000:
         node = stack.pop()
         visited += 1
