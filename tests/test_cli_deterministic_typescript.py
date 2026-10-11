@@ -1,5 +1,6 @@
 """CLI tests for deterministic Python-to-TypeScript migration."""
 import json
+import shutil
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -46,6 +47,27 @@ class DeterministicPythonTypeScriptCLITests(unittest.TestCase):
             self.assertEqual(report["target_language"], "typescript")
             self.assertEqual(report["validation_gates"]["target_build"], "BLOCKED")
             self.assertIn("No source code is sent", report["note"])
+
+    @unittest.skipUnless(shutil.which("tsc") and shutil.which("node"), "TypeScript compiler and Node.js are required")
+    def test_cli_runs_strict_typescript_build_and_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.py").write_text('print("typescript runtime")\n', encoding="utf-8")
+            output = root / "out"
+            stdout, stderr = StringIO(), StringIO()
+            with patch("polymigrate.cli.build_provider_registry") as provider_setup, \
+                 redirect_stdout(stdout), redirect_stderr(stderr):
+                main([
+                    "migrate", "--source", str(source), "--from", "python",
+                    "--to", "typescript", "--output", str(output),
+                    "--strategy", "deterministic",
+                ])
+            provider_setup.assert_not_called()
+            report = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["validation_gates"]["target_build"], "PASSED", stderr.getvalue())
+            self.assertIn("console.log", (output / "main.ts").read_text(encoding="utf-8"))
 
     def test_deterministic_strategy_still_rejects_unsupported_pairs(self):
         with tempfile.TemporaryDirectory() as tmp:
