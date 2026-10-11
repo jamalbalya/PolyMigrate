@@ -62,6 +62,13 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
         self.assertIn("&&", files["src/main.rs"])
         self.assertIn("(x != 0)", files["src/main.rs"])
 
+    def test_rejects_conditional_chains_over_twenty_branches(self):
+        lines = ["x = 0", "if x == 0:", "    print('match')"]
+        for value in range(1, 21):
+            lines.extend([f"elif x == {value}:", "    print('match')"])
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "20 branches"):
+            self._translate("\n".join(lines) + "\n")
+
     def test_rejects_chained_comparisons(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Chained comparisons"):
             self._translate('x = 6\nif 0 < x < 10:\n    print("in range")\n')
@@ -87,6 +94,24 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             )
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "positive\n")
+
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_elif_chain_generated_project_matches_python_output(self):
+        source = 'x = 2\nif x == 1:\n    print("one")\nelif x == 2:\n    print("two")\nelse:\n    print("other")\n'
+        files = self._translate(source)
+        self.assertIn("else if", files["src/main.rs"])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(
+                ["cargo", "run", "--offline", "--quiet"], cwd=root,
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "two\n")
 
     def test_range_loop_is_translated(self):
         files = self._translate("for i in range(3):\n    print(i)\n")

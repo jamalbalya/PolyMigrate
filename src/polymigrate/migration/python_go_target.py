@@ -237,6 +237,35 @@ class PythonToGoTargetAdapter:
         expression, _ = self._expr(call.args[0], assigned)
         return f"fmt.Println({expression})"
 
+    def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
+        """Render a bounded if/elif/else chain; branch bodies remain print-only."""
+        rendered: list[str] = []
+        cursor = node
+        depth = 0
+        while True:
+            depth += 1
+            if depth > 20:
+                raise UnsupportedPythonSyntax("Conditional chains are limited to 20 branches")
+            condition = self._condition(cursor.test, assigned)
+            if not cursor.body:
+                raise UnsupportedPythonSyntax("Empty conditional bodies are not supported")
+            body = [self._print_statement(statement, assigned) for statement in cursor.body]
+            prefix = f"if {condition} {{" if depth == 1 else f"}} else if {condition} {{"
+            rendered.append(prefix)
+            rendered.extend("\t" + line for line in body)
+            if cursor.orelse and len(cursor.orelse) == 1 and isinstance(cursor.orelse[0], ast.If):
+                cursor = cursor.orelse[0]
+                continue
+            if cursor.orelse:
+                alternative = [self._print_statement(statement, assigned) for statement in cursor.orelse]
+                rendered.append("} else {")
+                rendered.extend("\t" + line for line in alternative)
+                rendered.append("}")
+            else:
+                rendered.append("}")
+            break
+        return "\n".join(rendered)
+
     def generate(
         self, project: SourceProject, context: dict[str, object]
     ) -> list[GeneratedArtifact]:
@@ -357,21 +386,7 @@ class PythonToGoTargetAdapter:
                 statements.append("\n".join(rendered))
                 used_fmt = True
             elif isinstance(node, ast.If):
-                condition = self._condition(node.test, assigned)
-                if not node.body:
-                    raise UnsupportedPythonSyntax("Empty conditional bodies are not supported")
-                body = [self._print_statement(statement, assigned) for statement in node.body]
-                alternative: list[str] = []
-                if node.orelse:
-                    if any(isinstance(statement, ast.If) for statement in node.orelse):
-                        raise UnsupportedPythonSyntax("elif chains are not supported")
-                    alternative = [self._print_statement(statement, assigned) for statement in node.orelse]
-                rendered = [f"if {condition} {{", *("\t" + line for line in body), "}"]
-                if alternative:
-                    rendered[-1] = "} else {"
-                    rendered.extend(["\t" + line for line in alternative])
-                    rendered.append("}")
-                statements.append("\n".join(rendered))
+                statements.append(self._if_statement(node, assigned))
                 used_fmt = True
 
             elif (

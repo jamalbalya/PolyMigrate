@@ -124,6 +124,13 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
         self.assertIn("&&", code)
         self.assertIn("(x != 0)", code)
 
+    def test_rejects_conditional_chains_over_twenty_branches(self):
+        lines = ["x = 0", "if x == 0:", "    print('match')"]
+        for value in range(1, 21):
+            lines.extend([f"elif x == {value}:", "    print('match')"])
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "20 branches"):
+            self._translate("\n".join(lines) + "\n")
+
     def test_rejects_chained_comparisons(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Chained comparisons"):
             self._translate('x = 6\nif 0 < x < 10:\n    print("in range")\n')
@@ -147,6 +154,22 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
                                  text=True, timeout=30, check=False)
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "positive\n")
+
+    @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
+    def test_elif_chain_generated_program_matches_python_output(self):
+        source = 'x = 2\nif x == 1:\n    print("one")\nelif x == 2:\n    print("two")\nelse:\n    print("other")\n'
+        code = self._translate(source)
+        self.assertIn("} else if (x == 2) {", code)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.go"
+            path.write_text(code, encoding="utf-8")
+            fmt = subprocess.run(["gofmt", "-w", str(path)], capture_output=True,
+                                 text=True, timeout=10, check=False)
+            self.assertEqual(fmt.returncode, 0, fmt.stderr)
+            run = subprocess.run(["go", "run", str(path)], capture_output=True,
+                                 text=True, timeout=30, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "two\n")
 
     def test_range_loop_is_translated(self):
         code = self._translate("for i in range(3):\n    print(i)\n")
