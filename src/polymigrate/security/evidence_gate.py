@@ -116,6 +116,11 @@ def evaluate_security_evidence(
             if runner_id != "polymigrate_local_scanner_runner_v1":
                 errors.append(f"Scanner '{scanner}' has no trusted runner identity.")
                 continue
+            if scanner == "semgrep":
+                rules_digest = item.get("rules_sha256")
+                if not isinstance(rules_digest, str) or not _SHA256.fullmatch(rules_digest):
+                    errors.append("Scanner 'semgrep' has no valid bundled rules SHA-256.")
+                    continue
             if isinstance(tool_exit_code, bool) or not isinstance(tool_exit_code, int):
                 errors.append(f"Scanner '{scanner}' has no actual process exit code.")
                 continue
