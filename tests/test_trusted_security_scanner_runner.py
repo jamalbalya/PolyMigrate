@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from polymigrate.cli import _security_review_gate_status
@@ -97,6 +98,12 @@ class LocalScannerRunnerTests(unittest.TestCase):
         # Authenticated scanner identity is not the same as a comprehensive audit.
         self.assertEqual(_security_review_gate_status(result), "INCOMPLETE")
         self.assertTrue(result.to_dict()["scanner_provenance_verified"])
+        self.assertEqual(
+            _security_review_gate_status(
+                result, SimpleNamespace(status="PASSED"), SimpleNamespace(status="PASSED")
+            ),
+            "PASSED",
+        )
 
     def test_mismatched_scanner_pin_keeps_review_incomplete(self):
         with tempfile.TemporaryDirectory() as tmp:
