@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from polymigrate.cli import _security_review_gate_status
-from polymigrate.security.scanner_runner import _parse_report, run_local_security_scanners
+from polymigrate.security.scanner_runner import _RULES_PATH, _parse_report, run_local_security_scanners
 
 
 class LocalScannerRunnerTests(unittest.TestCase):
@@ -69,6 +69,8 @@ class LocalScannerRunnerTests(unittest.TestCase):
                     hashlib.sha256(Path(paths["semgrep"]).read_bytes()).hexdigest(),
                 "POLYMIGRATE_TRUSTED_SCANNER_SHA256_BANDIT":
                     hashlib.sha256(Path(paths["bandit"]).read_bytes()).hexdigest(),
+                "POLYMIGRATE_TRUSTED_SEMGREP_RULES_SHA256":
+                    hashlib.sha256(_RULES_PATH.read_bytes()).hexdigest(),
             }
             with patch.dict("os.environ", pins), \
                  patch("polymigrate.security.scanner_runner.shutil.which", side_effect=lambda name: paths.get(name)), \
@@ -91,6 +93,8 @@ class LocalScannerRunnerTests(unittest.TestCase):
                 "POLYMIGRATE_TRUSTED_SCANNER_SHA256_SEMGREP": "0" * 64,
                 "POLYMIGRATE_TRUSTED_SCANNER_SHA256_BANDIT":
                     hashlib.sha256(Path(paths["bandit"]).read_bytes()).hexdigest(),
+                "POLYMIGRATE_TRUSTED_SEMGREP_RULES_SHA256":
+                    hashlib.sha256(_RULES_PATH.read_bytes()).hexdigest(),
             }
             with patch.dict("os.environ", pins), \
                  patch("polymigrate.security.scanner_runner.shutil.which", side_effect=lambda name: paths.get(name)), \
@@ -100,6 +104,29 @@ class LocalScannerRunnerTests(unittest.TestCase):
         self.assertFalse(result.scanner_provenance_verified)
         self.assertEqual(_security_review_gate_status(result), "INCOMPLETE")
         self.assertTrue(any("does not match" in warning for warning in result.provenance_warnings))
+
+    def test_mismatched_semgrep_rules_pin_keeps_review_incomplete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "output"
+            root.mkdir()
+            tools_root = Path(tmp) / "tools"
+            tools_root.mkdir()
+            paths, fake_run = self._fake_tools(tools_root)
+            pins = {
+                "POLYMIGRATE_TRUSTED_SCANNER_SHA256_SEMGREP":
+                    hashlib.sha256(Path(paths["semgrep"]).read_bytes()).hexdigest(),
+                "POLYMIGRATE_TRUSTED_SCANNER_SHA256_BANDIT":
+                    hashlib.sha256(Path(paths["bandit"]).read_bytes()).hexdigest(),
+                "POLYMIGRATE_TRUSTED_SEMGREP_RULES_SHA256": "0" * 64,
+            }
+            with patch.dict("os.environ", pins), \\
+                 patch("polymigrate.security.scanner_runner.shutil.which", side_effect=lambda name: paths.get(name)), \\
+                 patch("polymigrate.security.scanner_runner.subprocess.run", side_effect=fake_run):
+                result = run_local_security_scanners(root, "python")
+        self.assertEqual(result.status, "PASSED")
+        self.assertFalse(result.scanner_provenance_verified)
+        self.assertEqual(_security_review_gate_status(result), "INCOMPLETE")
+        self.assertTrue(any("rules SHA-256 does not match" in warning for warning in result.provenance_warnings))
 
     def test_high_bandit_finding_fails_the_security_gate(self):
         with tempfile.TemporaryDirectory() as tmp:
