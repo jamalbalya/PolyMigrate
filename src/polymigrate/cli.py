@@ -214,12 +214,21 @@ def _candidate_dependency_integration_status(
     gates: dict[str, str],
     target_language: str,
     project_root: Path | None = None,
+    dependency_warnings: list[str] | tuple[str, ...] = (),
 ) -> tuple[str, list[str]]:
-    """Require a candidate package to be declared, imported, built, and integration-tested."""
+    """Require candidate dependencies to be proven; unresolved planning never counts as a pass."""
     candidates = [item for item in library_resolutions if item.get("decision_type") == "candidate"]
     if not candidates:
+        if library_resolutions:
+            return "UNVERIFIED", [
+                "Library gaps remain unresolved or require a custom/architectural implementation; dependency integration cannot be marked PASSED."
+            ]
+        if dependency_warnings:
+            return "NOT_RUN", [
+                "Dependency-gap planning emitted warnings; absence of candidate records is not proof that dependency integration is unnecessary."
+            ]
         return "PASSED", [
-            "No candidate library dependencies were selected; candidate-specific dependency integration proof is not applicable."
+            "No candidate library dependencies or unresolved library gaps were reported; candidate-specific dependency integration proof is not applicable."
         ]
     if dependency_review.status != "PASSED":
         return "NOT_RUN", ["Candidate dependency integration proof requires a PASSED dependency wiring review."]
@@ -868,7 +877,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 validation.gates["behavior_comparison"] = behavior_result.status
             dependency_integration_status, dependency_integration_warnings = _candidate_dependency_integration_status(
-                library_resolutions, dependency_wiring_result, validation.gates, target_language.id, result.output_root
+                library_resolutions, dependency_wiring_result, validation.gates, target_language.id,
+                result.output_root, dependency_warnings=dependency_warnings,
             )
             validation.gates["dependency_integration"] = dependency_integration_status
             gates = validation.gates
