@@ -261,6 +261,11 @@ class PythonToJavaTargetAdapter:
             raise UnsupportedPythonSyntax("print() is limited to 32 positional arguments")
         if not call.args:
             return "System.out.println();"
+        if len(call.args) == 1:
+            expression, expression_type = self._expr(call.args[0], assigned)
+            if expression_type == "bool":
+                return f'System.out.println(({expression}) ? "True" : "False");'
+            return f"System.out.println({expression});"
         rendered: list[str] = []
         for argument in call.args:
             expression, expression_type = self._expr(argument, assigned)
