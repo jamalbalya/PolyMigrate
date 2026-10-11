@@ -79,6 +79,22 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
                 self._translate(source)
 
+    def test_augmented_assignments_support_bounded_int_and_string_operators(self):
+        code = self._translate(
+            "x = 1\nx += 2\nx *= 2\ns = 'a'\ns += 'b'\nprint(x, s)\n"
+        )
+        self.assertIn("x += 2", code)
+        self.assertIn("x *= 2", code)
+        self.assertIn('s += "b"', code)
+        cases = (
+            ("x = 1\nx /= 2\n", "Only Int"),
+            ("s = 'a'\ns -= 'b'\n", "Only Int"),
+            ("x += 1\n", "previously assigned variables"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
     def test_conditional_assignments_merge_static_facts(self):
         code = self._translate(
             "x = 1\nif x > 0:\n    x = 2\nelse:\n    x = 2\nprint(x + 1)\n"
@@ -161,8 +177,8 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             "for k in range(3):\n    print(k)\n"
             "print(k)\n"
             "score = 1\nif score > 0:\n    score = 2\nelse:\n    score = 3\nprint(score)\n"
-            "x = 1\nif x > 0:\n    x = 2\nelse:\n    x = 2\nprint(x + 1)\n"
-            "count = 3\nwhile count > 0:\n    count = count - 1\n    print(count)\nprint(count)\n"
+            "x = 1\nif x > 0:\n    x += 1\nelse:\n    x += 1\nprint(x + 1)\n"
+            "count = 3\nwhile count > 0:\n    count -= 1\n    print(count)\nprint(count)\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
