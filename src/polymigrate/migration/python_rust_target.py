@@ -1,7 +1,7 @@
 """Deterministic translator for a deliberately small Python-to-Rust subset.
 
 Supports simple assignments, integer expressions (+, -, *), string/integer
-literals, unary +/- on integers, one-argument print(), and simple if/else
+literals, unary +/- on integers, bounded positional print(), and simple if/else
 conditions with bounded comparisons. Unsupported syntax is rejected. Integer
 arithmetic is limited to signed i32.
 """
