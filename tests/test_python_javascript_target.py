@@ -75,6 +75,8 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
         self.assertIn("[...(text)].length", code)
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the len"):
             self._translate('len = 1\nprint(len("text"))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the len"):
+            self._translate('print(len("text"))\nlen = 1\n')
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "strings only"):
             self._translate("print(len(123))\n")
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
