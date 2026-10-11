@@ -562,7 +562,7 @@ class PythonToKotlinTargetAdapter:
             raise UnsupportedPythonSyntax("This adapter currently accepts exactly one source file")
         self.warnings = [
             "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), len(string), print(), if/elif/else chains with print and same-type assignments to existing variables, bounded range() loops, and while loops with statically proven termination.",
-            "Augmented assignments, assignments inside range loops, nested control flow, unbounded while loops, functions, imports, classes, collections, and full project migration are not supported by this subset."
+            "Only Int +=/-=/*= and String += augmented assignments are supported; while bodies allow only integer updates, range loops remain print-only, nested control flow and unbounded while loops are rejected, and functions, imports, classes, collections, and full project migration are not supported by this subset."
         ]
         try:
             tree = ast.parse(project.units[0].source_text)
@@ -617,6 +617,8 @@ class PythonToKotlinTargetAdapter:
                         string_values.pop(name, None)
                 else:
                     string_values.pop(name, None)
+            elif isinstance(node, ast.AugAssign):
+                statements.append(self._augmented_assignment(node, assigned, types, integer_values, string_values))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
                 statements.append(self._print_call(node.value, assigned, types, integer_values, string_values))
             elif isinstance(node, ast.If):
