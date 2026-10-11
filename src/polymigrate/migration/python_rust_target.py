@@ -300,7 +300,7 @@ class PythonToRustTargetAdapter:
         return self._print_statement(node, assigned)
 
     def _if_statement(self, node: ast.If, assigned: set[str]) -> str:
-        """Render a bounded if/elif/else chain; branch bodies remain print-only."""
+        """Render a bounded if/elif/else chain with print calls and same-type assignments to existing variables."""
         rendered: list[str] = []
         modified: set[str] = set()
         cursor = node
