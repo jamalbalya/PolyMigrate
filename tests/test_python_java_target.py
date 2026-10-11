@@ -55,6 +55,36 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
             self.assertEqual(executed.returncode, 0, executed.stderr)
             self.assertEqual(executed.stdout, "42 hello True\n\n")
 
+    def test_abs_builtin_supports_safe_integer_values(self):
+        code = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
+        self.assertIn("Math.abs(x)", code)
+        self.assertIn("Math.abs(7)", code)
+
+    def test_abs_builtin_rejects_shadowing_invalid_types_and_overflow(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the abs"):
+            self._translate('abs = 1\nprint(abs(2))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the abs"):
+            self._translate('print(abs(2))\nabs = 1\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "integer values"):
+            self._translate('print(abs(True))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
+            self._translate("print(abs(value=2))\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "signed int32 range"):
+            self._translate("print(abs(-2147483648))\n")
+
+    @unittest.skipUnless(shutil.which("javac") and shutil.which("java"), "JDK is required")
+    def test_abs_builtin_generated_java_matches_python_output(self):
+        code = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_file = root / "Main.java"
+            java_file.write_text(code, encoding="utf-8")
+            compiled = subprocess.run(["javac", str(java_file)], capture_output=True, text=True, timeout=30, check=False)
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            executed = subprocess.run(["java", "-cp", tmp, "Main"], capture_output=True, text=True, timeout=30, check=False)
+            self.assertEqual(executed.returncode, 0, executed.stderr)
+            self.assertEqual(executed.stdout, "42\n7\n")
+
     def test_str_builtin_converts_integer_and_boolean_to_python_text(self):
         code = self._translate('x = 42\nprint("value=" + str(x))\nprint(str(True))\n')
         self.assertIn("Integer.toString(x)", code)
