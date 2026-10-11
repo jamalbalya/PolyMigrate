@@ -18,7 +18,8 @@ class LocalScannerRunnerTests(unittest.TestCase):
         bandit = root / "bandit"
         gitleaks = root / "gitleaks"
         osv = root / "osv-scanner"
-        for executable in (semgrep, bandit, gitleaks, osv):
+        gosec = root / "gosec"
+        for executable in (semgrep, bandit, gitleaks, osv, gosec):
             executable.write_text(f"local {executable.name} test executable", encoding="utf-8")
         bandit_findings = bandit_findings or []
         gitleaks_findings = gitleaks_findings or []
@@ -35,12 +36,14 @@ class LocalScannerRunnerTests(unittest.TestCase):
                 output = gitleaks_findings
             elif scanner == "osv-scanner":
                 output = {"results": [{"packages": [{"vulnerabilities": osv_findings}]}]}
+            elif scanner == "gosec":
+                output = {"Errors": [], "GolangErrors": [], "Issues": []}
             else:
                 raise AssertionError(f"unexpected scanner command: {args}")
             return subprocess.CompletedProcess(args, 0, stdout=json.dumps(output), stderr="")
         return {
             "semgrep": str(semgrep), "bandit": str(bandit),
-            "gitleaks": str(gitleaks), "osv-scanner": str(osv),
+            "gitleaks": str(gitleaks), "osv-scanner": str(osv), "gosec": str(gosec),
         }, fake_run
 
     def test_missing_required_scanners_is_incomplete(self):
@@ -51,6 +54,21 @@ class LocalScannerRunnerTests(unittest.TestCase):
                 result = run_local_security_scanners(root, "python")
         self.assertEqual(result.status, "INCOMPLETE")
         self.assertEqual(result.missing_scanners, ("bandit", "gitleaks", "osv-scanner", "semgrep"))
+        self.assertFalse(result.scanner_provenance_verified)
+
+    def test_go_profile_requires_gosec_gitleaks_osv_and_semgrep(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "output"
+            root.mkdir()
+            tools_root = Path(tmp) / "tools"
+            tools_root.mkdir()
+            paths, fake_run = self._fake_tools(tools_root)
+            with patch("polymigrate.security.scanner_runner.shutil.which", side_effect=lambda name: paths.get(name)), \
+                 patch("polymigrate.security.scanner_runner.subprocess.run", side_effect=fake_run):
+                result = run_local_security_scanners(root, "go")
+        self.assertEqual(result.status, "PASSED")
+        self.assertEqual(result.required_scanners, ("gitleaks", "gosec", "osv-scanner", "semgrep"))
+        self.assertEqual(result.accepted_scanners, ("gitleaks", "gosec", "osv-scanner", "semgrep"))
         self.assertFalse(result.scanner_provenance_verified)
 
     def test_clean_python_scans_record_binary_and_report_evidence(self):
