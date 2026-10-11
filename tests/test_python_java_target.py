@@ -273,8 +273,8 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "for/else"):
             self._translate("for i in range(3):\n    print(i)\nelse:\n    print('done')\n")
 
-    def test_rejects_assignments_in_loop_body(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "only print"):
+    def test_rejects_loop_local_assignment_to_unassigned_variable(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "previously assigned variables"):
             self._translate("for i in range(3):\n    x = i\n")
 
     @unittest.skipUnless(shutil.which("javac") and shutil.which("java"), "JDK is required")
