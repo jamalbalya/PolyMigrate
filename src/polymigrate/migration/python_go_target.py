@@ -395,6 +395,12 @@ class PythonToGoTargetAdapter:
         )
         if has_abs_call and assigns_abs:
             raise UnsupportedPythonSyntax("Shadowing the abs() builtin is not supported")
+        assigns_abs_helper = any(
+            isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "polymigrateAbsInt32"
+            for item in ast.walk(tree)
+        )
+        if has_abs_call and assigns_abs_helper:
+            raise UnsupportedPythonSyntax("Source variable conflicts with the generated abs helper name")
 
         referenced_names = {
             node.id
