@@ -131,6 +131,19 @@ class SecurityEvidenceGateTests(unittest.TestCase):
         self.assertFalse(result.to_dict()["scanner_provenance_verified"])
         self.assertTrue(result.to_dict()["scanner_execution_recorded"])
 
+    def test_semgrep_execution_requires_bundled_rules_digest(self):
+        item = evidence("semgrep")
+        item.update({
+            "scanner_binary_sha256": "b" * 64,
+            "runner_id": "polymigrate_local_scanner_runner_v1",
+            "tool_exit_code": 0,
+        })
+        result = evaluate_security_evidence(
+            [item], required_scanners={"semgrep"}, execution_provenance_recorded=True
+        )
+        self.assertEqual(result.status, "INCOMPLETE")
+        self.assertTrue(any("bundled rules SHA-256" in error for error in result.errors))
+
     def test_empty_required_scanner_set_is_incomplete(self):
         result = evaluate_security_evidence([], required_scanners=set())
         self.assertEqual(result.status, "INCOMPLETE")
