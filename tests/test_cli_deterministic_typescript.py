@@ -6,7 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from polymigrate.cli import main
 from polymigrate.security.scanner_runner import run_local_security_scanners
@@ -57,7 +57,15 @@ class DeterministicPythonTypeScriptCLITests(unittest.TestCase):
             (source / "main.py").write_text('print("typescript runtime")\n', encoding="utf-8")
             output = root / "out"
             stdout, stderr = StringIO(), StringIO()
-            with patch("polymigrate.cli.build_provider_registry") as provider_setup, \
+            fake_security = Mock()
+            fake_security.status = "INCOMPLETE"
+            fake_security.scanner_execution_recorded = False
+            fake_security.scanner_provenance_verified = False
+            fake_security.findings = ()
+            fake_security.warnings = ()
+            fake_security.to_dict.return_value = {"status": "INCOMPLETE"}
+            with patch("polymigrate.cli.run_local_security_scanners", return_value=fake_security), \
+                 patch("polymigrate.cli.build_provider_registry") as provider_setup, \
                  redirect_stdout(stdout), redirect_stderr(stderr):
                 main([
                     "migrate", "--source", str(source), "--from", "python",
