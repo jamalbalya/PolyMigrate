@@ -35,6 +35,7 @@ _PROFILES: dict[str, tuple[str, ...]] = {
     "swift": ("semgrep",),
 }
 _MAX_BINARY_BYTES = 300_000_000
+_MAX_RULES_BYTES = 5_000_000
 _VERSION_TIMEOUT_SECONDS = 10
 _SCAN_TIMEOUT_SECONDS = 120
 _SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -49,6 +50,16 @@ def _binary_sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _rules_sha256() -> str:
+    """Hash the bundled Semgrep rules only if the path is a bounded regular file."""
+    if _RULES_PATH.is_symlink():
+        raise ValueError("Semgrep rules path must not be a symlink")
+    resolved = _RULES_PATH.resolve(strict=True)
+    if not resolved.is_file() or resolved.stat().st_size > _MAX_RULES_BYTES:
+        raise ValueError("Semgrep rules file is not a regular file within the size limit")
+    return _binary_sha256(resolved)
 
 
 def _version_args(scanner_id: str, executable: str) -> list[str]:
@@ -155,8 +166,10 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
             continue
         try:
             binary_digest = _binary_sha256(Path(executable))
+            rule_digest = _rules_sha256() if scanner_id == "semgrep" else None
             pin_variable = "POLYMIGRATE_TRUSTED_SCANNER_SHA256_" + scanner_id.upper()
             expected_digest = os.environ.get(pin_variable, "").strip()
+            binary_trusted = False
             if not expected_digest or not _SHA256.fullmatch(expected_digest):
                 provenance_warnings.append(
                     f"Scanner '{scanner_id}' was executed but its binary SHA-256 is not pinned in {pin_variable}."
@@ -166,6 +179,21 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
                     f"Scanner '{scanner_id}' binary SHA-256 does not match {pin_variable}; provenance is unverified."
                 )
             else:
+                binary_trusted = True
+            rules_trusted = scanner_id != "semgrep"
+            if scanner_id == "semgrep":
+                rules_pin = os.environ.get("POLYMIGRATE_TRUSTED_SEMGREP_RULES_SHA256", "").strip()
+                if not rules_pin or not _SHA256.fullmatch(rules_pin):
+                    provenance_warnings.append(
+                        "Bundled Semgrep rules SHA-256 is not pinned in POLYMIGRATE_TRUSTED_SEMGREP_RULES_SHA256."
+                    )
+                elif rules_pin.lower() != rule_digest:
+                    provenance_warnings.append(
+                        "Bundled Semgrep rules SHA-256 does not match POLYMIGRATE_TRUSTED_SEMGREP_RULES_SHA256; provenance is unverified."
+                    )
+                else:
+                    rules_trusted = True
+            if binary_trusted and rules_trusted:
                 trusted_scanners.add(scanner_id)
             version_result = subprocess.run(
                 _version_args(scanner_id, executable), cwd=root, capture_output=True,
@@ -198,6 +226,7 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
                 "tool_exit_code": scan_result.returncode,
                 "report_sha256": hashlib.sha256(raw_report.encode("utf-8", errors="replace")).hexdigest(),
                 "scanner_binary_sha256": binary_digest,
+                **({"rules_sha256": rule_digest} if rule_digest is not None else {}),
                 "runner_id": _RUNNER_ID,
                 "findings": findings,
             })
