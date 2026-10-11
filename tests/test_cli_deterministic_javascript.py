@@ -58,7 +58,7 @@ class DeterministicPythonJavaScriptCLITests(unittest.TestCase):
             with redirect_stderr(stderr):
                 code = main([
                     "migrate", "--source", str(source), "--from", "python",
-                    "--to", "csharp", "--output", str(output), "--strategy", "deterministic",
+                    "--to", "swift", "--output", str(output), "--strategy", "deterministic",
                 ])
             self.assertEqual(code, 2)
             self.assertIn("supports --from python --to go", stderr.getvalue())

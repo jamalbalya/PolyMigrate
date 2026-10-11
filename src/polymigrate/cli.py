@@ -28,6 +28,7 @@ from polymigrate.migration.python_go_target import PythonToGoTargetAdapter
 from polymigrate.migration.python_javascript_target import PythonToJavaScriptTargetAdapter
 from polymigrate.migration.python_java_target import PythonToJavaTargetAdapter
 from polymigrate.migration.python_cpp_target import PythonToCppTargetAdapter
+from polymigrate.migration.python_csharp_target import PythonToCSharpTargetAdapter
 from polymigrate.migration.python_php_target import PythonToPHPTargetAdapter
 from polymigrate.migration.python_rust_target import PythonToRustTargetAdapter
 from polymigrate.migration.python_ruby_target import PythonToRubyTargetAdapter
@@ -436,10 +437,10 @@ def _derive_final_status(
 def _run_deterministic_migration(args, source_language, target_language) -> int:
     """Run an offline deterministic Python-to-target subset and local checks."""
     pair = (source_language.id, target_language.id)
-    if pair not in {("python", "go"), ("python", "javascript"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp")}:
+    if pair not in {("python", "go"), ("python", "javascript"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp")}:
         raise ValueError(
             "The deterministic strategy currently supports --from python --to go, "
-            "javascript, rust, java, php, ruby, or cpp"
+            "javascript, rust, java, php, ruby, cpp, or csharp"
         )
 
     context = {}
@@ -467,6 +468,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         adapters.register_target(PythonToRubyTargetAdapter())
     elif target_language.id == "cpp":
         adapters.register_target(PythonToCppTargetAdapter())
+    elif target_language.id == "csharp":
+        adapters.register_target(PythonToCSharpTargetAdapter())
     else:
         adapters.register_target(PythonToJavaTargetAdapter())
     result = MigrationEngine(adapters).execute(
@@ -551,7 +554,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         executions.append(record)
         return status
 
-    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "Main.java" if target_language.id == "java" else "main.php" if target_language.id == "php" else "main.rb" if target_language.id == "ruby" else "main.cpp")
+    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "Main.java" if target_language.id == "java" else "main.php" if target_language.id == "php" else "main.rb" if target_language.id == "ruby" else "Program.cs" if target_language.id == "csharp" else "main.cpp")
     if target_language.id == "go":
         go = shutil.which("go")
         gofmt = shutil.which("gofmt")
@@ -649,6 +652,24 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             gates["target_build"] = compile_status
             if compile_status == "PASSED":
                 runtime_status = run_check("target_runtime_smoke", [str(executable)])
+                if runtime_status != "PASSED":
+                    gates["target_build"] = runtime_status
+        gates["go_vet"] = "NOT_APPLICABLE"
+    elif target_language.id == "csharp":
+        dotnet = shutil.which("dotnet")
+        project_file = result.output_root / "PolyMigrate.csproj"
+        if not dotnet or not project_file.is_file():
+            gates["target_build"] = "BLOCKED"
+            warnings.append("C# validation is blocked because dotnet and the generated PolyMigrate.csproj must be available.")
+        else:
+            build_status = run_check(
+                "target_build_csharp",
+                [dotnet, "build", str(project_file), "--configuration", "Release", "--nologo", "--verbosity", "quiet"],
+            )
+            gates["target_build"] = build_status
+            if build_status == "PASSED":
+                assembly = result.output_root / "bin" / "Release" / "net8.0" / "PolyMigrate.dll"
+                runtime_status = run_check("target_runtime_smoke", [dotnet, str(assembly)])
                 if runtime_status != "PASSED":
                     gates["target_build"] = runtime_status
         gates["go_vet"] = "NOT_APPLICABLE"
