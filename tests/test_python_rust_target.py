@@ -83,8 +83,8 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
     def test_abs_builtin_supports_safe_integer_values(self):
         files = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
         code = files["src/main.rs"]
-        self.assertIn("(x).abs()", code)
-        self.assertIn("(7).abs()", code)
+        self.assertIn("(x as i32).abs()", code)
+        self.assertIn("(7 as i32).abs()", code)
 
     def test_abs_builtin_rejects_shadowing_invalid_types_and_overflow(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the abs"):
