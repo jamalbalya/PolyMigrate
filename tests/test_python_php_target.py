@@ -37,7 +37,7 @@ class PythonToPHPTranslatorTests(unittest.TestCase):
         )[0].content
         self.assertIn("$prefix = ('hello ' . 'world');", generated)
         self.assertIn("$flag = true;", generated)
-        self.assertIn("polymigrateString($flag)", generated)
+        self.assertIn("array_map('polymigrateString', [$prefix, $flag, polymigrateString(false)])", generated)
         self.assertIn("polymigrateString(false)", generated)
         self.assertIn("return $value ? 'True' : 'False';", generated)
 
