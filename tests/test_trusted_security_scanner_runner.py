@@ -12,12 +12,16 @@ from polymigrate.security.scanner_runner import _RULES_PATH, _parse_report, run_
 
 
 class LocalScannerRunnerTests(unittest.TestCase):
-    def _fake_tools(self, root: Path, bandit_findings=None):
+    def _fake_tools(self, root: Path, bandit_findings=None, gitleaks_findings=None, osv_findings=None):
         semgrep = root / "semgrep"
         bandit = root / "bandit"
-        semgrep.write_text("local semgrep test executable", encoding="utf-8")
-        bandit.write_text("local bandit test executable", encoding="utf-8")
+        gitleaks = root / "gitleaks"
+        osv = root / "osv-scanner"
+        for executable in (semgrep, bandit, gitleaks, osv):
+            executable.write_text(f"local {executable.name} test executable", encoding="utf-8")
         bandit_findings = bandit_findings or []
+        gitleaks_findings = gitleaks_findings or []
+        osv_findings = osv_findings or []
         def fake_run(args, **kwargs):
             scanner = Path(args[0]).name
             if args[1] in {"--version", "-version"}:
@@ -26,10 +30,17 @@ class LocalScannerRunnerTests(unittest.TestCase):
                 output = {"errors": [], "results": []}
             elif scanner == "bandit":
                 output = {"errors": [], "results": bandit_findings}
+            elif scanner == "gitleaks":
+                output = gitleaks_findings
+            elif scanner == "osv-scanner":
+                output = {"results": [{"packages": [{"vulnerabilities": osv_findings}]}]}
             else:
                 raise AssertionError(f"unexpected scanner command: {args}")
             return subprocess.CompletedProcess(args, 0, stdout=json.dumps(output), stderr="")
-        return { "semgrep": str(semgrep), "bandit": str(bandit) }, fake_run
+        return {
+            "semgrep": str(semgrep), "bandit": str(bandit),
+            "gitleaks": str(gitleaks), "osv-scanner": str(osv),
+        }, fake_run
 
     def test_missing_required_scanners_is_incomplete(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -38,7 +49,7 @@ class LocalScannerRunnerTests(unittest.TestCase):
             with patch("polymigrate.security.scanner_runner.shutil.which", return_value=None):
                 result = run_local_security_scanners(root, "python")
         self.assertEqual(result.status, "INCOMPLETE")
-        self.assertEqual(result.missing_scanners, ("bandit", "semgrep"))
+        self.assertEqual(result.missing_scanners, ("bandit", "gitleaks", "osv-scanner", "semgrep"))
         self.assertFalse(result.scanner_provenance_verified)
 
     def test_clean_python_scans_record_binary_and_report_evidence(self):
@@ -52,7 +63,7 @@ class LocalScannerRunnerTests(unittest.TestCase):
                  patch("polymigrate.security.scanner_runner.subprocess.run", side_effect=fake_run):
                 result = run_local_security_scanners(root, "python")
         self.assertEqual(result.status, "PASSED")
-        self.assertEqual(result.accepted_scanners, ("bandit", "semgrep"))
+        self.assertEqual(result.accepted_scanners, ("bandit", "gitleaks", "osv-scanner", "semgrep"))
         self.assertFalse(result.scanner_provenance_verified)
         self.assertTrue(result.scanner_execution_recorded)
         self.assertEqual(_security_review_gate_status(result), "INCOMPLETE")
@@ -69,6 +80,10 @@ class LocalScannerRunnerTests(unittest.TestCase):
                     hashlib.sha256(Path(paths["semgrep"]).read_bytes()).hexdigest(),
                 "POLYMIGRATE_TRUSTED_SCANNER_SHA256_BANDIT":
                     hashlib.sha256(Path(paths["bandit"]).read_bytes()).hexdigest(),
+                "POLYMIGRATE_TRUSTED_SCANNER_SHA256_GITLEAKS":
+                    hashlib.sha256(Path(paths["gitleaks"]).read_bytes()).hexdigest(),
+                "POLYMIGRATE_TRUSTED_SCANNER_SHA256_OSV_SCANNER":
+                    hashlib.sha256(Path(paths["osv-scanner"]).read_bytes()).hexdigest(),
                 "POLYMIGRATE_TRUSTED_SEMGREP_RULES_SHA256":
                     hashlib.sha256(_RULES_PATH.read_bytes()).hexdigest(),
             }
