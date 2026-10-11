@@ -249,7 +249,7 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self._translate('x = 6\nif 0 < x < 10:\n    print("in range")\n')
 
     def test_rejects_assignments_inside_conditionals(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "only print"):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "previously assigned variables"):
             self._translate("x = 1\nif x > 0:\n    y = 2\nprint(x)\n")
 
     @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
