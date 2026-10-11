@@ -177,3 +177,30 @@ jobs:
         run: python -m pip install --editable .
       - name: Run strict TypeScript compile and runtime fixtures
         run: python -m unittest tests.test_python_typescript_target tests.test_cli_deterministic_typescript -v
+
+  kotlin-deterministic-e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install pinned Kotlin compiler
+        run: |
+          curl -fsSL https://github.com/JetBrains/kotlin/releases/download/v2.4.21/kotlin-compiler-2.4.21.zip -o "$RUNNER_TEMP/kotlin-compiler.zip"
+          echo "7cc140e76daf416a0424a5557f99afd7ca89ebd463ea1101261e3e01c33e75cd  $RUNNER_TEMP/kotlin-compiler.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/kotlin-compiler.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/kotlinc/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/kotlinc/bin/kotlinc" -version
+      - name: Install package
+        run: python -m pip install --editable .
+      - name: Run Kotlin compiler and runtime fixtures
+        run: python -m unittest tests.test_python_kotlin_target tests.test_cli_deterministic_kotlin -v
