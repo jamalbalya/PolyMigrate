@@ -142,12 +142,13 @@ class PythonToRustTargetAdapter:
             self._checked_integer_value(node, self._int_values)
             op = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*"}[type(node.op)]
             return f"({left} {op} {right})", "int"
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return f"!({self._condition(node.operand, assigned)})", "bool"
+
         if (isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub)
                 and isinstance(node.operand, ast.Constant) and type(node.operand.value) is int
                 and node.operand.value == 2**31):
             return "-2147483648", "int"
-        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-            return f"!({self._condition(node.operand, assigned)})", "bool"
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
             if (isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant)
                     and type(node.operand.value) is int and node.operand.value == 0):
