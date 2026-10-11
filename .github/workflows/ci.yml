@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install package
+        run: python -m pip install --editable ".[parsers]"
+      - name: Build wheel and verify packaged skills
+        run: |
+          python -m pip wheel --no-deps --wheel-dir dist .
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          wheel = next(Path("dist").glob("polymigrate-*.whl"))
+          with ZipFile(wheel) as archive:
+              names = set(archive.namelist())
+          required = {
+              f"polymigrate/skills/builtin/{skill}/{file}"
+              for skill in ("behavior-preservation", "graphify-analysis", "library-replacement")
+              for file in ("skill.json", "SKILL.md")
+          }
+          missing = required - names
+          if missing:
+              raise SystemExit(f"Built wheel is missing skill assets: {sorted(missing)}")
+          print(f"Verified {len(required)} packaged skill assets in {wheel.name}")
+          PY
+      - name: Compile
+        run: python -m compileall -q src tests
+      - name: Unit, integration, and E2E tests
+        run: python -m unittest discover -s tests -v
+
+  docker-behavior-e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: src
+      POLYMIGRATE_RUN_DOCKER_E2E: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: python -m pip install --editable .
+      - name: Pull preapproved behavior test images
+        run: |
+          docker pull python:3.12-slim
+          docker pull node:22-alpine
+          docker pull golang:1.23-alpine
+      - name: Run real sandboxed behavior comparison
+        run: python -m unittest discover -s tests -p "test_behavior_comparison_docker.py" -v

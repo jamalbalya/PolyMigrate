@@ -311,9 +311,9 @@ def _security_review_gate_status(result) -> str:
     """Keep the comprehensive review gate closed until T059 is implemented.
 
     Authenticated scanner provenance proves which bounded tools and rules ran;
-    it does not prove the scan is comprehensive. Preserve scanner findings and
-    provenance in the separate scanner report, but never promote this gate to
-    PASSED based on the current limited scanner profile alone.
+    it does not prove that the scan is comprehensive. Preserve scanner findings
+    and provenance in the separate scanner report, but never promote this gate
+    to PASSED based on the current limited scanner profile alone.
     """
     return "INCOMPLETE"
 

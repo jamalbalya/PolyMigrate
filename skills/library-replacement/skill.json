@@ -1,0 +1,8 @@
+{
+  "id": "library-replacement",
+  "version": "1.0.0",
+  "description": "Evaluate equivalent libraries, composed solutions, adapters, custom implementations, and architectural alternatives.",
+  "input_contract": ["source_library", "required_capabilities", "target_language", "evidence"],
+  "output_contract": ["ranked_candidates", "decision_rationale", "validation_plan"],
+  "allowed_tools": ["search_documentation", "inspect_package_metadata", "search_package_registry", "resolve_library_gap", "read_source", "run_tests", "compare_behavior"]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "behavior-preservation",
+  "version": "1.0.0",
+  "description": "Preserve observable behavior and verify migrated code with differential and regression tests.",
+  "input_contract": ["source_contract", "source_tests", "target_implementation"],
+  "output_contract": ["test_matrix", "behavior_differences", "validation_status"],
+  "allowed_tools": ["read_source", "write_workspace", "run_build", "run_tests", "compare_behavior", "emit_report"]
+}
