@@ -342,7 +342,7 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
             self._translate("print(missing)\n")
 
     def test_rejects_unsupported_control_flow(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "While"):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "integer comparison"):
             self._translate("while True:\n    print('yes')\n")
 
     def test_rejects_console_shadowing_when_print_is_used(self):
