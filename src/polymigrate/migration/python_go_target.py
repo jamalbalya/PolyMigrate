@@ -6,7 +6,7 @@ Supported:
 - print() with up to 32 positional arguments and safe integer abs()
 - Binary +, -, and * expressions
 - Unary + and - on integers
-- Simple if/else conditions with safe comparisons and print-only branches
+- Simple if/else conditions with safe comparisons and bounded assignments to existing variables
 
 Unsupported syntax is rejected rather than translated speculatively.
 Source code is parsed, never executed.
