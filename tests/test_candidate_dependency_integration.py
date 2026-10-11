@@ -33,6 +33,46 @@ class CandidateDependencyIntegrationTests(unittest.TestCase):
         self.assertEqual(status, "PASSED")
         self.assertIn("not applicable", warnings[0])
 
+    def test_unresolved_library_gap_does_not_pass_dependency_integration(self):
+        status, warnings = _candidate_dependency_integration_status(
+            [{"decision_type": "unresolved", "strategy": "unresolved"}],
+            self.review, self.gates, "python",
+        )
+        self.assertEqual(status, "UNVERIFIED")
+        self.assertIn("remain unresolved", warnings[0])
+
+    def test_dependency_planner_warning_does_not_turn_missing_results_into_pass(self):
+        status, warnings = _candidate_dependency_integration_status(
+            [], self.review, self.gates, "python",
+            dependency_warnings=("dependency planning failed",),
+        )
+        self.assertEqual(status, "NOT_RUN")
+        self.assertIn("emitted warnings", warnings[0])
+
+    def test_planner_warnings_keep_candidate_proof_unverified(self):
+        status, warnings = _candidate_dependency_integration_status(
+            [self.candidate], self.review, self.gates, "go",
+            dependency_warnings=("import inventory reached its limit",),
+        )
+        self.assertEqual(status, "NOT_RUN")
+        self.assertIn("inventory may be incomplete", warnings[0])
+
+    def test_custom_implementation_recommendation_is_not_dependency_integration_proof(self):
+        status, warnings = _candidate_dependency_integration_status(
+            [{"decision_type": "custom_implementation", "strategy": "custom"}],
+            self.review, self.gates, "python",
+        )
+        self.assertEqual(status, "UNVERIFIED")
+        self.assertIn("custom/architectural implementation", warnings[0])
+
+    def test_unresolved_gap_blocks_proof_even_when_another_candidate_is_selected(self):
+        status, warnings = _candidate_dependency_integration_status(
+            [self.candidate, {"decision_type": "unresolved", "strategy": "unresolved"}],
+            self.review, self.gates, "go",
+        )
+        self.assertEqual(status, "UNVERIFIED")
+        self.assertIn("One or more library gaps remain unresolved", warnings[0])
+
     def test_generic_green_gates_do_not_replace_candidate_specific_test_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             status, warnings = _candidate_dependency_integration_status(

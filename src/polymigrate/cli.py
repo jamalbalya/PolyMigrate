@@ -214,12 +214,22 @@ def _candidate_dependency_integration_status(
     gates: dict[str, str],
     target_language: str,
     project_root: Path | None = None,
+    dependency_warnings: list[str] | tuple[str, ...] = (),
 ) -> tuple[str, list[str]]:
-    """Require a candidate package to be declared, imported, built, and integration-tested."""
-    candidates = [item for item in library_resolutions if item.get("decision_type") == "candidate"]
+    """Require complete dependency evidence and resolved library gaps before a pass."""
+    if dependency_warnings:
+        return "NOT_RUN", [
+            "Dependency-gap planning emitted warnings; the dependency inventory may be incomplete, so integration cannot be proven."
+        ]
+    unresolved = [item for item in library_resolutions if item.get("decision_type") != "candidate"]
+    if unresolved:
+        return "UNVERIFIED", [
+            "One or more library gaps remain unresolved or require a custom/architectural implementation; dependency integration cannot be marked PASSED."
+        ]
+    candidates = list(library_resolutions)
     if not candidates:
         return "PASSED", [
-            "No candidate library dependencies were selected; candidate-specific dependency integration proof is not applicable."
+            "No candidate library dependencies or unresolved library gaps were reported; candidate-specific dependency integration proof is not applicable."
         ]
     if dependency_review.status != "PASSED":
         return "NOT_RUN", ["Candidate dependency integration proof requires a PASSED dependency wiring review."]
@@ -868,7 +878,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 validation.gates["behavior_comparison"] = behavior_result.status
             dependency_integration_status, dependency_integration_warnings = _candidate_dependency_integration_status(
-                library_resolutions, dependency_wiring_result, validation.gates, target_language.id, result.output_root
+                library_resolutions, dependency_wiring_result, validation.gates, target_language.id,
+                result.output_root, dependency_warnings=dependency_warnings,
             )
             validation.gates["dependency_integration"] = dependency_integration_status
             gates = validation.gates
