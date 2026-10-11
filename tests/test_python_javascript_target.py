@@ -129,6 +129,39 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "cannot change a variable's type"):
             self._translate('x = 1\nif x > 0:\n    x = "two"\nprint(x)\n')
 
+    def test_augmented_assignments_match_python_output(self):
+        code = self._translate("x = 2\nx += 3\nx *= 2\nx -= 1\nprint(x)\n")
+        self.assertIn("x += 3;", code)
+        self.assertIn("x *= 2;", code)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.js"
+            path.write_text(code, encoding="utf-8")
+            run = subprocess.run(["node", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "9\n")
+
+    def test_string_augmented_assignment(self):
+        code = self._translate('message = "a"\nmessage += "b"\nprint(message)\n')
+        self.assertIn('message += "b";', code)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required")
+    def test_string_augmented_assignment_matches_python_output(self):
+        code = self._translate('message = "a"\nmessage += "b"\nprint(message)\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.js"
+            path.write_text(code, encoding="utf-8")
+            run = subprocess.run(["node", str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "ab\n")
+
+    def test_augmented_assignment_rejects_type_mismatch_boolean_and_overflow(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "same type"):
+            self._translate('x = 1\nx += "a"\nprint(x)\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Boolean augmented arithmetic"):
+            self._translate("flag = True\nflag += True\nprint(flag)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "safe integer range"):
+            self._translate("x = 9007199254740991\nx += 1\nprint(x)\n")
+
     def test_print_string(self):
         self.assertIn('console.log("hello");', self._translate('print("hello")\n'))
 
