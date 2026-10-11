@@ -293,6 +293,63 @@ def _extract_structure(language_id: str, source_text: str) -> tuple[tuple[str, .
     return tuple(sorted(symbols)[:200]), tuple(sorted(dependencies)[:100]), warning, "python-ast"
 
 
+def _extract_references(language_id: str, source_text: str) -> tuple[str, ...]:
+    """Extract bounded call-name hints from Python AST or an already-installed Tree-sitter grammar."""
+    references: set[str] = set()
+    if language_id == "python":
+        try:
+            tree = ast.parse(source_text)
+        except (SyntaxError, RecursionError):
+            return ()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if isinstance(node.func, ast.Name):
+                references.add(node.func.id)
+            elif isinstance(node.func, ast.Attribute):
+                references.add(node.func.attr)
+        return tuple(sorted(references)[:200])
+
+    parser = _offline_tree_sitter_parser(language_id)
+    if parser is None:
+        return ()
+    try:
+        tree = parser.parse(source_text.encode("utf-8"))
+    except Exception:
+        return ()
+    if tree is None or tree.root_node.has_error:
+        return ()
+    call_types = {
+        "go": {"call_expression"},
+        "javascript": {"call_expression", "new_expression"},
+        "typescript": {"call_expression", "new_expression"},
+        "java": {"method_invocation", "object_creation_expression"},
+        "kotlin": {"call_expression"},
+        "rust": {"call_expression"},
+        "csharp": {"invocation_expression", "object_creation_expression"},
+        "cpp": {"call_expression"},
+        "c": {"call_expression"},
+        "ruby": {"call", "command"},
+        "php": {"function_call_expression", "member_call_expression", "scoped_call_expression"},
+        "swift": {"call_expression"},
+    }.get(language_id, set())
+    stack = [tree.root_node]
+    visited = 0
+    call_pattern = re.compile(r"([A-Za-z_$][A-Za-z0-9_$]*(?:(?:\\.|::|->)[A-Za-z_$][A-Za-z0-9_$]*)*)\\s*\\(")
+    while stack and visited < 100_000:
+        node = stack.pop()
+        visited += 1
+        if node.type in call_types and node.text:
+            text = node.text.decode("utf-8", errors="replace")[:4_000]
+            match = call_pattern.search(text)
+            if match:
+                name = re.split(r"\\.|::|->", match.group(1))[-1]
+                if name and name not in {"if", "while", "for", "switch", "catch", "sizeof"}:
+                    references.add(name)
+        stack.extend(reversed(node.named_children))
+    return tuple(sorted(references)[:200])
+
+
 class InventorySourceAdapter:
     """Bounded source inventory with Python AST hints and heuristic structure extraction for other languages."""
     def __init__(self, language_id: str, extensions: Iterable[str], *, max_file_bytes: int = 1_000_000,
