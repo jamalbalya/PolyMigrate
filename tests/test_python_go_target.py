@@ -426,6 +426,21 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.stdout, "0\n2\n4\n5\n3\n1\n")
 
     @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
+    def test_range_loop_assignment_to_existing_variable_matches_python_output(self):
+        source = "x = 0\nfor i in range(3):\n    x = i\nprint(x)\n"
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.go"
+            path.write_text(code, encoding="utf-8")
+            fmt = subprocess.run(["gofmt", "-w", str(path)], capture_output=True,
+                                 text=True, timeout=10, check=False)
+            self.assertEqual(fmt.returncode, 0, fmt.stderr)
+            run = subprocess.run(["go", "run", str(path)], capture_output=True,
+                                 text=True, timeout=30, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "2\n")
+
+    @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
     def test_range_loop_generated_program_builds_and_runs(self):
         code = self._translate("for i in range(3):\n    print(i)\n")
         with tempfile.TemporaryDirectory() as tmp:
