@@ -112,6 +112,26 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "signed int32 range"):
             self._translate("x = 2147483647\nx += 1\nprint(x)\n")
 
+    def test_bounded_while_loop_matches_python_output(self):
+        code = self._translate("x = 0\nwhile x < 3:\n    print(x)\n    x += 1\nprint(x)\n")
+        self.assertIn("while ((x < 3)) {", code)
+        with tempfile.TemporaryDirectory() as tmp:
+            java_file = Path(tmp) / "Main.java"
+            java_file.write_text(code, encoding="utf-8")
+            compiled = subprocess.run(["javac", str(java_file)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            run = subprocess.run(["java", "-cp", tmp, "Main"], capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "0\n1\n2\n3\n")
+
+    def test_while_loop_requires_provable_termination(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "does not update its condition variables"):
+            self._translate("x = 0\nwhile x < 1:\n    print(x)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "no progress"):
+            self._translate("x = 0\nwhile x < 1:\n    x += 0\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "integer comparison"):
+            self._translate("while True:\n    print(1)\n")
+
     def test_translates_assignments_arithmetic_and_print(self):
         code = self._translate("x = 6\ny = x * 7\nprint(y)\n")
         self.assertIn("int x = 6;", code)
