@@ -409,6 +409,7 @@ class InventorySourceAdapter:
                     warnings.append(f"Skipped unreadable or non-UTF-8 source file: {relative.as_posix()}")
                     continue
                 symbols, dependencies, structure_warning, parser_backend = _extract_structure(self.language_id, text)
+                references = _extract_references(self.language_id, text)
                 parser_backends.add(parser_backend)
                 if structure_warning:
                     warnings.append(f"{relative.as_posix()}: {structure_warning}")
@@ -418,6 +419,7 @@ class InventorySourceAdapter:
                     content_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
                     symbols=symbols,
                     dependencies=dependencies,
+                    references=references,
                 ))
                 total_bytes += size
         if not units:
