@@ -172,6 +172,9 @@ class PythonToGoTargetAdapter:
             op = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*"}[type(node.op)]
             return f"({left} {op} {right})", left_type
 
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return f"!({self._condition(node.operand, assigned)})", "bool"
+
         if isinstance(node, ast.UnaryOp,):
             if (
                 isinstance(node.op, ast.USub)
@@ -247,8 +250,6 @@ class PythonToGoTargetAdapter:
         return start_expression, stop_expression, start_value, stop_value, step_expression, step_value
 
     def _condition(self, node: ast.expr, assigned: set[str]) -> str:
-        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-            return f"!({self._condition(node.operand, assigned)})", "bool"
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
             return f"!({self._condition(node.operand, assigned)})"
         if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
