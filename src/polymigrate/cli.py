@@ -383,15 +383,24 @@ def _promote_java_dependency_review_with_candidate_evidence(
     )
 
 
-def _security_review_gate_status(result) -> str:
-    """Keep the comprehensive review gate closed until T059 is implemented.
-
-    Authenticated scanner provenance proves which bounded tools and rules ran;
-    it does not prove that the scan is comprehensive. Preserve scanner findings
-    and provenance in the separate scanner report, but never promote this gate
-    to PASSED based on the current limited scanner profile alone.
-    """
-    return "INCOMPLETE"
+def _security_review_gate_status(scanner_result, static_review=None, dependency_review=None) -> str:
+    """Require clean static review, trusted SAST/secret/SCA scans, and dependency consistency."""
+    if scanner_result is None or static_review is None or dependency_review is None:
+        return "INCOMPLETE"
+    statuses = (scanner_result.status, static_review.status, dependency_review.status)
+    if "BLOCKED" in statuses:
+        return "BLOCKED"
+    if "FAILED" in statuses:
+        return "FAILED"
+    if "REVIEW_REQUIRED" in statuses:
+        return "REVIEW_REQUIRED"
+    if (
+        statuses != ("PASSED", "PASSED", "PASSED")
+        or not getattr(scanner_result, "scanner_execution_recorded", False)
+        or not getattr(scanner_result, "scanner_provenance_verified", False)
+    ):
+        return "INCOMPLETE"
+    return "PASSED"
 
 
 def _derive_final_status(
@@ -591,7 +600,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
     dependency_result = review_dependency_wiring(result.output_root, target_language.id)
     gates["dependency_wiring"] = dependency_result.status
     gates["dependency_integration"] = "PASSED"
-    gates["security_review"] = _security_review_gate_status(trusted_security_result)
+    gates["security_review"] = _security_review_gate_status(trusted_security_result, security_result, dependency_result)
     warnings.append("No candidate library dependencies were selected; candidate-specific dependency integration proof is not applicable.")
 
     warnings.extend(security_result.warnings)
@@ -964,7 +973,7 @@ def main(argv: list[str] | None = None) -> int:
             security_evidence_result = _load_security_evidence(args.security_evidence)
             dependency_wiring_result = review_dependency_wiring(result.output_root, target_language.id)
             validation.gates["dependency_wiring"] = dependency_wiring_result.status
-            validation.gates["security_review"] = _security_review_gate_status(trusted_security_result)
+            validation.gates["security_review"] = _security_review_gate_status(trusted_security_result, static_security_result, dependency_wiring_result)
             behavior_result = None
             if args.behavior_spec is not None:
                 source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"

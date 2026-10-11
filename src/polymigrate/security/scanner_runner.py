@@ -19,20 +19,21 @@ from polymigrate.security.evidence_gate import SecurityEvidenceResult, evaluate_
 
 _RUNNER_ID = "polymigrate_local_scanner_runner_v1"
 _RULES_PATH = Path(__file__).with_name("semgrep_rules.yml")
+_BASE_SCANNERS = ("semgrep", "gitleaks", "osv-scanner")
 _PROFILES: dict[str, tuple[str, ...]] = {
-    "python": ("semgrep", "bandit"),
-    "go": ("semgrep", "gosec"),
-    "javascript": ("semgrep",),
-    "typescript": ("semgrep",),
-    "java": ("semgrep",),
-    "kotlin": ("semgrep",),
-    "rust": ("semgrep",),
-    "csharp": ("semgrep",),
-    "c": ("semgrep",),
-    "cpp": ("semgrep",),
-    "ruby": ("semgrep",),
-    "php": ("semgrep",),
-    "swift": ("semgrep",),
+    "python": (*_BASE_SCANNERS, "bandit"),
+    "go": (*_BASE_SCANNERS, "gosec"),
+    "javascript": _BASE_SCANNERS,
+    "typescript": _BASE_SCANNERS,
+    "java": _BASE_SCANNERS,
+    "kotlin": _BASE_SCANNERS,
+    "rust": _BASE_SCANNERS,
+    "csharp": _BASE_SCANNERS,
+    "c": _BASE_SCANNERS,
+    "cpp": _BASE_SCANNERS,
+    "ruby": _BASE_SCANNERS,
+    "php": _BASE_SCANNERS,
+    "swift": _BASE_SCANNERS,
 }
 _MAX_BINARY_BYTES = 300_000_000
 _MAX_RULES_BYTES = 5_000_000
@@ -76,6 +77,13 @@ def _scan_args(scanner_id: str, executable: str, root: Path) -> list[str]:
         return [executable, "-r", str(root), "-f", "json", "-q"]
     if scanner_id == "gosec":
         return [executable, "-fmt=json", "./..."]
+    if scanner_id == "gitleaks":
+        return [
+            executable, "dir", "--no-banner", "--no-color", "--redact=100",
+            "--report-format=json", "--report-path=-", str(root),
+        ]
+    if scanner_id == "osv-scanner":
+        return [executable, "scan", "source", "--format", "json", "--recursive", str(root)]
     raise ValueError("scanner is not allowlisted")
 
 
@@ -85,14 +93,48 @@ def _finding_severity(scanner_id: str, value: Any) -> str | None:
     severity = value.upper()
     if scanner_id == "semgrep":
         return {"ERROR": "HIGH", "WARNING": "MEDIUM", "INFO": "LOW"}.get(severity)
+    if scanner_id in {"gitleaks", "osv-scanner"}:
+        # Any discovered secret or known vulnerable dependency is a blocking finding.
+        return "HIGH"
     if severity in {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}:
         return severity
     return None
 
 
 def _parse_report(scanner_id: str, payload: Any) -> tuple[list[dict[str, str]], bool]:
+    if scanner_id == "gitleaks":
+        if not isinstance(payload, list):
+            return [], False
+        findings: list[dict[str, str]] = []
+        for item in payload:
+            if not isinstance(item, dict) or not isinstance(item.get("RuleID"), str) or not item["RuleID"].strip():
+                return [], False
+            findings.append({"severity": "HIGH", "rule_id": "GITLEAKS:" + item["RuleID"]})
+        return findings, True
     if not isinstance(payload, dict):
         return [], False
+    if scanner_id == "osv-scanner":
+        raw_results = payload.get("results")
+        if not isinstance(raw_results, list):
+            return [], False
+        findings: list[dict[str, str]] = []
+        for result in raw_results:
+            if not isinstance(result, dict) or not isinstance(result.get("packages"), list):
+                return [], False
+            for package in result["packages"]:
+                if not isinstance(package, dict):
+                    return [], False
+                vulnerabilities = package.get("vulnerabilities", [])
+                if not isinstance(vulnerabilities, list):
+                    return [], False
+                for vulnerability in vulnerabilities:
+                    if not isinstance(vulnerability, dict) or not isinstance(vulnerability.get("id"), str):
+                        return [], False
+                    vulnerability_id = vulnerability["id"].strip()
+                    if not vulnerability_id:
+                        return [], False
+                    findings.append({"severity": "HIGH", "rule_id": "OSV:" + vulnerability_id})
+        return findings, True
     if scanner_id == "semgrep":
         if not isinstance(payload.get("errors"), list) or payload["errors"]:
             return [], False
@@ -150,7 +192,7 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
     Scanner binary hashes and the Semgrep rules hash must match operator-managed pins;
     missing or mismatched pins keep scanner provenance unverified. The scanner set is
     intentionally limited and does not establish a comprehensive audit.
-    Bandit and gosec are additional required scanners for Python and Go respectively.
+    Gitleaks checks for exposed secrets, OSV-Scanner checks lockfiles/manifests for known dependency vulnerabilities, and Bandit/gosec provide language-specific checks for Python/Go.
     """
     if root.is_symlink() or not root.is_dir():
         return evaluate_security_evidence(
@@ -176,7 +218,7 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
                         "Bundled Semgrep rules file is missing, symlinked, or exceeds the size limit."
                     )
                     continue
-            pin_variable = "POLYMIGRATE_TRUSTED_SCANNER_SHA256_" + scanner_id.upper()
+            pin_variable = "POLYMIGRATE_TRUSTED_SCANNER_SHA256_" + scanner_id.upper().replace("-", "_")
             expected_digest = os.environ.get(pin_variable, "").strip()
             binary_trusted = False
             if not expected_digest or not _SHA256.fullmatch(expected_digest):
@@ -223,8 +265,15 @@ def run_local_security_scanners(root: Path, language: str) -> SecurityEvidenceRe
             except json.JSONDecodeError:
                 payload = None
             findings, report_valid = _parse_report(scanner_id, payload)
-            allowed_codes = {0, 1} if scanner_id in {"bandit", "gosec"} else {0}
-            complete = report_valid and scan_result.returncode in allowed_codes
+            if scanner_id in {"bandit", "gosec"}:
+                complete = report_valid and scan_result.returncode in {0, 1}
+            elif scanner_id in {"gitleaks", "osv-scanner"}:
+                complete = report_valid and (
+                    scan_result.returncode == 0
+                    or (scan_result.returncode == 1 and bool(findings))
+                )
+            else:
+                complete = report_valid and scan_result.returncode == 0
             evidence.append({
                 "scanner_id": scanner_id,
                 "scanner_version": version_text.splitlines()[0][:256],
