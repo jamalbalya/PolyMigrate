@@ -301,7 +301,9 @@ def _extract_references(language_id: str, source_text: str) -> tuple[str, ...]:
             tree = ast.parse(source_text)
         except (SyntaxError, RecursionError):
             return ()
-        for node in ast.walk(tree):
+        for index, node in enumerate(ast.walk(tree)):
+            if index >= 100_000:
+                break
             if not isinstance(node, ast.Call):
                 continue
             if isinstance(node.func, ast.Name):
