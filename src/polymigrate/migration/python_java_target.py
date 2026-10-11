@@ -334,6 +334,17 @@ class PythonToJavaTargetAdapter:
         except (SyntaxError, RecursionError):
             raise UnsupportedPythonSyntax("Python source contains invalid or excessively nested syntax") from None
 
+        has_str_call = any(
+            isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "str"
+            for item in ast.walk(tree)
+        )
+        assigns_str = any(
+            isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store) and item.id == "str"
+            for item in ast.walk(tree)
+        )
+        if has_str_call and assigns_str:
+            raise UnsupportedPythonSyntax("Shadowing the str() builtin is not supported")
+
         referenced_names = {
             node.id for node in ast.walk(tree)
             if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
