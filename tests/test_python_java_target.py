@@ -27,6 +27,34 @@ class PythonToJavaTargetAdapterTests(unittest.TestCase):
         self.assertIn("int y = (x * 7);", code)
         self.assertIn("System.out.println(y);", code)
 
+    def test_print_supports_multiple_arguments_and_empty_call(self):
+        code = self._translate('print(42, "hello", True)\nprint()\n')
+        self.assertIn('Integer.toString(42) + " " + "hello" + " " + ((true) ? "True" : "False")', code)
+        self.assertIn("System.out.println();", code)
+
+    def test_print_rejects_keyword_arguments_and_too_many_values(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "keyword arguments"):
+            self._translate('print("a", sep=",")\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "32 positional"):
+            self._translate("print(" + ", ".join("1" for _ in range(33)) + ")\n")
+
+    @unittest.skipUnless(shutil.which("javac") and shutil.which("java"), "JDK is required")
+    def test_multi_argument_print_compiles_and_matches_python_output(self):
+        code = self._translate('print(42, "hello", True)\nprint()\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_file = root / "Main.java"
+            java_file.write_text(code, encoding="utf-8")
+            compiled = subprocess.run(
+                ["javac", str(java_file)], capture_output=True, text=True, timeout=30, check=False
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            executed = subprocess.run(
+                ["java", "-cp", tmp, "Main"], capture_output=True, text=True, timeout=30, check=False
+            )
+            self.assertEqual(executed.returncode, 0, executed.stderr)
+            self.assertEqual(executed.stdout, "42 hello True\n\n")
+
     def test_str_builtin_converts_integer_and_boolean_to_python_text(self):
         code = self._translate('x = 42\nprint("value=" + str(x))\nprint(str(True))\n')
         self.assertIn("Integer.toString(x)", code)
