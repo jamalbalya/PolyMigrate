@@ -24,6 +24,7 @@ from polymigrate.migration.manifests import scan_project_manifests
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
 from polymigrate.migration.python_go_target import PythonToGoTargetAdapter
 from polymigrate.migration.python_javascript_target import PythonToJavaScriptTargetAdapter
+from polymigrate.migration.python_java_target import PythonToJavaTargetAdapter
 from polymigrate.migration.python_rust_target import PythonToRustTargetAdapter
 from polymigrate.migration.research import LibraryResolutionWorkflow
 from polymigrate.models import MigrationRequest
@@ -348,10 +349,10 @@ def _derive_final_status(
 def _run_deterministic_migration(args, source_language, target_language) -> int:
     """Run an offline deterministic Python-to-target subset and local checks."""
     pair = (source_language.id, target_language.id)
-    if pair not in {("python", "go"), ("python", "javascript"), ("python", "rust")}:
+    if pair not in {("python", "go"), ("python", "javascript"), ("python", "rust"), ("python", "java")}:
         raise ValueError(
-            "The deterministic strategy currently supports --from python --to go "
-            "or --from python --to javascript or --from python --to rust"
+            "The deterministic strategy currently supports --from python --to go, "
+            "javascript, rust, or java"
         )
 
     context = {}
@@ -371,8 +372,10 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         adapters.register_target(PythonToGoTargetAdapter())
     elif target_language.id == "javascript":
         adapters.register_target(PythonToJavaScriptTargetAdapter())
-    else:
+    elif target_language.id == "rust":
         adapters.register_target(PythonToRustTargetAdapter())
+    else:
+        adapters.register_target(PythonToJavaTargetAdapter())
     result = MigrationEngine(adapters).execute(
         args.source,
         source_language.id,
@@ -455,7 +458,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         executions.append(record)
         return status
 
-    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js")
+    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "Main.java")
     if target_language.id == "go":
         go = shutil.which("go")
         gofmt = shutil.which("gofmt")
@@ -483,6 +486,20 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             warnings.append("JavaScript validation is blocked because node is not available.")
         else:
             gates["target_build"] = run_check("target_build", [node, "--check", str(main_source)])
+        gates["go_vet"] = "NOT_APPLICABLE"
+    elif target_language.id == "java":
+        javac = shutil.which("javac")
+        java = shutil.which("java")
+        if not javac or not java:
+            gates["target_build"] = "BLOCKED"
+            warnings.append("Java validation is blocked because both javac and java must be available.")
+        else:
+            compile_status = run_check("target_build", [javac, str(main_source)])
+            gates["target_build"] = compile_status
+            if compile_status == "PASSED":
+                runtime_status = run_check("target_runtime_smoke", [java, "-cp", ".", "Main"])
+                if runtime_status != "PASSED":
+                    gates["target_build"] = runtime_status
         gates["go_vet"] = "NOT_APPLICABLE"
     else:
         cargo = shutil.which("cargo")
