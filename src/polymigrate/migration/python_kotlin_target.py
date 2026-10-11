@@ -211,6 +211,28 @@ class PythonToKotlinTargetAdapter:
         values = ", ".join(expression for expression, _ in expressions)
         return f"println(listOf<Any>({values}).joinToString(\" \") {{ pyString(it) }})"
 
+    def _augmented_assignment(self, node: ast.AugAssign, assigned: set[str], types: dict[str, str],
+                               integer_values: dict[str, int], string_values: dict[str, str]) -> str:
+        if not isinstance(node.target, ast.Name):
+            raise UnsupportedPythonSyntax("Augmented assignments must target one existing variable")
+        name = node.target.id
+        if name not in assigned:
+            raise UnsupportedPythonSyntax("Augmented assignments must target previously assigned variables")
+        expression, value_type = self._expr(node.value, assigned, types, integer_values, string_values)
+        target_type = types.get(name)
+        if target_type == "int" and value_type == "int" and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult)):
+            symbol = "+" if isinstance(node.op, ast.Add) else "-" if isinstance(node.op, ast.Sub) else "*"
+            combined = ast.BinOp(left=ast.Name(id=name, ctx=ast.Load()), op=node.op, right=node.value)
+            integer_values[name] = self._int_value(combined, integer_values, string_values)
+            string_values.pop(name, None)
+            return f"{name} {symbol}= {expression}"
+        if target_type == "string" and value_type == "string" and isinstance(node.op, ast.Add):
+            combined = ast.BinOp(left=ast.Name(id=name, ctx=ast.Load()), op=node.op, right=node.value)
+            string_values[name] = _string_value(combined, string_values)
+            integer_values.pop(name, None)
+            return f"{name} += {expression}"
+        raise UnsupportedPythonSyntax("Only Int +=/-=/*= and String += are supported augmented assignments")
+
     def _if_statement(self, node: ast.If, assigned: set[str], types: dict[str, str],
                       integer_values: dict[str, int], string_values: dict[str, str] | None = None) -> str:
         base_integer_values = dict(integer_values)
@@ -248,6 +270,10 @@ class PythonToKotlinTargetAdapter:
                 elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
                     rendered.append(self._print_call(
                         statement.value, assigned, types, local_integers, local_strings
+                    ))
+                elif isinstance(statement, ast.AugAssign):
+                    rendered.append(self._augmented_assignment(
+                        statement, assigned, types, local_integers, local_strings
                     ))
                 elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
                       and isinstance(statement.value.value, str)):
@@ -356,6 +382,13 @@ class PythonToKotlinTargetAdapter:
                 if name not in assigned or types.get(name) != "int":
                     raise UnsupportedPythonSyntax("while bodies may only update previously assigned integer variables")
                 modified_names.add(name)
+            elif isinstance(statement, ast.AugAssign):
+                if not isinstance(statement.target, ast.Name):
+                    raise UnsupportedPythonSyntax("while augmented assignments must target one existing integer variable")
+                name = statement.target.id
+                if name not in assigned or types.get(name) != "int" or not isinstance(statement.op, (ast.Add, ast.Sub, ast.Mult)):
+                    raise UnsupportedPythonSyntax("while loops support only Int +=/-=/*= assignments to existing variables")
+                modified_names.add(name)
             elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
                 if not isinstance(statement.value.func, ast.Name) or statement.value.func.id != "print":
                     raise UnsupportedPythonSyntax("while bodies may contain only print() or integer assignments")
@@ -384,6 +417,10 @@ class PythonToKotlinTargetAdapter:
                         raise UnsupportedPythonSyntax("while assignments must remain integer-valued")
                     local_values[name] = self._int_value(statement.value, local_values, string_values)
                     rendered.append(f"{name} = {expression}")
+                elif isinstance(statement, ast.AugAssign):
+                    rendered.append(self._augmented_assignment(
+                        statement, assigned, types, local_values, string_values
+                    ))
                 elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
                     rendered.append(self._print_call(statement.value, assigned, types, local_values, string_values))
                 elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str):
@@ -405,6 +442,8 @@ class PythonToKotlinTargetAdapter:
                     if value_type != "int":
                         raise UnsupportedPythonSyntax("while assignments must remain integer-valued")
                     facts[name] = self._int_value(statement.value, facts, string_values)
+                elif isinstance(statement, ast.AugAssign):
+                    self._augmented_assignment(statement, assigned, types, facts, string_values)
                 elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
                     self._print_call(statement.value, assigned, types, facts, string_values)
             iterations += 1
