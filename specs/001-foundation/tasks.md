@@ -82,7 +82,7 @@
 
 - [x] T072 Extend the deterministic Python-to-Rust subset with bounded if/else conditions, boolean combinations, and integer/string truthiness mappings, verified by offline Cargo execution.
 
-- [x] T073 Extend deterministic Python-to-Go/JavaScript/Rust subsets with bounded `range()` loops over statically known bounds, enforce a 10,000-iteration cap, and reject loop-body assignments; verify generated runtime output for all three targets.
+- [x] T073 Extend deterministic Python-to-Go/JavaScript/Rust subsets with bounded `range()` loops over statically known bounds, enforce a 10,000-iteration cap, and reject loop-index reassignment; loop bodies may update previously assigned variables without changing types, verified with runtime output fixtures.
 - [x] T074 Add bounded Python `if`/`elif`/`else` chain support to deterministic Go, JavaScript, and Rust translators; cap chains at 20 branches and verify generated runtime output.
 - [x] T075 Fail closed when dependency-gap planning fails or library decisions remain unresolved/custom; do not treat an empty candidate list as proof that dependency integration passed.
 - [x] T076 Support statically known positive and negative non-zero `range()` steps in deterministic Go, JavaScript, and Rust translators; cap actual iteration count and reject target-integer overflow, with runtime-equivalence tests.
@@ -118,3 +118,5 @@
 - [x] T097 Build a deterministic, content-free project index from parser-derived file paths, symbols, dependencies, and hashes; enforce file/item/serialized-size caps and include the index in each AI translation request for cross-file context.
 - [x] T098 Include the exact mapped target-relative path in each AI translation prompt and require target naming conventions (including Java public type/file-name alignment), with prompt contract tests.
 - [x] T099 Add bounded parser-derived call-reference hints to source units, the project context index, and per-file model prompts; Python references use AST calls and other languages use installed Tree-sitter grammars when available.
+
+- [x] T100 Add runtime-equivalence fixtures for safe assignments to previously assigned variables inside bounded `range()` loops across Python-to-Go, Python-to-JavaScript, Python-to-Rust, and Python-to-Java; reject loop-local declarations and loop-index reassignment.
