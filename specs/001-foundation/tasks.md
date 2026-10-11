@@ -139,5 +139,5 @@
 
 - [x] T109 Add an offline deterministic Python-to-C#/.NET 8 translator for a single source file with simple assignments, signed-32-bit integer/string/boolean expressions, `str()`, `abs()`, and positional `print()`; generate a minimal project file, reject unsupported syntax, and validate build/runtime output in CI.
 
-- [ ] T110 Extend the deterministic Python-to-C# subset with print-only `if`/`elif`/`else` chains, safe single comparisons, Python truthiness, and short-circuit boolean conditions; reject branch assignments, nested control flow, and chained comparisons, with real .NET 8 runtime-equivalence fixtures.
+- [x] T110 Extend the deterministic Python-to-C# subset with print-only `if`/`elif`/`else` chains, safe single comparisons, Python truthiness, and short-circuit boolean conditions; reject branch assignments, nested control flow, and chained comparisons, with real .NET 8 runtime-equivalence fixtures passing in CI.
 - [ ] T111 Add bounded Python `range()` loops to the deterministic Python-to-C# subset only where static analysis proves integer safety and loop semantics; preserve Python loop-variable behavior, cap actual iterations, and reject unsupported bodies and overflow, with real .NET 8 runtime-equivalence fixtures.
