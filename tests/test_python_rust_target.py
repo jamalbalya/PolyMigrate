@@ -122,9 +122,16 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
         files = self._translate("start = 1\nstop = 4\nfor i in range(start, stop):\n    print(i)\n")
         self.assertIn("for i in start..stop {", files["src/main.rs"])
 
-    def test_rejects_range_step_and_large_loop(self):
-        with self.assertRaisesRegex(UnsupportedPythonSyntax, "explicit steps"):
-            self._translate("for i in range(0, 3, 2):\n    print(i)\n")
+    def test_range_steps_are_bounded_and_zero_is_rejected(self):
+        code = self._translate("for i in range(0, 5, 2):\n    print(i)\n")
+        negative_code = self._translate("for i in range(5, 0, -2):\n    print(i)\n")
+                self.assertIn("i += 2;", code)
+                self.assertIn("while i > 0", negative_code)
+        self._translate("for i in range(0, 10001, 2):\n    print(i)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "step cannot be zero"):
+            self._translate("for i in range(0, 5, 0):\n    print(i)\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000-iteration"):
+            self._translate("for i in range(0, 20002, 2):\n    print(i)\n")
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "10000-iteration"):
             self._translate("for i in range(10001):\n    print(i)\n")
 
