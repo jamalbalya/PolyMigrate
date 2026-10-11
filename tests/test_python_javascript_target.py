@@ -121,6 +121,18 @@ class PythonToJavaScriptTargetAdapterTests(unittest.TestCase):
             self._translate("i = 1\nfor i in range(3):\n    print(i)\n")
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is required")
+    def test_signed_range_steps_generated_program_matches_python_output(self):
+        source = "for i in range(0, 5, 2):\n    print(i)\nfor j in range(5, 0, -2):\n    print(j)\n"
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "main.js"
+            path.write_text(code, encoding="utf-8")
+            run = subprocess.run(["node", str(path)], capture_output=True, text=True,
+                                 timeout=10, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "0\n2\n4\n5\n3\n1\n")
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required")
     def test_range_loop_generated_program_matches_python_output(self):
         code = self._translate("for i in range(3):\n    print(i)\n")
         with tempfile.TemporaryDirectory() as tmp:
