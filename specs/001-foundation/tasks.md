@@ -83,3 +83,4 @@
 - [x] T072 Extend the deterministic Python-to-Rust subset with bounded if/else conditions, boolean combinations, and integer/string truthiness mappings, verified by offline Cargo execution.
 
 - [x] T073 Extend deterministic Python-to-Go/JavaScript/Rust subsets with bounded `range()` loops over statically known bounds, enforce a 10,000-iteration cap, reject explicit steps and loop-body assignments, and verify generated runtime output for all three targets.
+- [x] T074 Add bounded Python `if`/`elif`/`else` chain support to deterministic Go, JavaScript, and Rust translators; cap chains at 20 branches and verify generated runtime output.
