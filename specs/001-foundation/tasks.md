@@ -120,3 +120,5 @@
 - [x] T099 Add bounded parser-derived call-reference hints to source units, the project context index, and per-file model prompts; Python references use AST calls and other languages use installed Tree-sitter grammars when available.
 
 - [x] T100 Add runtime-equivalence fixtures for safe assignments to previously assigned variables inside bounded `range()` loops across Python-to-Go, Python-to-JavaScript, Python-to-Rust, and Python-to-Java; reject loop-local declarations and loop-index reassignment.
+
+- [x] T101 Add Unicode-code-point-aware `len(string)` support to deterministic Python-to-Go, JavaScript, Rust, and Java translators; reject builtin shadowing, invalid argument forms, and non-string values, enforce target integer bounds, and compare generated runtime output with Python fixtures.
