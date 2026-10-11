@@ -59,6 +59,12 @@ class PythonToCSharpTranslatorTests(unittest.TestCase):
                     project_for(f"{name} = 1" + chr(10) + f"print({name})" + chr(10)), {}
                 )
 
+    def test_rejects_lone_unicode_surrogates_before_writing_output(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "lone Unicode surrogates"):
+            PythonToCSharpTargetAdapter().generate(
+                project_for("print('\\ud800')\n"), {}
+            )
+
     def test_rejects_signed_32_bit_overflow(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "signed 32-bit range"):
             PythonToCSharpTargetAdapter().generate(
