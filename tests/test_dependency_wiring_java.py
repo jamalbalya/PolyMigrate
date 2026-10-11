@@ -49,6 +49,17 @@ class JavaDependencyWiringTests(unittest.TestCase):
         self.assertEqual(result.status, "BLOCKED")
         self.assertEqual(result.missing_declarations, ("com.vendor.Widget",))
 
+    def test_wildcard_external_import_is_inventory_not_silently_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "Main.java").write_text(
+                "import com.vendor.widgets.*;\nclass Main {}\n", encoding="utf-8"
+            )
+            result = review_dependency_wiring(root, "java")
+        self.assertEqual(result.status, "BLOCKED")
+        self.assertEqual(result.observed_imports, ("com.vendor.widgets",))
+        self.assertEqual(result.missing_declarations, ("com.vendor.widgets",))
+
     def test_maven_coordinate_is_recorded_but_import_mapping_stays_unverified(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._root(tmp)

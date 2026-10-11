@@ -218,11 +218,11 @@ def _java_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
         clean = re.sub(r"(?m)^\s*//.*$", "", clean)
         local_packages.update(
             match.group(1) for match in re.finditer(
-                r"(?m)^\s*package\s+([A-Za-z_$][A-Za-z0-9_$.]*)\s*;", clean
+                r"(?m)^\s*package\s+([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*;", clean
             )
         )
         for match in re.finditer(
-            r"(?m)^\s*import\s+(?:static\s+)?([A-Za-z_$][A-Za-z0-9_$.]*)(?:\.\*)?\s*;",
+            r"(?m)^\s*import\s+(?:static\s+)?([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)(?:\.\*)?\s*;",
             clean,
         ):
             imports.add(match.group(1))
@@ -250,10 +250,11 @@ def _java_dependencies(root: Path) -> tuple[set[str], set[str], list[str]]:
             except ET.ParseError:
                 warnings.append("pom.xml could not be parsed for Java dependency declarations.")
         else:
-            declared.update(re.findall(
+            coordinates = re.findall(
                 r"""(?m)\b(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testRuntimeOnly|compile)\s*\(?\s*['"]([^'"]+:[^'"]+:[^'"]+)['"]""",
                 text,
-            ))
+            )
+            declared.update(":".join(coordinate.split(":")[:2]) for coordinate in coordinates)
 
     if external and not present:
         warnings.extend(
