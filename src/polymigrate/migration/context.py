@@ -16,8 +16,10 @@ def build_source_project_index(
     max_context_chars: int = 50_000,
 ) -> dict[str, Any]:
     """Create a deterministic, content-free project index with a strict prompt-size cap."""
-    if min(max_files, max_symbols_per_file, max_dependencies_per_file, max_context_chars) < 1:
+    if min(max_files, max_symbols_per_file, max_dependencies_per_file) < 1:
         raise ValueError("Project index limits must be positive")
+    if max_context_chars < 512:
+        raise ValueError("max_context_chars must be at least 512")
 
     units = sorted(project.units, key=lambda unit: unit.relative_path)
     entries: list[dict[str, Any]] = []
