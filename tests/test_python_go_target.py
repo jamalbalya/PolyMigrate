@@ -141,6 +141,10 @@ class PythonToGoTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "2\n")
 
+    def test_rejects_conditional_type_changes(self):
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "cannot change a variable's type"):
+            self._translate('x = 1\nif x > 0:\n    x = "two"\nprint(x)\n')
+
     def test_print_string(self):
         code = self._translate('print("hello")\n')
         self.assertIn('import "fmt"', code)
