@@ -12,6 +12,19 @@ Migration draft caching is disabled by default. If enabled, the local SQLite dat
 
 The current CLI does not deploy to production and does not claim behavior equivalence. Review migration-review.json; any gate marked NOT_RUN is not evidence of correctness.
 
+## Generated-code security gate
+
+The CLI security gate requires complete reports from the bundled Semgrep ruleset, Gitleaks (secret detection), OSV-Scanner (dependency vulnerability checks), and Bandit for Python or gosec for Go. Each required executable must match an operator-managed SHA-256 pin; Semgrep's bundled rules file must match `POLYMIGRATE_TRUSTED_SEMGREP_RULES_SHA256`. Missing tools, malformed reports, findings, timeouts, or missing/mismatched pins cannot be interpreted as a clean result.
+
+The gate returns `PASSED` only when scanner evidence is complete and provenance-verified, the bounded static review has no findings requiring action, and dependency-wiring review passes. Scanner summaries omit secret values. This is a defined evidence gate over the configured scanner set, not a mathematical guarantee that generated code is secure or a substitute for a human security review before production use.
+
+Required executable pin variables:
+- `POLYMIGRATE_TRUSTED_SCANNER_SHA256_SEMGREP`
+- `POLYMIGRATE_TRUSTED_SCANNER_SHA256_GITLEAKS`
+- `POLYMIGRATE_TRUSTED_SCANNER_SHA256_OSV_SCANNER`
+- `POLYMIGRATE_TRUSTED_SCANNER_SHA256_BANDIT` for Python
+- `POLYMIGRATE_TRUSTED_SCANNER_SHA256_GOSEC` for Go
+
 ## Reporting a vulnerability
 
 Please use GitHub's private vulnerability reporting for this repository if it is enabled. Avoid posting credentials, exploit payloads, or sensitive project code in public issues.
