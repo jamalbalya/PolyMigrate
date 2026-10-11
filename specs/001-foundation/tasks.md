@@ -106,3 +106,5 @@
 - [x] T087 Add narrowly scoped Java candidate-dependency proof only for a declared project-local system-scope JAR whose exact class import is verified in the archive and whose build, integration test, and behavior gates pass; leave public Maven/Gradle resolution unverified.
 
 - [x] T088 Add safe Python `str()` conversion to the deterministic Java subset, preserving Python boolean spelling and rejecting shadowed/invalid calls; verify compiled runtime output.
+
+- [x] T089 Extend deterministic Python-to-Java `print()` to support up to 32 positional values with Python-style space separators/boolean text and empty calls; reject unsupported keyword arguments and verify generated Java compilation/runtime output.
