@@ -77,3 +77,23 @@ jobs:
           docker pull golang:1.23-alpine
       - name: Run real sandboxed behavior comparison
         run: python -m unittest discover -s tests -p "test_behavior_comparison_docker.py" -v
+
+  php-deterministic-e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PHP CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y php-cli
+      - name: Install package
+        run: python -m pip install --editable .
+      - name: Run PHP translator and CLI runtime tests
+        run: python -m unittest tests.test_python_php_target tests.test_cli_deterministic_php -v
