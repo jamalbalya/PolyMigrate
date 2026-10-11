@@ -125,8 +125,8 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
     def test_range_steps_are_bounded_and_zero_is_rejected(self):
         code = self._translate("for i in range(0, 5, 2):\n    print(i)\n")
         negative_code = self._translate("for i in range(5, 0, -2):\n    print(i)\n")
-                self.assertIn("i += 2;", code)
-                self.assertIn("while i > 0", negative_code)
+        self.assertIn("i += 2;", code)
+        self.assertIn("while i > 0", negative_code)
         self._translate("for i in range(0, 10001, 2):\n    print(i)\n")
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "step cannot be zero"):
             self._translate("for i in range(0, 5, 0):\n    print(i)\n")
