@@ -80,6 +80,34 @@ class PythonToRustTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "42\nTrue\n")
 
+    def test_len_builtin_counts_unicode_code_points_and_rejects_invalid_calls(self):
+        files = self._translate('text = "A😀B"\nn = len(text)\nprint(n)\n')
+        code = files["src/main.rs"]
+        self.assertIn("chars().count()", code)
+        self.assertIn("i32::try_from", code)
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "Shadowing the len"):
+            self._translate('len = 1\nprint(len("text"))\n')
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "strings only"):
+            self._translate("print(len(123))\n")
+        with self.assertRaisesRegex(UnsupportedPythonSyntax, "exactly one positional"):
+            self._translate('print(len(value="text"))\n')
+
+    @unittest.skipUnless(shutil.which("cargo"), "Rust toolchain is required")
+    def test_len_builtin_generated_rust_matches_python_code_point_count(self):
+        files = self._translate('text = "A😀B"\nn = len(text)\nprint(n)\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            run = subprocess.run(
+                ["cargo", "run", "--offline", "--quiet"], cwd=root,
+                capture_output=True, text=True, timeout=90, check=False,
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "3\n")
+
     def test_abs_builtin_supports_safe_integer_values(self):
         files = self._translate("x = -42\nprint(abs(x))\nprint(abs(7))\n")
         code = files["src/main.rs"]
