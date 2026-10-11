@@ -142,4 +142,4 @@
 - [x] T110 Extend the deterministic Python-to-C# subset with print-only `if`/`elif`/`else` chains, safe single comparisons, Python truthiness, and short-circuit boolean conditions; reject branch assignments, nested control flow, and chained comparisons, with real .NET 8 runtime-equivalence fixtures passing in CI.
 - [x] T111 Add bounded Python `range()` loops to the deterministic Python-to-C# subset only where static analysis proves integer safety and loop semantics; preserve Python loop-variable behavior, cap actual iterations, and reject unsupported bodies and overflow, with real .NET 8 runtime-equivalence fixtures passing in CI.
 
-- [ ] T112 Add a fail-closed deterministic Python-to-TypeScript subset with explicit type mapping, bounded expressions/control flow, compiler/runtime-equivalence fixtures, and a clear unsupported-syntax boundary.
+- [ ] T112 Add a fail-closed deterministic Python-to-TypeScript subset using the fixed int/string/boolean model, strict TypeScript compiler validation, bounded expressions/control flow, runtime-equivalence fixtures, and a clear unsupported-syntax boundary.
