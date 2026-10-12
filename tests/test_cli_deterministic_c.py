@@ -48,7 +48,7 @@ class DeterministicPythonCCLITests(unittest.TestCase):
             stderr = StringIO()
             with redirect_stderr(stderr):
                 code = main([
-                    "migrate", "--source", str(source), "--from": "go",
+                    "migrate", "--source", str(source), "--from", "go",
                     "--to", "c", "--output", str(output), "--strategy", "deterministic",
                 ])
             self.assertEqual(code, 2)
