@@ -60,8 +60,8 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             "for i in range(start, stop, 2):\n    print(i)\n"
             "for j in range(3, -1, -2):\n    print(j)\n"
         )
-        self.assertIn("for i in stride(from: Int32(start), to: Int32(stop), by: Int32(2)) {", code)
-        self.assertIn("for j in stride(from: Int32(3), to: Int32(-1), by: Int32(-2)) {", code)
+        self.assertIn("for i in stride(from: Int32(start), to: Int32(stop), by: Int(2)) {", code)
+        self.assertIn("for j in stride(from: Int32(3), to: Int32(-1), by: Int(-2)) {", code)
 
         cases = (
             ("for i in range(3):\n    print(i)\nprint(i)\n", "Use of a Swift range-loop variable after its loop"),

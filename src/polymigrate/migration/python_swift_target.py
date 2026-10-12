@@ -276,7 +276,7 @@ class PythonToSwiftTargetAdapter:
 
         assert rendered_body is not None
         return [
-            f"for {name} in stride(from: Int32({start_expression}), to: Int32({stop_expression}), by: Int32({step_expression})) {{",
+            f"for {name} in stride(from: Int32({start_expression}), to: Int32({stop_expression}), by: Int({step_expression})) {{",
             *rendered_body,
             "}",
         ]

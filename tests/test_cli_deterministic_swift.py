@@ -33,7 +33,7 @@ class DeterministicPythonSwiftCLITests(unittest.TestCase):
             self.assertTrue((output / "main.swift").is_file())
             generated = (output / "main.swift").read_text(encoding="utf-8")
             self.assertIn("if (y > 40) {", generated)
-            self.assertIn("for i in stride(from: Int32(0), to: Int32(3), by: Int32(1)) {", generated)
+            self.assertIn("for i in stride(from: Int32(0), to: Int32(3), by: Int(1)) {", generated)
             report = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))
             self.assertEqual(report["strategy"], "deterministic")
             self.assertEqual(report["target_language"], "swift")
