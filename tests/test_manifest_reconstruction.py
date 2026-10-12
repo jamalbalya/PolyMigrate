@@ -117,7 +117,7 @@ class ManifestReconstructionTests(unittest.TestCase):
             (
                 "python", "pyproject.toml",
                 '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n',
-                "executable custom build backend",
+                "build-system section",
             ),
             (
                 "rust", "Cargo.toml",

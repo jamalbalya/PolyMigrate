@@ -118,7 +118,7 @@ def reconstruct_target_manifests(
                 warnings.append(f"Rejected target manifest with executable lifecycle scripts: {path}")
                 continue
         if path == "pyproject.toml" and re.search(r"(?m)^\s*\[build-system\]\s*$", body):
-            warnings.append("Rejected pyproject.toml with an executable custom build backend.")
+            warnings.append("Rejected pyproject.toml with a build-system section because build backends can execute code.")
             continue
         if path == "Cargo.toml" and re.search(r"(?im)^\s*(?:build\s*=|\[build-dependencies\])", body):
             warnings.append("Rejected Cargo.toml with a build script or build dependencies.")
