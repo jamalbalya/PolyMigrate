@@ -73,7 +73,7 @@ class JavaScriptToGoTargetAdapter:
                 if not isinstance(iterable, ast.List):
                     raise UnsupportedJavaScriptSyntax("Unsupported generated print argument expansion")
                 node.args = list(iterable.elts)
-            artifact_content = ast.unparse(ast.fix_missing_locations(intermediate_tree)) + "\\n"
+            artifact_content = ast.unparse(ast.fix_missing_locations(intermediate_tree)) + "\n"
 
         python_units = tuple(
             SourceUnit(
