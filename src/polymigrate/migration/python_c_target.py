@@ -408,6 +408,7 @@ class PythonToCTargetAdapter:
         if not node.body:
             raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported in C")
 
+        facts_before_loop = dict(integer_values)
         assigned.add(name)
         types[name] = "int"
         rendered_body: list[str] | None = None
@@ -418,11 +419,36 @@ class PythonToCTargetAdapter:
             for statement in node.body:
                 if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
                     body_lines.extend(self._print(statement.value, assigned, types, integer_values))
+                elif isinstance(statement, ast.Assign):
+                    if len(statement.targets) != 1 or not isinstance(statement.targets[0], ast.Name):
+                        raise UnsupportedPythonSyntax("C range() assignments must target one existing integer variable")
+                    target = statement.targets[0].id
+                    if target == name:
+                        raise UnsupportedPythonSyntax("C range() loop index reassignment is not supported")
+                    if target not in assigned or types.get(target) != "int":
+                        raise UnsupportedPythonSyntax("C range() assignments must target existing integer variables")
+                    expression, value_type = self._expr(statement.value, assigned, types, integer_values)
+                    if value_type != "int":
+                        raise UnsupportedPythonSyntax("C range() assignments must remain integer-valued")
+                    integer_values[target] = self._int_value(statement.value, integer_values)
+                    body_lines.append(f"{target} = {expression};")
+                elif isinstance(statement, ast.AugAssign):
+                    if not isinstance(statement.target, ast.Name):
+                        raise UnsupportedPythonSyntax("C range() augmented assignments must target one existing integer variable")
+                    if statement.target.id == name:
+                        raise UnsupportedPythonSyntax("C range() loop index reassignment is not supported")
+                    if types.get(statement.target.id) != "int":
+                        raise UnsupportedPythonSyntax("C range() augmented assignments support existing integer variables only")
+                    body_lines.append(self._augmented_assignment(
+                        statement, assigned, types, integer_values
+                    ))
                 elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
                       and isinstance(statement.value.value, str)):
                     continue
                 else:
-                    raise UnsupportedPythonSyntax("C range() loop bodies may contain only print() calls")
+                    raise UnsupportedPythonSyntax(
+                        "C range() loop bodies may contain only print() calls and integer assignments"
+                    )
             if not body_lines:
                 raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported in C")
             if rendered_body is None:
@@ -431,6 +457,8 @@ class PythonToCTargetAdapter:
         if count == 0:
             assigned.discard(name)
             types.pop(name, None)
+            integer_values.clear()
+            integer_values.update(facts_before_loop)
             integer_values.pop(name, None)
             return []
         last_value = actual_range[-1]
@@ -476,7 +504,7 @@ class PythonToCTargetAdapter:
             for item in ast.walk(tree)
         )
         self.warnings = [
-            "Deterministic Python-to-C supports one file, signed 32-bit integer arithmetic, simple string and boolean values, abs(), positional print(), print-only if/elif/else chains with bounded scalar conditions, bounded print-only range() loops, and statically simulated while loops that update existing integer variables.",
+            "Deterministic Python-to-C supports one file, signed 32-bit integer arithmetic, simple string and boolean values, abs(), positional print(), print-only if/elif/else chains with bounded scalar conditions, bounded range() loops with print calls and existing-integer assignments/augmented assignments, and statically simulated while loops that update existing integer variables.",
             "Conditional assignments, string concatenation, str(), nested control flow, while/else, imports, functions, classes, collections, and full-project migration are not supported by this subset.",
         ]
         for node in tree.body:

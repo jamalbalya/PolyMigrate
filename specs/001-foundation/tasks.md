@@ -163,3 +163,5 @@
 - [x] T122 Extend the constrained Python-to-C11 translator with bounded print-only `for i in range(...)` loops; statically validate one to three integer arguments, reject zero steps and ranges above 10,000 iterations, preserve the last loop value when referenced, and compare compiled C output with Python including negative steps and zero-iteration semantics.
 
 - [x] T123 Add bounded Python `while`-to-C translation using a single integer comparison and statically simulated existing-integer assignments/`+=`/`-=`/`*=` updates; reject unproven termination, no-progress loops, overflow, `while/else`, nested control flow, and iteration counts above 10,000, with GCC runtime-equivalence tests.
+
+- [x] T124 Extend bounded C `range()` loops to update previously assigned integer variables with simple assignments or integer `+=`/`-=`/`*=`; statically simulate every iteration for overflow, reject loop-index mutation/new variables/type changes, preserve zero-iteration facts, and compare compiled C output with Python.

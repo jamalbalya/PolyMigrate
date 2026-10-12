@@ -133,6 +133,28 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "2\n1\n0\n0\n")
 
+    def test_range_loop_integer_updates_preserve_static_facts_and_reject_unsafe_cases(self):
+        code = self._translate(
+            "total = 0\nfor i in range(4):\n    total += i\nprint(total)\n"
+        )
+        self.assertIn("total += i;", code)
+        cases = (
+            ("for i in range(2):\n    total = i\n", "existing integer variables"),
+            ("total = 0\nfor i in range(2):\n    i += 1\n", "loop index reassignment"),
+            ("total = 0\nfor i in range(2):\n    total = 'bad'\n", "remain integer-valued"),
+            ("total = 2147483640\nfor i in range(10):\n    total += 1\n", "signed 32-bit C range"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
+    def test_zero_iteration_range_loop_preserves_variable_values(self):
+        code = self._translate(
+            "total = 1\nfor i in range(0):\n    total = total + 1\nprint(total)\n"
+        )
+        self.assertNotIn("while (i", code)
+        self.assertIn('printf("%" PRId32, (int32_t)(total));', code)
+
     def test_bounded_range_loop_generation_and_fail_closed_cases(self):
         code = self._translate("for i in range(5, 0, -2):\n    print(i)\n")
         self.assertIn("int32_t i = 5;", code)
@@ -140,7 +162,7 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
         self.assertIn("i += -2;", code)
         self.assertIn("i = 1;", code)
         cases = (
-            ("for i in range(2):\n    i = 1\n", "loop bodies may contain only print"),
+            ("for i in range(2):\n    i = 1\n", "loop index reassignment"),
             ("for i in range(2):\n    print(i)\nelse:\n    print(0)\n", "for/else"),
             ("for i in range(3, 1, 0):\n    print(i)\n", "step cannot be zero"),
             ("for i in range(10001):\n    print(i)\n", "limited to 10000"),
@@ -157,6 +179,10 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             "for i in range(3):\n    print(i)\n"
             "print(i)\n"
             "for j in range(5, 0, -2):\n    print(j)\n"
+            "total = 0\nfor k in range(4):\n    total += k\nprint(total)\n"
+            "sum_result = 0\nfor q in range(4):\n    sum_result = sum_result + q\nprint(sum_result)\n"
+            "product = 1\nfor n in range(1, 5):\n    product *= n\nprint(product)\n"
+            "unchanged = 1\nfor z in range(0):\n    unchanged = unchanged + 1\nprint(unchanged)\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
@@ -172,7 +198,7 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             self.assertEqual(compile_result.returncode, 0, compile_result.stdout + compile_result.stderr)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "0\n1\n2\n2\n5\n3\n1\n")
+            self.assertEqual(run.stdout, "0\n1\n2\n2\n5\n3\n1\n6\n6\n24\n1\n")
 
     @unittest.skipUnless(shutil.which("gcc"), "GCC is required for C runtime equivalence")
     def test_compiled_c_output_matches_python_fixture(self):
