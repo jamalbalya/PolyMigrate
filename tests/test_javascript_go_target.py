@@ -59,7 +59,7 @@ class JavaScriptToGoTargetTests(unittest.TestCase):
             root = Path(tmp)
             source = root / "source"
             source.mkdir()
-            (source / "main.js").write_text("console.log(true);\\n", encoding="utf-8")
+            (source / "main.js").write_text("console.log(true);\n", encoding="utf-8")
             adapters = AdapterRegistry()
             adapters.register_source(InventorySourceAdapter("javascript", (".js",)))
             adapters.register_target(JavaScriptToGoTargetAdapter())
