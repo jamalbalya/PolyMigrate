@@ -169,8 +169,8 @@ class ManifestReconstructionTests(unittest.TestCase):
                 self.assertTrue(any("non-declarative Gradle manifest" in warning for warning in warnings), warnings)
 
     def test_accepts_only_restricted_static_gradle_dsl(self):
-        settings = "\\n".join(['rootProject.name = "demo"', ""])
-        build = "\\n".join([
+        settings = "\n".join(['rootProject.name = "demo"', ""])
+        build = "\n".join([
             "repositories {", "    mavenCentral()", "}",
             "dependencies {", '    implementation("org.example:lib:1.0")', "}", "",
         ])
