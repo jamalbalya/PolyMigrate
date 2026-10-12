@@ -180,6 +180,7 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             "print(i)\n"
             "for j in range(5, 0, -2):\n    print(j)\n"
             "total = 0\nfor k in range(4):\n    total += k\nprint(total)\n"
+            "sum_result = 0\nfor q in range(4):\n    sum_result = sum_result + q\nprint(sum_result)\n"
             "product = 1\nfor n in range(1, 5):\n    product *= n\nprint(product)\n"
             "unchanged = 1\nfor z in range(0):\n    unchanged = unchanged + 1\nprint(unchanged)\n"
         )
@@ -197,7 +198,7 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             self.assertEqual(compile_result.returncode, 0, compile_result.stdout + compile_result.stderr)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "0\n1\n2\n2\n5\n3\n1\n6\n24\n1\n")
+            self.assertEqual(run.stdout, "0\n1\n2\n2\n5\n3\n1\n6\n6\n24\n1\n")
 
     @unittest.skipUnless(shutil.which("gcc"), "GCC is required for C runtime equivalence")
     def test_compiled_c_output_matches_python_fixture(self):
