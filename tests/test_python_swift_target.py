@@ -54,11 +54,44 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
                 self._translate(source)
 
+    def test_conditional_assignments_preserve_types_and_merge_static_facts(self):
+        code = self._translate(
+            "score = 3\nvalue = 0\n"
+            "if score > 5:\n    value = 10\n"
+            "elif score > 0:\n    value = score + 2\n"
+            "else:\n    value = -1\n"
+            "print(value)\n"
+            "x = 1\nif score > 0:\n    x = 2\nelse:\n    x = 2\n"
+            "print(x + 1)\n"
+            "label = 'before'\nif score > 0:\n    label = 'same'\nelse:\n    label = 'same'\n"
+            "length = len(label)\nprint(length)\n"
+        )
+        self.assertIn("var value: Int32 = 0", code)
+        self.assertIn("var x: Int32 = 1", code)
+        self.assertIn("var label: String = \\"before\\"", code)
+        self.assertIn("x = 2", code)
+        self.assertIn("length = Int32((label).unicodeScalars.count)", code)
+
+        cases = (
+            ("if True:\n    x = 1\n", "conditional assignments must target existing variables"),
+            ("x = 1\nif x:\n    x = 'text'\n", "must preserve the variable type"),
+            ("x = 1\nif x:\n    x = 2\nprint(x + 1)\n", "cannot be proven statically safe"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
     def test_generates_bounded_range_loops_and_rejects_unsafe_forms(self):
         code = self._translate(
             "start = 1\nstop = 5\n"
             "for i in range(start, stop, 2):\n    print(i)\n"
             "for j in range(3, -1, -2):\n    print(j)\n"
+            "value = 0\nif score > 5:\n    value = 10\n"
+            "elif score > 0:\n    value = score + 2\n"
+            "else:\n    value = -1\nprint(value)\n"
+            "x = 1\nif score > 0:\n    x = 2\nelse:\n    x = 2\nprint(x + 1)\n"
+            "label3 = 'before'\nif score > 0:\n    label3 = 'same'\nelse:\n    label3 = 'same'\n"
+            "length = len(label3)\nprint(length)\n"
         )
         self.assertIn("for i in stride(from: Int32(start), to: Int32(stop), by: Int(2)) {", code)
         self.assertIn("for j in stride(from: Int32(3), to: Int32(-1), by: Int(-2)) {", code)
@@ -129,7 +162,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\npositive 3\nmatch\nunicode-different\nempty\nenabled\n1\n2\n3\n3\n1\n")
+            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\npositive 3\nmatch\nunicode-different\nempty\nenabled\n1\n2\n3\n3\n1\n5\n3\n4\n")
 
 
 if __name__ == "__main__":

@@ -281,40 +281,160 @@ class PythonToSwiftTargetAdapter:
             "}",
         ]
 
+    def _static_string_value(self, node: ast.expr) -> str | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.Name):
+            return self._string_values.get(node.id)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            left = self._static_string_value(node.left)
+            right = self._static_string_value(node.right)
+            return left + right if left is not None and right is not None else None
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "str" and len(node.args) == 1 and not node.keywords):
+            argument = node.args[0]
+            if isinstance(argument, ast.Constant):
+                if isinstance(argument.value, str):
+                    return argument.value
+                if type(argument.value) is bool:
+                    return "True" if argument.value else "False"
+                if type(argument.value) is int:
+                    return str(self._checked_int(argument, self._int_values))
+            if isinstance(argument, ast.Name):
+                value_type = self._types.get(argument.id)
+                if value_type == "string":
+                    return self._string_values.get(argument.id)
+                if value_type == "int" and argument.id in self._int_values:
+                    return str(self._int_values[argument.id])
+                if value_type == "bool" and argument.id in self._bool_values:
+                    return "True" if self._bool_values[argument.id] else "False"
+            if isinstance(argument, (ast.UnaryOp, ast.BinOp, ast.Call)):
+                try:
+                    value = self._checked_int(argument, self._int_values)
+                    return str(value)
+                except UnsupportedPythonSyntax:
+                    return None
+        return None
+
     def _if_statement(self, node: ast.If, assigned: set[str], *, depth: int = 1,
-                      keyword: str = "if") -> list[str]:
+                      keyword: str = "if", close_end: bool = True,
+                      base_ints: dict[str, int] | None = None,
+                      base_strings: dict[str, str] | None = None,
+                      base_bools: dict[str, bool] | None = None,
+                      modified_names: set[str] | None = None,
+                      branch_facts: list[tuple[dict[str, int], dict[str, str], dict[str, bool]]] | None = None) -> list[str]:
+        root_call = base_ints is None
+        if base_ints is None:
+            base_ints = dict(self._int_values)
+        if base_strings is None:
+            base_strings = dict(self._string_values)
+        if base_bools is None:
+            base_bools = dict(self._bool_values)
+        if modified_names is None:
+            modified_names = set()
+        if branch_facts is None:
+            branch_facts = []
         if depth > 20:
             raise UnsupportedPythonSyntax("if/elif chains are limited to 20 branches in Swift")
-        condition = self._condition(node.test, assigned)
-        lines = [f"{keyword} {condition} {{"]
 
-        def render_branch(body: list[ast.stmt]) -> list[str]:
-            rendered: list[str] = []
-            for statement in body:
+        self._int_values = dict(base_ints)
+        self._string_values = dict(base_strings)
+        self._bool_values = dict(base_bools)
+        condition = self._condition(node.test, assigned)
+        rendered = [f"{keyword} {condition} {{"]
+
+        def snapshot() -> tuple[dict[str, int], dict[str, str], dict[str, bool]]:
+            return dict(self._int_values), dict(self._string_values), dict(self._bool_values)
+
+        def render_branch(statements: list[ast.stmt]) -> list[str]:
+            lines: list[str] = []
+            for statement in statements:
                 if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
-                    rendered.extend("    " + line for line in self._print_call(statement.value, assigned))
+                    lines.extend("    " + line for line in self._print_call(statement.value, assigned))
+                elif isinstance(statement, ast.Assign):
+                    if len(statement.targets) != 1 or not isinstance(statement.targets[0], ast.Name):
+                        raise UnsupportedPythonSyntax("Swift conditional assignments must target one existing variable")
+                    target = statement.targets[0].id
+                    if target not in assigned:
+                        raise UnsupportedPythonSyntax("Swift conditional assignments must target existing variables")
+                    expression, value_type = self._expr(statement.value, assigned)
+                    if value_type != self._types.get(target):
+                        raise UnsupportedPythonSyntax("Swift conditional assignments must preserve the variable type")
+                    if value_type == "int":
+                        self._int_values[target] = self._checked_int(statement.value, self._int_values)
+                    elif value_type == "string":
+                        static_value = self._static_string_value(statement.value)
+                        if static_value is None:
+                            self._string_values.pop(target, None)
+                        else:
+                            self._string_values[target] = static_value
+                    elif value_type == "bool":
+                        if isinstance(statement.value, ast.Constant) and type(statement.value.value) is bool:
+                            self._bool_values[target] = statement.value.value
+                        elif isinstance(statement.value, ast.Name) and statement.value.id in self._bool_values:
+                            self._bool_values[target] = self._bool_values[statement.value.id]
+                        else:
+                            self._bool_values.pop(target, None)
+                    modified_names.add(target)
+                    lines.append(f"    {target} = {expression}")
                 elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
                       and isinstance(statement.value.value, str)):
                     continue
                 else:
                     raise UnsupportedPythonSyntax(
-                        "Swift conditional bodies may contain only print() calls; nested control flow and assignments are rejected"
+                        "Swift conditional bodies may contain only print() calls and same-type assignments to existing variables"
                     )
-            if not rendered:
+            if not lines:
                 raise UnsupportedPythonSyntax("Empty conditional bodies are not supported in Swift")
-            return rendered
+            return lines
 
-        lines.extend(render_branch(node.body))
+        rendered.extend(render_branch(node.body))
+        branch_facts.append(snapshot())
         if node.orelse:
             if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
-                lines.extend(self._if_statement(node.orelse[0], assigned, depth=depth + 1, keyword="} else if"))
+                rendered.extend(self._if_statement(
+                    node.orelse[0], assigned, depth=depth + 1, keyword="} else if",
+                    close_end=False, base_ints=base_ints, base_strings=base_strings,
+                    base_bools=base_bools, modified_names=modified_names, branch_facts=branch_facts,
+                ))
             else:
-                lines.append("} else {")
-                lines.extend(render_branch(node.orelse))
-                lines.append("}")
+                self._int_values = dict(base_ints)
+                self._string_values = dict(base_strings)
+                self._bool_values = dict(base_bools)
+                rendered.append("} else {")
+                rendered.extend(render_branch(node.orelse))
+                branch_facts.append(snapshot())
         else:
-            lines.append("}")
-        return lines
+            branch_facts.append((dict(base_ints), dict(base_strings), dict(base_bools)))
+
+        if close_end:
+            rendered.append("}")
+
+        if root_call:
+            self._int_values = dict(base_ints)
+            self._string_values = dict(base_strings)
+            self._bool_values = dict(base_bools)
+            for name in modified_names:
+                value_type = self._types.get(name)
+                if value_type == "int":
+                    values = [facts[0].get(name) for facts in branch_facts]
+                    if values and values[0] is not None and all(value == values[0] for value in values):
+                        self._int_values[name] = values[0]
+                    else:
+                        self._int_values.pop(name, None)
+                elif value_type == "string":
+                    values = [facts[1].get(name) for facts in branch_facts]
+                    if values and values[0] is not None and all(value == values[0] for value in values):
+                        self._string_values[name] = values[0]
+                    else:
+                        self._string_values.pop(name, None)
+                elif value_type == "bool":
+                    values = [facts[2].get(name) for facts in branch_facts]
+                    if values and values[0] is not None and all(value == values[0] for value in values):
+                        self._bool_values[name] = values[0]
+                    else:
+                        self._bool_values.pop(name, None)
+        return rendered
 
     def _print_call(self, call: ast.Call, assigned: set[str]) -> list[str]:
         if not isinstance(call.func, ast.Name) or call.func.id != "print":
@@ -336,7 +456,7 @@ class PythonToSwiftTargetAdapter:
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         self.warnings = [
             "Deterministic Python-to-Swift translation supports one file and a strict expression/assignment/print subset only.",
-            "Functions, imports, collections, nested control flow, assignments inside control-flow bodies, project dependencies, and full-project migration are unsupported.",
+            "Functions, imports, collections, nested control flow, assignments inside loops, project dependencies, and full-project migration are unsupported.",
         ]
         if project.language_id != "python":
             raise ValueError("Python-to-Swift target requires a Python source project")
@@ -354,7 +474,7 @@ class PythonToSwiftTargetAdapter:
             if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
         }
         assignment_counts: dict[str, int] = {}
-        for statement in tree.body:
+        for statement in ast.walk(tree):
             if isinstance(statement, ast.Assign) and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name):
                 target_name = statement.targets[0].id
                 assignment_counts[target_name] = assignment_counts.get(target_name, 0) + 1

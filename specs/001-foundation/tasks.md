@@ -173,3 +173,5 @@
 - [x] T127 Extend the deterministic Python-to-Swift subset with bounded `if`/`elif`/`else` chains, simple same-type comparisons, short-circuit boolean conditions, and print-only branch bodies; reject chained/string-ordering/boolean-ordering comparisons, branch assignments, and nested control flow, with Swift compiler/runtime equivalence fixtures and CLI coverage.
 
 - [x] T128 Extend deterministic Python-to-Swift with statically bounded `for i in range(...)` loops, negative steps, at most 10000 iterations, per-iteration signed-Int32 safety checks, print-only bodies, and explicit rejection of loop-variable escape and unsupported statements; validate with Swift compiler/runtime and CLI E2E fixtures.
+
+- [x] T129 Support same-type assignments to existing variables inside Swift `if`/`elif`/`else` branches, merge integer/string/boolean static facts only when every path agrees, emit mutable bindings when reassigned, and reject unsafe post-branch arithmetic when facts disagree; add compiler/runtime and CLI fixtures.
