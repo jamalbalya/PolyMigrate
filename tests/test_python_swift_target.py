@@ -54,6 +54,27 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
                 self._translate(source)
 
+    def test_generates_bounded_range_loops_and_rejects_unsafe_forms(self):
+        code = self._translate(
+            "start = 1\nstop = 5\n"
+            "for i in range(start, stop, 2):\n    print(i)\n"
+            "for j in range(3, -1, -2):\n    print(j)\n"
+        )
+        self.assertIn("for i in stride(from: Int32(start), to: Int32(stop), by: Int(2)) {", code)
+        self.assertIn("for j in stride(from: Int32(3), to: Int32(-1), by: Int(-2)) {", code)
+
+        cases = (
+            ("for i in range(3):\n    print(i)\nprint(i)\n", "Use of a Swift range-loop variable after its loop"),
+            ("for i in range(0, 3, 0):\n    print(i)\n", "step cannot be zero"),
+            ("for i in range(10001):\n    print(i)\n", "limited to 10000 iterations"),
+            ("i = 2\nfor i in range(3):\n    print(i)\n", "cannot shadow assigned variables"),
+            ("for i in range(3):\n    i = i + 1\n", "loop bodies may contain only print"),
+            ("for i in range(3):\n    if i:\n        print(i)\n", "loop bodies may contain only print"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
     def test_rejects_unsupported_syntax_type_changes_and_overflow(self):
         cases = (
             ("x = 1\nprint(x + 2147483647)\n", "signed Int32 range"),
@@ -92,6 +113,8 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             "if unicode_a == unicode_b:\n    print('unicode-equal')\nelse:\n    print('unicode-different')\n"
             "empty = ''\nif empty:\n    print('nonempty')\nelse:\n    print('empty')\n"
             "active = True\nif active == True:\n    print('enabled')\nelse:\n    print('disabled')\n"
+            "for i in range(3):\n    print(i + 1)\n"
+            "for j in range(3, -1, -2):\n    print(j)\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
@@ -106,7 +129,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\npositive 3\nmatch\nunicode-different\nempty\nenabled\n")
+            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\npositive 3\nmatch\nunicode-different\nempty\nenabled\n1\n2\n3\n3\n1\n")
 
 
 if __name__ == "__main__":
