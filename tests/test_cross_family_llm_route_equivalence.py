@@ -121,8 +121,8 @@ class CrossFamilyLLMRouteEquivalenceTests(unittest.TestCase):
             root = Path(tmp)
             source, target = self._migrate(
                 root, "javascript", "go",
-                "console.log(42);\\n",
-                'package main\\nimport "fmt"\\nfunc main() { fmt.Println(42) }\\n',
+                "console.log(42);\n",
+                'package main\nimport "fmt"\nfunc main() { fmt.Println(42) }\n',
             )
             original = subprocess.run(["node", str(source)], capture_output=True, text=True, timeout=30)
             env = dict(os.environ, GO111MODULE="off", GOTOOLCHAIN="local")
@@ -137,14 +137,14 @@ class CrossFamilyLLMRouteEquivalenceTests(unittest.TestCase):
             root = Path(tmp)
             source, target = self._migrate(
                 root, "csharp", "javascript",
-                'using System;\\nclass Program { static void Main() { Console.WriteLine(42); } }\\n',
-                "console.log(42);\\n",
+                'using System;\nclass Program { static void Main() { Console.WriteLine(42); } }\n',
+                "console.log(42);\n",
             )
             source_project = root / "source" / "Original.csproj"
             source_project.write_text(
                 '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType>'
                 '<TargetFramework>net8.0</TargetFramework><ImplicitUsings>disable</ImplicitUsings>'
-                '<Nullable>enable</Nullable></PropertyGroup></Project>\\n',
+                '<Nullable>enable</Nullable></PropertyGroup></Project>\n',
                 encoding="utf-8",
             )
             original_build = subprocess.run(
