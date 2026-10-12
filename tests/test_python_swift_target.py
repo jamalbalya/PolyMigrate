@@ -40,7 +40,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
         )
         self.assertIn("if (score > 5) {", code)
         self.assertIn("} else if ((score > 0) && (score < 5)) {", code)
-        self.assertIn('(label == "ready")', code)
+        self.assertIn('unicodeScalars.elementsEqual(("ready").unicodeScalars)', code)
         self.assertIn("!(empty).isEmpty", code)
 
         cases = (
@@ -88,6 +88,8 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             "elif score > 0 and score < 5:\n    print('positive', score)\n"
             "else:\n    print('other')\n"
             "label2 = 'ready'\nif label2 == 'ready':\n    print('match')\nelse:\n    print('miss')\n"
+            "unicode_a = 'é'\nunicode_b = 'e\\u0301'\n"
+            "if unicode_a == unicode_b:\n    print('unicode-equal')\nelse:\n    print('unicode-different')\n"
             "empty = ''\nif empty:\n    print('nonempty')\nelse:\n    print('empty')\n"
             "active = True\nif active == True:\n    print('enabled')\nelse:\n    print('disabled')\n"
         )
@@ -104,7 +106,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\npositive 3\nmatch\nempty\nenabled\n")
+            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\npositive 3\nmatch\nunicode-different\nempty\nenabled\n")
 
 
 if __name__ == "__main__":
