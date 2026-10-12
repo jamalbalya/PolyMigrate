@@ -61,7 +61,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             ("print([1, 2])\n", "Unsupported expression syntax: List"),
             ("var = 2\nprint(var)\n", "not supported in Swift"),
             ("print(value)\n", "used before assignment"),
-            ("x = 1\nif x:\n    print(x)\n", "Unsupported statement syntax: If"),
+            ("def f():\n    print(1)\n", "Unsupported statement syntax: FunctionDef"),
             ('x = "bad\\x00value"\nprint(x)\n', "unsupported control characters"),
         )
         for source, message in cases:
