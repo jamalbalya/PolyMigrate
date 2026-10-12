@@ -145,6 +145,51 @@ class ManifestReconstructionTests(unittest.TestCase):
                 self.assertEqual(artifacts, [])
                 self.assertTrue(any(warning_text in warning for warning in warnings), warnings)
 
+    def test_rejects_executable_gradle_build_scripts(self):
+        malicious = (
+            'plugins { id("org.example.untrusted") version "1.0" }',
+            'tasks.register("exfiltrate") { doLast { println("run") } }',
+            'apply(from = "untrusted.gradle.kts")',
+            'buildscript { repositories { mavenCentral() } }',
+            'dependencies { implementation("$payload") }',
+        )
+        for body in malicious:
+            provider = ManifestFixtureProvider({
+                "files": [{"path": "build.gradle.kts", "content": body}],
+                "warnings": [],
+            })
+            providers = ProviderRegistry()
+            providers.register(provider)
+            with self.subTest(body=body):
+                artifacts, warnings = reconstruct_target_manifests(
+                    "kotlin", [{"path": "source-manifest", "content": "fixture"}],
+                    [], [], providers, "fixture",
+                )
+                self.assertEqual(artifacts, [])
+                self.assertTrue(any("non-declarative Gradle manifest" in warning for warning in warnings), warnings)
+
+    def test_accepts_only_restricted_static_gradle_dsl(self):
+        settings = "\n".join(['rootProject.name = "demo"', ""])
+        build = "\n".join([
+            "repositories {", "    mavenCentral()", "}",
+            "dependencies {", '    implementation("org.example:lib:1.0")', "}", "",
+        ])
+        provider = ManifestFixtureProvider({
+            "files": [
+                {"path": "settings.gradle.kts", "content": settings},
+                {"path": "build.gradle.kts", "content": build},
+            ],
+            "warnings": [],
+        })
+        providers = ProviderRegistry()
+        providers.register(provider)
+        artifacts, warnings = reconstruct_target_manifests(
+            "kotlin", [{"path": "source-manifest", "content": "fixture"}],
+            [], [], providers, "fixture",
+        )
+        self.assertEqual({item.relative_path for item in artifacts}, {"settings.gradle.kts", "build.gradle.kts"})
+        self.assertTrue(any("unverified" in warning.lower() for warning in warnings))
+
     def test_rejects_recognizable_secrets_in_manifest_content(self):
         providers = ProviderRegistry()
         provider = ManifestFixtureProvider({
