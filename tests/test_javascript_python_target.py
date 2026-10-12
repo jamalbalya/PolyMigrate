@@ -107,7 +107,7 @@ if (false) { console.log("unreachable"); }
             (0, "other" + chr(10)),
         )
         for count, expected in cases:
-            source = "\\n".join((
+            source = chr(10).join((
                 "const count = " + str(count) + ";",
                 'if (count > 3) { console.log("large"); } else if (count === 2) { console.log("two"); } else if (count === 1) { console.log("one"); } else { console.log("other"); }',
                 "",
