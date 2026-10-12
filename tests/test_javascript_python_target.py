@@ -63,6 +63,9 @@ console.log(label, false);
             'if (true) { console.log("unsafe"); }\n',
             'const value = 9007199254740992;\n',
             'console.log(process.env.SECRET);\n',
+            'const true = 1;\n',
+            'const console = 1;\n',
+            'const message = "line\\nfeed";\n',
         )
         for source in unsupported:
             with self.subTest(source=source), self.assertRaises(UnsupportedJavaScriptSyntax):
