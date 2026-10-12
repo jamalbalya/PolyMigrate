@@ -207,6 +207,80 @@ class PythonToSwiftTargetAdapter:
             return f"!({expression}).isEmpty"
         raise UnsupportedPythonSyntax("Condition type is not supported in Swift")
 
+    def _for_statement(self, node: ast.For, assigned: set[str]) -> list[str]:
+        if not isinstance(node.target, ast.Name):
+            raise UnsupportedPythonSyntax("range() loop targets must be simple variable names in Swift")
+        name = node.target.id
+        if (not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)
+                or name in _SWIFT_KEYWORDS or name in {"print", "abs", "str", "len", "range"}
+                or name.startswith("__")):
+            raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not supported in Swift")
+        if name in assigned:
+            raise UnsupportedPythonSyntax("range() loop variables cannot shadow assigned variables in Swift")
+        if node.orelse:
+            raise UnsupportedPythonSyntax("for/else statements are not supported in Swift")
+        if not isinstance(node.iter, ast.Call) or not isinstance(node.iter.func, ast.Name) or node.iter.func.id != "range":
+            raise UnsupportedPythonSyntax("Swift supports only statically bounded for i in range(...) loops")
+        if "range" in assigned:
+            raise UnsupportedPythonSyntax("Shadowing the range() builtin is not supported in Swift")
+        call = node.iter
+        if call.keywords or not 1 <= len(call.args) <= 3:
+            raise UnsupportedPythonSyntax("range() must have one to three positional integer arguments in Swift")
+        if len(call.args) == 1:
+            start_node, stop_node, step_node = ast.Constant(value=0), call.args[0], ast.Constant(value=1)
+        elif len(call.args) == 2:
+            start_node, stop_node, step_node = call.args[0], call.args[1], ast.Constant(value=1)
+        else:
+            start_node, stop_node, step_node = call.args
+        start_value = self._checked_int(start_node, self._int_values)
+        stop_value = self._checked_int(stop_node, self._int_values)
+        step_value = self._checked_int(step_node, self._int_values)
+        if step_value == 0:
+            raise UnsupportedPythonSyntax("range() step cannot be zero")
+        values_range = range(start_value, stop_value, step_value)
+        if len(values_range) > 10_000:
+            raise UnsupportedPythonSyntax("Swift range loops are limited to 10000 iterations")
+        values = list(values_range)
+        minimum, maximum = -(2**31), 2**31 - 1
+        if values and not minimum <= values[-1] + step_value <= maximum:
+            raise UnsupportedPythonSyntax("Swift range loop increment could overflow signed Int32")
+        start_expression, _ = self._expr(start_node, assigned)
+        stop_expression, _ = self._expr(stop_node, assigned)
+        step_expression, _ = self._expr(step_node, assigned)
+
+        assigned.add(name)
+        self._types[name] = "int"
+        rendered_body: list[str] | None = None
+        # Check every reachable iteration value so expressions such as i + 1
+        # cannot overflow only on a later loop iteration.
+        for loop_value in (values if values else [0]):
+            self._int_values[name] = loop_value
+            body: list[str] = []
+            for statement in node.body:
+                if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    body.extend("    " + line for line in self._print_call(statement.value, assigned))
+                elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
+                      and isinstance(statement.value.value, str)):
+                    continue
+                else:
+                    raise UnsupportedPythonSyntax(
+                        "Swift range-loop bodies may contain only print() calls; assignments and nested control flow are rejected"
+                    )
+            if not body:
+                raise UnsupportedPythonSyntax("Empty range-loop bodies are not supported in Swift")
+            if rendered_body is None:
+                rendered_body = body
+        assigned.remove(name)
+        self._types.pop(name, None)
+        self._int_values.pop(name, None)
+
+        assert rendered_body is not None
+        return [
+            f"for {name} in stride(from: Int32({start_expression}), to: Int32({stop_expression}), by: Int32({step_expression})) {{",
+            *rendered_body,
+            "}",
+        ]
+
     def _if_statement(self, node: ast.If, assigned: set[str], *, depth: int = 1,
                       keyword: str = "if") -> list[str]:
         if depth > 20:
@@ -262,7 +336,7 @@ class PythonToSwiftTargetAdapter:
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         self.warnings = [
             "Deterministic Python-to-Swift translation supports one file and a strict expression/assignment/print subset only.",
-            "Functions, imports, collections, nested control flow, branch assignments, project dependencies, and full-project migration are unsupported.",
+            "Functions, imports, collections, nested control flow, assignments inside control-flow bodies, project dependencies, and full-project migration are unsupported.",
         ]
         if project.language_id != "python":
             raise ValueError("Python-to-Swift target requires a Python source project")
@@ -284,7 +358,7 @@ class PythonToSwiftTargetAdapter:
             if isinstance(statement, ast.Assign) and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name):
                 target_name = statement.targets[0].id
                 assignment_counts[target_name] = assignment_counts.get(target_name, 0) + 1
-        for node in tree.body:
+        for node_index, node in enumerate(tree.body):
             if isinstance(node, ast.Assign):
                 if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
                     raise UnsupportedPythonSyntax("Only assignments to one simple variable are supported")
@@ -322,6 +396,14 @@ class PythonToSwiftTargetAdapter:
                         self._bool_values[name] = node.value.value
                     else:
                         self._bool_values.pop(name, None)
+            elif isinstance(node, ast.For):
+                loop_name = node.target.id if isinstance(node.target, ast.Name) else None
+                if loop_name and any(
+                    isinstance(child, ast.Name) and child.id == loop_name and isinstance(child.ctx, ast.Load)
+                    for following in tree.body[node_index + 1:] for child in ast.walk(following)
+                ):
+                    raise UnsupportedPythonSyntax("Use of a Swift range-loop variable after its loop is not supported")
+                statements.extend(self._for_statement(node, assigned))
             elif isinstance(node, ast.If):
                 statements.extend(self._if_statement(node, assigned))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
@@ -329,7 +411,7 @@ class PythonToSwiftTargetAdapter:
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
             else:
-                raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}; Swift subset only supports assignments, print(), and print-only conditionals")
+                raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}; Swift subset only supports assignments, print-only conditionals, and bounded print-only range loops")
         unused = sorted(assigned - referenced_names)
         if unused:
             raise UnsupportedPythonSyntax("Assigned variable(s) are never used: " + ", ".join(unused))

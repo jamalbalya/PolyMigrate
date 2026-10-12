@@ -171,3 +171,5 @@
 - [x] T126 Add a deterministic Python-to-Swift subset for one file with signed-Int32-safe arithmetic, strings/booleans, `str()`, `abs()`, Unicode-scalar-aware `len(string)`, and Python-style positional `print()`; reject unsupported syntax, add Swift compiler/runtime equivalence fixtures and a dedicated CI job, and keep T023 open because broad production parser/generator coverage remains incomplete.
 
 - [x] T127 Extend the deterministic Python-to-Swift subset with bounded `if`/`elif`/`else` chains, simple same-type comparisons, short-circuit boolean conditions, and print-only branch bodies; reject chained/string-ordering/boolean-ordering comparisons, branch assignments, and nested control flow, with Swift compiler/runtime equivalence fixtures and CLI coverage.
+
+- [x] T128 Extend deterministic Python-to-Swift with statically bounded `for i in range(...)` loops, negative steps, at most 10000 iterations, per-iteration signed-Int32 safety checks, print-only bodies, and explicit rejection of loop-variable escape and unsupported statements; validate with Swift compiler/runtime and CLI E2E fixtures.
