@@ -19,7 +19,7 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; verified run `38221590245` on commit `9d532a1b` passed 678 tests per Python version with 8 environment-dependent skips, verified all 6 packaged skill assets, and passed the dedicated C, C++, C#, Kotlin, PHP, Ruby, Swift, TypeScript, and sandboxed Docker behavior E2E suites.
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; verified run `38222067706` on commit `c77d520a` passed 680 tests per Python version with 8 environment-dependent skips, verified all 6 packaged skill assets, and passed the dedicated C, C++, C#, Kotlin, PHP, Ruby, Swift, TypeScript, and sandboxed Docker behavior E2E suites.
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials; mocked request/response contract tests exist, but live provider responses and model-specific behavior remain unverified.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
@@ -187,3 +187,4 @@
 - [x] T138 Reject executable SwiftPM `Package.swift` manifests outside a narrow static DSL and reject Maven XML DTD/entity/external identifiers; malicious and positive fixtures pass in the verified full CI run.
 - [x] T139 Add a fail-closed deterministic JavaScript-to-Python scalar subset with CLI integration, Python syntax/runtime smoke validation, and regression tests; full T023 parser/generator coverage remains open.
 - [x] T140 Extend the constrained JavaScript-to-Python translator with scalar `if`/`else` conditions and print-only branch bodies; reject nested control flow, branch assignments, unsupported comparisons, and invalid `else` syntax.
+- [x] T141 Add bounded JavaScript C-style `for` loops with statically known integer bounds, direction checks, a 10,000-iteration limit, print-only bodies, loop-variable scope enforcement, and regression tests.
