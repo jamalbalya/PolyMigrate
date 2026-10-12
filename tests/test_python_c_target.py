@@ -50,6 +50,9 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             "if label == 'ready':\n    print('match')\nelse:\n    print('miss')\n"
             "if empty:\n    print('nonempty')\nelse:\n    print('empty')\n"
             "active = True\nif active == True:\n    print('enabled')\nelse:\n    print('disabled')\n"
+            "value = 0\nif score > 5:\n    value = 10\nelif score > 0:\n    value = score + 2\nelse:\n    value = -1\nprint(value)\n"
+            "label2 = 'ready'\nif label2 == 'ready':\n    label2 = 'go'\nelse:\n    label2 = 'stop'\nprint(label2)\n"
+            "counter = 0\nif active:\n    counter += 1\nelse:\n    counter += 2\nprint(counter)\n"
         )
         self.assertIn("} else if", code)
         self.assertIn("strcmp(label, \"ready\") == 0", code)
@@ -57,7 +60,9 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
 
     def test_c_conditionals_reject_assignments_chained_comparisons_and_string_ordering(self):
         cases = (
-            ("x = 1\nif x:\n    x = 2\n", "conditional bodies may contain only print"),
+            ("x = 1\nif x:\n    y = 2\n", "conditional assignments must target existing variables"),
+            ("x = 1\nif x:\n    x = 'bad'\n", "preserve the variable type"),
+            ("x = 1\nif x:\n    x = x + 1\nprint(x + 1)\n", "cannot be proven safe"),
             ("x = 1\nif 0 < x < 3:\n    print(x)\n", "Chained comparisons are not supported"),
             ("label = 'x'\nif label < 'z':\n    print(label)\n", "String ordering comparisons are not supported"),
         )
@@ -90,7 +95,7 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             self.assertEqual(compile_result.returncode, 0, compile_result.stdout + compile_result.stderr)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "positive 3\nmatch\nempty\nenabled\n")
+            self.assertEqual(run.stdout, "positive 3\nmatch\nempty\nenabled\n5\ngo\n1\n")
 
     def test_bounded_while_loop_generation_and_fail_closed_cases(self):
         code = self._translate(
