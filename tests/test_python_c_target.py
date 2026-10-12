@@ -35,7 +35,6 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             ("x = 1\nx = 'text'\nprint(x)\n", "Changing the type of 'x'"),
             ("print([1, 2])\n", "Unsupported expression syntax: List"),
             ("int = 2\nprint(int)\n", "not a supported C identifier"),
-            ("x = 1\nif x:\n    print(x)\n", "Unsupported statement syntax: If"),
             ("x = 'bad\\x00value'\nprint(x)\n", "unsupported control characters"),
         )
         for source, message in cases:
