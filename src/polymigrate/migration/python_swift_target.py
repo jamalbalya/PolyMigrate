@@ -167,6 +167,76 @@ class PythonToSwiftTargetAdapter:
                 return f"Int32(({expression}).unicodeScalars.count)", "int"
         raise UnsupportedPythonSyntax(f"Unsupported expression syntax: {type(node).__name__}")
 
+    def _condition(self, node: ast.expr, assigned: set[str]) -> str:
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return f"!({self._condition(node.operand, assigned)})"
+        if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
+            operator = " && " if isinstance(node.op, ast.And) else " || "
+            return "(" + operator.join(self._condition(item, assigned) for item in node.values) + ")"
+        if isinstance(node, ast.Compare):
+            if len(node.ops) != 1 or len(node.comparators) != 1:
+                raise UnsupportedPythonSyntax("Chained comparisons are not supported in Swift conditions")
+            left, left_type = self._expr(node.left, assigned)
+            right, right_type = self._expr(node.comparators[0], assigned)
+            if left_type != right_type:
+                raise UnsupportedPythonSyntax("Swift comparisons require operands of the same inferred type")
+            operator_node = node.ops[0]
+            operators = {
+                ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<",
+                ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=",
+            }
+            operator = operators.get(type(operator_node))
+            if operator is None:
+                raise UnsupportedPythonSyntax("Only simple equality and ordering comparisons are supported in Swift")
+            if left_type == "string" and not isinstance(operator_node, (ast.Eq, ast.NotEq)):
+                raise UnsupportedPythonSyntax("String ordering comparisons are not supported in Swift")
+            if left_type == "bool" and not isinstance(operator_node, (ast.Eq, ast.NotEq)):
+                raise UnsupportedPythonSyntax("Boolean ordering comparisons are not supported in Swift")
+            return f"({left} {operator} {right})"
+        expression, value_type = self._expr(node, assigned)
+        if value_type == "bool":
+            return expression
+        if value_type == "int":
+            return f"({expression} != 0)"
+        if value_type == "string":
+            return f"!({expression}).isEmpty"
+        raise UnsupportedPythonSyntax("Condition type is not supported in Swift")
+
+    def _if_statement(self, node: ast.If, assigned: set[str], *, depth: int = 1,
+                      keyword: str = "if") -> list[str]:
+        if depth > 20:
+            raise UnsupportedPythonSyntax("if/elif chains are limited to 20 branches in Swift")
+        condition = self._condition(node.test, assigned)
+        lines = [f"{keyword} {condition} {{"]
+
+        def render_branch(body: list[ast.stmt]) -> list[str]:
+            rendered: list[str] = []
+            for statement in body:
+                if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    rendered.extend("    " + line for line in self._print_call(statement.value, assigned))
+                elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
+                      and isinstance(statement.value.value, str)):
+                    continue
+                else:
+                    raise UnsupportedPythonSyntax(
+                        "Swift conditional bodies may contain only print() calls; nested control flow and assignments are rejected"
+                    )
+            if not rendered:
+                raise UnsupportedPythonSyntax("Empty conditional bodies are not supported in Swift")
+            return rendered
+
+        lines.extend(render_branch(node.body))
+        if node.orelse:
+            if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
+                lines.extend(self._if_statement(node.orelse[0], assigned, depth=depth + 1, keyword="} else if"))
+            else:
+                lines.append("} else {")
+                lines.extend(render_branch(node.orelse))
+                lines.append("}")
+        else:
+            lines.append("}")
+        return lines
+
     def _print_call(self, call: ast.Call, assigned: set[str]) -> list[str]:
         if not isinstance(call.func, ast.Name) or call.func.id != "print":
             raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
@@ -187,7 +257,7 @@ class PythonToSwiftTargetAdapter:
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         self.warnings = [
             "Deterministic Python-to-Swift translation supports one file and a strict expression/assignment/print subset only.",
-            "Functions, imports, collections, control flow, project dependencies, and full-project migration are unsupported.",
+            "Functions, imports, collections, nested control flow, branch assignments, project dependencies, and full-project migration are unsupported.",
         ]
         if project.language_id != "python":
             raise ValueError("Python-to-Swift target requires a Python source project")
@@ -247,12 +317,14 @@ class PythonToSwiftTargetAdapter:
                         self._bool_values[name] = node.value.value
                     else:
                         self._bool_values.pop(name, None)
+            elif isinstance(node, ast.If):
+                statements.extend(self._if_statement(node, assigned))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
                 statements.extend(self._print_call(node.value, assigned))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
             else:
-                raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}; Swift subset only supports assignments and print()")
+                raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}; Swift subset only supports assignments, print(), and print-only conditionals")
         unused = sorted(assigned - referenced_names)
         if unused:
             raise UnsupportedPythonSyntax("Assigned variable(s) are never used: " + ", ".join(unused))
