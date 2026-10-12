@@ -70,7 +70,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
         self.assertIn("var x: Int32 = 1", code)
         self.assertIn('var label: String = "before"', code)
         self.assertIn("x = 2", code)
-        self.assertIn("length = Int32((label).unicodeScalars.count)", code)
+        self.assertIn("let length: Int32 = Int32((label).unicodeScalars.count)", code)
 
         cases = (
             ("if True:\n    x = 1\n", "conditional assignments must target existing variables"),
