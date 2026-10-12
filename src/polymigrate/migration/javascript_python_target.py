@@ -30,7 +30,7 @@ _TOKEN = re.compile(
     r"""(?P<STRING>"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|"""
     r"(?P<NUMBER>0|[1-9][0-9]*)|"
     r"(?P<IDENT>[A-Za-z_$][A-Za-z0-9_$]*)|"
-    r"(?P<OP>===|!==|==|!=|&&|\|\||[{}();,.+\-*=/<>!])"
+    r"(?P<OP>===|!==|==|!=|&&|\|\||[{}();,:.+\-*=/<>!])"
 )
 
 
@@ -39,7 +39,8 @@ class UnsupportedJavaScriptSyntax(ValueError):
 
 
 class _Parser:
-    def __init__(self, source: str) -> None:
+    def __init__(self, source: str, *, allow_type_annotations: bool = False) -> None:
+        self.allow_type_annotations = allow_type_annotations
         self.tokens: list[tuple[str, str]] = []
         offset = 0
         while offset < len(source):
@@ -243,8 +244,19 @@ class _Parser:
             name = self._identifier()
             if name in self.types:
                 raise UnsupportedJavaScriptSyntax(f"Duplicate declaration for {name!r} is not supported")
+            declared_type = None
+            if self._peek(":"):
+                if not self.allow_type_annotations:
+                    raise UnsupportedJavaScriptSyntax("Type annotations are only supported in TypeScript mode")
+                self._take(":")
+                type_kind, type_name = self._take()
+                declared_type = {"number": "int", "string": "string", "boolean": "bool"}.get(type_name)
+                if type_kind != "IDENT" or declared_type is None:
+                    raise UnsupportedJavaScriptSyntax("Only number, string, and boolean type annotations are supported")
             self._take("=")
             expression, value_type, known_value = self._expression()
+            if declared_type is not None and declared_type != value_type:
+                raise UnsupportedJavaScriptSyntax(f"Type annotation for {name!r} does not match its initializer")
             self.types[name] = value_type
             self.values[name] = known_value
             if declaration == "const":
