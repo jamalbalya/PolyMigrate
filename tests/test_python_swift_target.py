@@ -29,6 +29,31 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
         self.assertIn("let active: Bool = true", code)
         self.assertIn('print((active ? "True" : "False"), terminator: "")', code)
 
+    def test_generates_print_only_conditionals_and_rejects_unsafe_branches(self):
+        code = self._translate(
+            "score = 3\n"
+            "if score > 5:\n    print('high')\n"
+            "elif score > 0 and score < 5:\n    print('positive', score)\n"
+            "else:\n    print('other')\n"
+            "label = 'ready'\nif label == 'ready':\n    print('match')\nelse:\n    print('miss')\n"
+            "empty = ''\nif empty:\n    print('nonempty')\nelse:\n    print('empty')\n"
+        )
+        self.assertIn("if (score > 5) {", code)
+        self.assertIn("} else if ((score > 0) && (score < 5)) {", code)
+        self.assertIn('unicodeScalars.elementsEqual(("ready").unicodeScalars)', code)
+        self.assertIn("!(empty).isEmpty", code)
+
+        cases = (
+            ("x = 1\nif x:\n    x = 2\nprint(x)\n", "conditional bodies may contain only print"),
+            ("x = 1\nif x:\n    if x:\n        print(x)\n", "conditional bodies may contain only print"),
+            ("x = 1\nif 0 < x < 3:\n    print(x)\n", "Chained comparisons"),
+            ("label = 'x'\nif label < 'z':\n    print(label)\n", "String ordering comparisons"),
+            ("flag = True\nif flag < False:\n    print(flag)\n", "Boolean ordering comparisons"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
     def test_rejects_unsupported_syntax_type_changes_and_overflow(self):
         cases = (
             ("x = 1\nprint(x + 2147483647)\n", "signed Int32 range"),
@@ -36,7 +61,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             ("print([1, 2])\n", "Unsupported expression syntax: List"),
             ("var = 2\nprint(var)\n", "not supported in Swift"),
             ("print(value)\n", "used before assignment"),
-            ("x = 1\nif x:\n    print(x)\n", "Unsupported statement syntax: If"),
+            ("def f():\n    print(1)\n", "Unsupported statement syntax: FunctionDef"),
             ('x = "bad\\x00value"\nprint(x)\n', "unsupported control characters"),
         )
         for source, message in cases:
@@ -59,6 +84,14 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             'count = 6\nlabel = "value"\nactive = True\n'
             "print(label, count, active)\nprint(-3 * 2, abs(-7))\nprint()\n"
             "print(str(False))\nprint(len('😀'))\n"
+            "score = 3\nif score > 5:\n    print('high')\n"
+            "elif score > 0 and score < 5:\n    print('positive', score)\n"
+            "else:\n    print('other')\n"
+            "label2 = 'ready'\nif label2 == 'ready':\n    print('match')\nelse:\n    print('miss')\n"
+            "unicode_a = 'é'\nunicode_b = 'e\\u0301'\n"
+            "if unicode_a == unicode_b:\n    print('unicode-equal')\nelse:\n    print('unicode-different')\n"
+            "empty = ''\nif empty:\n    print('nonempty')\nelse:\n    print('empty')\n"
+            "active = True\nif active == True:\n    print('enabled')\nelse:\n    print('disabled')\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
@@ -73,7 +106,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\n")
+            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\npositive 3\nmatch\nunicode-different\nempty\nenabled\n")
 
 
 if __name__ == "__main__":
