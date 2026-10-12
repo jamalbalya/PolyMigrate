@@ -139,7 +139,8 @@ class _Parser:
         condition, _condition_type, _condition_value = self._condition()
         self._take(")")
         then_body = self._block()
-        self._separators()
+        while self.tokens[self.index][0] == "NEWLINE":
+            self.index += 1
         else_body: list[str] | None = None
         if self.tokens[self.index] == ("IDENT", "else"):
             self.index += 1
