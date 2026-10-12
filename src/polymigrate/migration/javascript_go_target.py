@@ -57,12 +57,29 @@ class JavaScriptToGoTargetAdapter:
                 raise UnsupportedJavaScriptSyntax(
                     "Boolean literals are not supported in the deterministic JavaScript-to-Go subset because their printed casing differs across runtimes"
                 )
+            # JavaScript-to-Python preserves console.log's multi-argument
+            # formatting with print(*[...]). The Python-to-Go parser accepts
+            # ordinary positional print arguments, so normalize only this
+            # generated, structurally verified list-comprehension shape.
+            for node in ast.walk(intermediate_tree):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or node.func.id != "print":
+                    continue
+                if len(node.args) != 1 or not isinstance(node.args[0], ast.Starred):
+                    continue
+                value = node.args[0].value
+                if not isinstance(value, ast.ListComp) or len(value.generators) != 1:
+                    raise UnsupportedJavaScriptSyntax("Unsupported generated print argument expansion")
+                iterable = value.generators[0].iter
+                if not isinstance(iterable, ast.List):
+                    raise UnsupportedJavaScriptSyntax("Unsupported generated print argument expansion")
+                node.args = list(iterable.elts)
+            artifact_content = ast.unparse(ast.fix_missing_locations(intermediate_tree)) + "\\n"
 
         python_units = tuple(
             SourceUnit(
                 relative_path=artifact.relative_path,
-                source_text=artifact.content,
-                content_sha256=hashlib.sha256(artifact.content.encode("utf-8")).hexdigest(),
+                source_text=artifact_content,
+                content_sha256=hashlib.sha256(artifact_content.encode("utf-8")).hexdigest(),
             )
             for artifact in python_artifacts
         )
