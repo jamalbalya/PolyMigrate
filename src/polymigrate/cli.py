@@ -444,8 +444,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
     pair = (source_language.id, target_language.id)
     if pair not in {("javascript", "python"), ("python", "go"), ("python", "javascript"), ("python", "typescript"), ("python", "kotlin"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp"), ("python", "c"), ("python", "swift")}:
         raise ValueError(
-            "The deterministic strategy currently supports --from javascript --to python, "
-            "or --from python --to go, javascript, typescript, kotlin, rust, java, php, ruby, cpp, csharp, c, or swift"
+            "The deterministic strategy currently supports --from python --to go, javascript, typescript, kotlin, rust, java, php, ruby, cpp, csharp, c, or swift, "
+            "and --from javascript --to python"
         )
 
     context = {}
