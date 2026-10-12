@@ -98,7 +98,7 @@ class JavaScriptToGoTargetAdapter:
             ) from None
 
         self.warnings = [
-            "This deterministic translator composes the bounded JavaScript-to-Python and Python-to-Go subsets; syntax outside their intersection is rejected.",
+            "Deterministic JavaScript-to-Go subset: composes the bounded JavaScript-to-Python and Python-to-Go translators; syntax outside their intersection is rejected.",
             "Only a single source file is supported; this is not a full project, dependency, or framework migration.",
         ]
         return artifacts
