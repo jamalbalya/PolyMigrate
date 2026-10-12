@@ -101,10 +101,10 @@ if (false) { console.log("unreachable"); }
     def test_translates_else_if_chains_with_python_runtime_equivalence(self):
         from polymigrate.migration.javascript_python_target import _Parser
         cases = (
-            (4, "large\\n"),
-            (2, "two\\n"),
-            (1, "one\\n"),
-            (0, "other\\n"),
+            (4, "large" + chr(10)),
+            (2, "two" + chr(10)),
+            (1, "one" + chr(10)),
+            (0, "other" + chr(10)),
         )
         for count, expected in cases:
             source = f'''const count = {count};
