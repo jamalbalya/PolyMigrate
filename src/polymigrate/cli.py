@@ -26,6 +26,7 @@ from polymigrate.migration.manifests import scan_project_manifests
 from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
 from polymigrate.migration.python_go_target import PythonToGoTargetAdapter
 from polymigrate.migration.python_javascript_target import PythonToJavaScriptTargetAdapter
+from polymigrate.migration.javascript_python_target import JavaScriptToPythonTargetAdapter
 from polymigrate.migration.python_typescript_target import PythonToTypeScriptTargetAdapter
 from polymigrate.migration.python_java_target import PythonToJavaTargetAdapter
 from polymigrate.migration.python_kotlin_target import PythonToKotlinTargetAdapter
@@ -441,10 +442,10 @@ def _derive_final_status(
 def _run_deterministic_migration(args, source_language, target_language) -> int:
     """Run an offline deterministic Python-to-target subset and local checks."""
     pair = (source_language.id, target_language.id)
-    if pair not in {("python", "go"), ("python", "javascript"), ("python", "typescript"), ("python", "kotlin"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp"), ("python", "c"), ("python", "swift")}:
+    if pair not in {("javascript", "python"), ("python", "go"), ("python", "javascript"), ("python", "typescript"), ("python", "kotlin"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp"), ("python", "c"), ("python", "swift")}:
         raise ValueError(
-            "The deterministic strategy currently supports --from python --to go, "
-            "javascript, typescript, kotlin, rust, java, php, ruby, cpp, csharp, c, or swift"
+            "The deterministic strategy currently supports --from python --to go, javascript, typescript, kotlin, rust, java, php, ruby, cpp, csharp, c, or swift, "
+            "and --from javascript --to python"
         )
 
     context = {}
@@ -453,14 +454,21 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         if not isinstance(context, dict):
             raise ValueError("context JSON must contain an object")
 
+    source_extensions = (
+        (".js", ".mjs", ".cjs")
+        if pair == ("javascript", "python")
+        else source_language.extensions
+    )
     source_adapter = InventorySourceAdapter(
-        source_language.id, source_language.extensions
+        source_language.id, source_extensions
     )
     source_project = source_adapter.analyze(args.source)
 
     adapters = AdapterRegistry()
     adapters.register_source(source_adapter)
-    if target_language.id == "go":
+    if pair == ("javascript", "python"):
+        adapters.register_target(JavaScriptToPythonTargetAdapter())
+    elif target_language.id == "go":
         adapters.register_target(PythonToGoTargetAdapter())
     elif target_language.id == "javascript":
         adapters.register_target(PythonToJavaScriptTargetAdapter())
@@ -566,8 +574,27 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         executions.append(record)
         return status
 
-    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "main.ts" if target_language.id == "typescript" else "Main.kt" if target_language.id == "kotlin" else "Main.java" if target_language.id == "java" else "main.php" if target_language.id == "php" else "main.rb" if target_language.id == "ruby" else "Program.cs" if target_language.id == "csharp" else "main.c" if target_language.id == "c" else "main.swift" if target_language.id == "swift" else "main.cpp")
-    if target_language.id == "go":
+    main_source = result.output_root / ("main.py" if target_language.id == "python" else "main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "main.ts" if target_language.id == "typescript" else "Main.kt" if target_language.id == "kotlin" else "Main.java" if target_language.id == "java" else "main.php" if target_language.id == "php" else "main.rb" if target_language.id == "ruby" else "Program.cs" if target_language.id == "csharp" else "main.c" if target_language.id == "c" else "main.swift" if target_language.id == "swift" else "main.cpp")
+    if target_language.id == "python":
+        python = shutil.which("python3") or shutil.which("python")
+        python_files = sorted(result.output_root.rglob("*.py"))
+        if not python or not python_files:
+            gates["target_build"] = "BLOCKED"
+            warnings.append("Python validation is blocked because Python and at least one generated .py file are required.")
+        else:
+            syntax_statuses = [
+                run_check(f"target_build_python_{index}", [python, "-m", "py_compile", str(path)])
+                for index, path in enumerate(python_files)
+            ]
+            gates["target_build"] = "PASSED" if all(status == "PASSED" for status in syntax_statuses) else next(
+                status for status in syntax_statuses if status != "PASSED"
+            )
+            if gates["target_build"] == "PASSED" and main_source.is_file():
+                runtime_status = run_check("target_runtime_smoke_python", [python, str(main_source)])
+                if runtime_status != "PASSED":
+                    gates["target_build"] = runtime_status
+        gates["go_vet"] = "NOT_APPLICABLE"
+    elif target_language.id == "go":
         go = shutil.which("go")
         gofmt = shutil.which("gofmt")
         if not go or not gofmt:
@@ -817,7 +844,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         }
         warnings.extend(behavior["warnings"])
     else:
-        source_image = os.environ.get("POLYMIGRATE_DOCKER_IMAGE_PYTHON", "").strip() or None
+        source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
+        source_image = os.environ.get(source_image_variable, "").strip() or None
         target_image = os.environ.get(target_image_variable, "").strip() or None
         comparison = compare_behavior(
             args.behavior_spec, args.source, result.output_root,
@@ -875,7 +903,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             "warnings": warnings,
         },
         "note": (
-            "Offline deterministic translation for a constrained Python-to-target subset. "
+            "Offline deterministic translation for constrained language-pair subsets. "
             "No source code is sent to an AI provider. Unsupported syntax is rejected. "
             "Build/vet checks do not prove full behavior equivalence; unrun gates remain "
             "NOT_RUN. Static security scanning is heuristic, not a comprehensive audit."
