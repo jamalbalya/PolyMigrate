@@ -60,7 +60,7 @@ console.log(label, false);
         from polymigrate.migration.javascript_python_target import _Parser
         unsupported = (
             'let value = "count: " + 3;\n',
-            'if (true) { console.log("unsafe"); }\n',
+            'while (true) { console.log("unsafe"); }\n',
             'const value = 9007199254740992;\n',
             'console.log(process.env.SECRET);\n',
             'const true = 1;\n',
@@ -77,6 +77,37 @@ console.log(label, false);
             'let value = 1;\nvalue = "one";\n',
             'let value = 1;\nlet value = 2;\n',
         ):
+            with self.subTest(source=source), self.assertRaises(UnsupportedJavaScriptSyntax):
+                _Parser(source).parse()
+
+    def test_translates_print_only_if_else_and_scalar_comparisons(self):
+        source = '''const count = 2;
+if (count > 1) { console.log("many"); } else { console.log("few"); }
+if (count === 2) { console.log(true); }
+if (false) { console.log("unreachable"); }
+'''
+        from polymigrate.migration.javascript_python_target import _Parser
+        generated = _Parser(source).parse()
+        ast.parse(generated)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "main.py"
+            target.write_text(generated, encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(target)], capture_output=True, text=True, check=False,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "many\ntrue\n")
+
+    def test_rejects_assignment_nested_control_flow_and_string_ordering_in_branches(self):
+        from polymigrate.migration.javascript_python_target import _Parser
+        unsupported = (
+            'let value = 1; if (value > 0) { value = 2; }\n',
+            'if (true) { if (false) { console.log("nested"); } }\n',
+            'if ("a" < "b") { console.log("ordered"); }\n',
+            'if (1 < 2 < 3) { console.log("chained"); }\n',
+            'if (true) { console.log("then"); }; else { console.log("else"); }\n',
+        )
+        for source in unsupported:
             with self.subTest(source=source), self.assertRaises(UnsupportedJavaScriptSyntax):
                 _Parser(source).parse()
 

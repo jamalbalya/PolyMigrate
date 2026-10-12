@@ -1,8 +1,9 @@
 """Deterministic JavaScript-to-Python translator for a deliberately narrow scalar subset.
 
 Supported statements: const/let/var scalar declarations, same-type reassignment of
-existing let/var bindings, and console.log() with scalar expressions. Unsupported
-syntax is rejected rather than guessed; source text is parsed and never executed.
+existing let/var bindings, console.log() with scalar expressions, and bounded-shape
+if/else branches with scalar comparisons and print-only bodies. Unsupported syntax
+is rejected rather than guessed; source text is parsed and never executed.
 """
 from __future__ import annotations
 
@@ -87,10 +88,68 @@ class _Parser:
     def _statement_end(self) -> None:
         if self._peek(";"):
             self.index += 1
-        if self.tokens[self.index][0] not in {"NEWLINE", "EOF"}:
+        if self.tokens[self.index][0] not in {"NEWLINE", "EOF"} and not self._peek("}"):
             raise UnsupportedJavaScriptSyntax(
                 f"Expected a statement boundary, found {self.tokens[self.index][1]!r}"
             )
+
+    def _block(self) -> list[str]:
+        self._take("{")
+        self._separators()
+        body: list[str] = []
+        while not self._peek("}"):
+            if self._peek():
+                raise UnsupportedJavaScriptSyntax("Unclosed JavaScript block")
+            kind, value = self.tokens[self.index]
+            if kind != "IDENT" or value != "console":
+                raise UnsupportedJavaScriptSyntax("Conditional bodies may contain console.log() statements only")
+            start = len(self.output)
+            self._statement()
+            body.extend(self.output[start:])
+            del self.output[start:]
+            self._separators()
+        self._take("}")
+        return body
+
+    def _condition(self) -> tuple[str, str, Any]:
+        left_expr, left_type, left_value = self._expression()
+        operators = {"===", "!==", "==", "!=", "<", "<=", ">", ">="}
+        if self.tokens[self.index][1] not in operators:
+            return left_expr, left_type, left_value
+        operator = self._take()[1]
+        right_expr, right_type, right_value = self._expression()
+        if left_type != right_type:
+            raise UnsupportedJavaScriptSyntax("Condition comparisons require operands of the same type")
+        if operator in {"<", "<=", ">", ">="} and left_type != "int":
+            raise UnsupportedJavaScriptSyntax("Ordering comparisons are supported for integers only")
+        py_operator = {"===": "==", "!==": "!=", "==": "==", "!=": "!=", "<": "<", "<=": "<=", ">": ">", ">=": ">="}[operator]
+        result = {
+            "==": left_value == right_value,
+            "!=": left_value != right_value,
+            "<": left_value < right_value if left_type == "int" else False,
+            "<=": left_value <= right_value if left_type == "int" else False,
+            ">": left_value > right_value if left_type == "int" else False,
+            ">=": left_value >= right_value if left_type == "int" else False,
+        }[py_operator]
+        return f"({left_expr} {py_operator} {right_expr})", "bool", result
+
+    def _if_statement(self) -> None:
+        self._take("if")
+        self._take("(")
+        condition, _condition_type, _condition_value = self._condition()
+        self._take(")")
+        then_body = self._block()
+        while self.tokens[self.index][0] == "NEWLINE":
+            self.index += 1
+        else_body: list[str] | None = None
+        if self.tokens[self.index] == ("IDENT", "else"):
+            self.index += 1
+            else_body = self._block()
+        self.output.append(f"if {condition}:")
+        self.output.extend(f"    {line}" for line in then_body) if then_body else self.output.append("    pass")
+        if else_body is not None:
+            self.output.append("else:")
+            self.output.extend(f"    {line}" for line in else_body) if else_body else self.output.append("    pass")
 
     def parse(self) -> str:
         self._separators()
@@ -103,6 +162,10 @@ class _Parser:
 
     def _statement(self) -> None:
         kind, value = self.tokens[self.index]
+        if kind == "IDENT" and value == "if":
+            self._if_statement()
+            return
+
         if kind == "IDENT" and value in {"const", "let", "var"}:
             declaration = value
             self.index += 1
@@ -258,7 +321,7 @@ class JavaScriptToPythonTargetAdapter:
         if not project.units:
             raise ValueError("No JavaScript source units were supplied")
         self.warnings = [
-            "Deterministic JavaScript-to-Python subset only: functions, modules/imports, objects, arrays, control flow, async code, and dynamic coercion are unsupported.",
+            "Deterministic JavaScript-to-Python subset only: functions, modules/imports, objects, arrays, loops, nested control flow, async code, and dynamic coercion are unsupported; if/else branches may contain console.log() only.",
             "Generated output is limited to the explicitly supported scalar cases; project-level behavior is not implied.",
         ]
         artifacts: list[GeneratedArtifact] = []
