@@ -26,13 +26,13 @@ _ALLOWED_MANIFESTS = {
     "swift": ("Package.swift",),
 }
 _GRADLE_ALLOWED_LINE = re.compile(
-    r"""^(?:rootProject\\.name\\s*=\\s*["'][^"'$\\n]*["']|"""
-    r"""include\\(\\s*["'][^"'$\\n]*["'](?:\\s*,\\s*["'][^"'$\\n]*["'])*\\s*\\)|"""
-    r"""(?:dependencyResolutionManagement|repositories|dependencies)\\s*\\{|"""
-    r"""(?:mavenCentral|google)\\(\\)|"""
+    r"""^(?:rootProject\.name\s*=\s*["'][^"'$\n]*["']|"""
+    r"""include\(\s*["'][^"'$\n]*["'](?:\s*,\s*["'][^"'$\n]*["'])*\s*\)|"""
+    r"""(?:dependencyResolutionManagement|repositories|dependencies)\s*\{|"""
+    r"""(?:mavenCentral|google)\(\)|"""
     r"""(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testCompileOnly|"""
-    r"""testRuntimeOnly|annotationProcessor|kapt)\\(\\s*["'][^"'$\\n]+["']\\s*\\)|"""
-    r"""\\})$"""
+    r"""testRuntimeOnly|annotationProcessor|kapt)\(\s*["'][^"'$\n]+["']\s*\)|"""
+    r"""\})$"""
 )
 
 
