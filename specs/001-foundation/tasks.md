@@ -198,3 +198,5 @@
 - [x] T144 Extend Go-to-Python translation with boolean `if`/`else` and statically bounded C-style `for` loops; reject unsupported/nested control flow, unsafe bounds, arithmetic on dynamic loop variables, and scope leaks.
 
 - [x] T145 Add constrained TypeScript-to-Python deterministic migration for a single root `main.ts`, validate `number`/`string`/`boolean` annotations, reject unsupported module/type syntax, and add CLI plus runtime regression tests.
+
+- [ ] T146 Add end-to-end deterministic behavior-equivalence smoke tests for Python ↔ Go and Python ↔ TypeScript: execute both original and generated artifacts, compile Go/TypeScript outputs where applicable, and compare stdout. These fixtures prove only a narrow arithmetic case; expand the corpus before making broader equivalence claims.
