@@ -161,3 +161,5 @@
 - [x] T121 Extend the constrained Python-to-C11 subset with print-only `if`/`elif`/`else` chains, short-circuit boolean conditions, scalar truthiness, and string equality via `strcmp`; reject branch assignments, nested control flow, chained comparisons, and string ordering, with GCC runtime-equivalence tests.
 
 - [x] T122 Extend the constrained Python-to-C11 translator with bounded print-only `for i in range(...)` loops; statically validate one to three integer arguments, reject zero steps and ranges above 10,000 iterations, preserve the last loop value when referenced, and compare compiled C output with Python including negative steps and zero-iteration semantics.
+
+- [x] T123 Add bounded Python `while`-to-C translation using a single integer comparison and statically simulated existing-integer assignments/`+=`/`-=`/`*=` updates; reject unproven termination, no-progress loops, overflow, `while/else`, nested control flow, and iteration counts above 10,000, with GCC runtime-equivalence tests.
