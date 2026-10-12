@@ -198,3 +198,5 @@
 - [x] T144 Extend Go-to-Python translation with boolean `if`/`else` and statically bounded C-style `for` loops; reject unsupported/nested control flow, unsafe bounds, arithmetic on dynamic loop variables, and scope leaks.
 
 - [x] T145 Add constrained TypeScript-to-Python deterministic migration for a single root `main.ts`, validate `number`/`string`/`boolean` annotations, reject unsupported module/type syntax, and add CLI plus runtime regression tests.
+
+- [ ] T147 Expand migration orchestration contract coverage to every directed non-identity pair in the registered language catalog; separately track deterministic translator support, AI-assisted experimental support, and proven semantic equivalence so registry coverage is never mistaken for production migration coverage.
