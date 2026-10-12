@@ -16,7 +16,7 @@ Implemented in this foundation:
 - Optional Graphify JSON artifact reader and safe CLI query adapter with degraded-mode reporting.
 - SQLite migration knowledge store with fingerprints, validation status, and opt-in cross-project reuse.
 - Evidence-derived final review status.
-- Deterministic Python-to-Go, Python-to-JavaScript, Python-to-TypeScript, Python-to-Rust, Python-to-Java, Python-to-Kotlin, Python-to-PHP, Python-to-Ruby, Python-to-C++, and Python-to-C# translators for explicitly constrained syntax subsets, with target validation and explicit validation-gate reporting.
+- Deterministic Python-to-Go, Python-to-JavaScript, Python-to-TypeScript, Python-to-Rust, Python-to-Java, Python-to-Kotlin, Python-to-PHP, Python-to-Ruby, Python-to-C++, Python-to-C#, and Python-to-Swift translators for explicitly constrained syntax subsets, with target validation and explicit validation-gate reporting.
 - Spec-kit documents, initial skills, and GitHub Actions CI.
 
 The provider adapters have not yet been verified against live credentials in this repository environment. They intentionally do not advertise native tool calling. Graphify reads an existing graph and can query it through the graphify CLI; graph construction and updates are handled by the local Graphify workflow. Graphify runtime/version compatibility is not a CI validation gate for this project.
@@ -65,12 +65,15 @@ The offline deterministic strategy currently supports these deliberately narrow 
 - Python → PHP
 - Python → Ruby
 - Python → Kotlin
+- Python → Swift
 
 For example:
 
     polymigrate migrate --source ./small-python-project --from python --to javascript --output ./migration-output --strategy deterministic
 
 The C subset translates one Python file with signed 32-bit integer arithmetic, simple string and boolean values, `abs()`, positional `print()` with Python-style boolean text, `if`/`elif`/`else` chains with bounded scalar conditions and same-type assignments to existing variables, and bounded `for i in range(...)` loops whose bodies may print or update existing integer variables with simple assignments or integer `+=`/`-=`/`*=`; loop arguments must be statically known integers, non-zero steps, and at most 10,000 iterations. The loop variable retains its last yielded value, while zero-iteration loops leave it undefined. It also supports statically simulated `while` loops with one integer-comparison condition proven to terminate within 10,000 iterations; loop bodies may print or update existing integer variables with simple assignments or integer `+=`/`-=`/`*=`. It rejects nested control flow, `while/else`, string concatenation, imports, functions, collections, and full-project migration. Generated `.c` files are compiled with C11, `-Wall -Wextra -Werror`, and runtime-smoke-tested when `gcc` is available.
+
+The Swift subset translates one Python file into `main.swift` using explicitly typed `Int32`, `String`, and `Bool` variables, signed-32-bit checked arithmetic, string concatenation, `str()`, `abs()`, Unicode-scalar-aware `len(string)`, and positional `print()` with Python-style boolean text. It rejects control flow, imports, functions, collections, type-changing assignments, unsafe arithmetic, and multi-file projects. When `swiftc` is available, generated source is compiled with warnings treated as errors and run against output fixtures; this is not full-project migration.
 
 The TypeScript subset reuses the constrained Python-to-JavaScript translator and emits `.ts`; variables are inferred from the same fixed int/string/boolean model and the dedicated CI job compiles with `tsc --strict` before comparing runtime output with Python. TypeScript-specific reserved identifiers are rejected, and this does not imply full-project migration.
 
@@ -182,7 +185,7 @@ The CI workflow runs compilation and unit/integration/E2E contract tests across 
 - src/polymigrate/graph/: optional Graphify artifact adapter.
 - src/polymigrate/migration/: bounded source-manifest inventory, library strategy ranking, evidence-constrained AI decisions, and a safe adapter execution pipeline.
 - src/polymigrate/migration/python_go_target.py: experimental deterministic translator for a constrained Python-to-Go subset.
-- src/polymigrate/migration/python_javascript_target.py, python_rust_target.py, python_java_target.py, python_php_target.py, python_ruby_target.py, python_cpp_target.py, and python_csharp_target.py: experimental deterministic translators for strict Python-to-JavaScript, Python-to-Rust, Python-to-Java, Python-to-PHP, and Python-to-Ruby, and Python-to-C++, and Python-to-C# subsets.
+- src/polymigrate/migration/python_javascript_target.py, python_rust_target.py, python_java_target.py, python_php_target.py, python_ruby_target.py, python_cpp_target.py, python_csharp_target.py, and python_swift_target.py: experimental deterministic translators for strict Python-to-JavaScript, Python-to-Rust, Python-to-Java, Python-to-PHP, and Python-to-Ruby, and Python-to-C++, and Python-to-C# subsets.
 - src/polymigrate/validation/dependency_wiring.py: static manifest/import consistency checks for supported languages, including Rust Cargo projects; this is not proof of package API compatibility.
 - src/polymigrate/knowledge.py: persistent evidence-gated knowledge store.
 - src/polymigrate/security/: best-effort secret redaction at model boundaries.
