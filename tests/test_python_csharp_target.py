@@ -79,7 +79,7 @@ class PythonToCSharpTranslatorTests(unittest.TestCase):
             ), {}
         )[0].content
         self.assertIn("counter = (counter + 1);", generated)
-        self.assertIn("total = (total + polymigrateRangeCounter1);", generated)
+        self.assertIn("total = (total + polymigrateRangeCounter3);", generated)
 
     def test_range_loop_assignments_reject_unsafe_or_semantically_ambiguous_cases(self):
         cases = (
