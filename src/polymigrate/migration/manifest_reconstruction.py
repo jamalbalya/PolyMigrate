@@ -54,6 +54,51 @@ def _gradle_manifest_is_declarative(content: str) -> bool:
     return depth == 0
 
 
+_SWIFT_PACKAGE_ALLOWED_LINE = re.compile(
+    r"""^(?:// swift-tools-version: [0-9]+(?:\.[0-9]+){1,2}|import PackageDescription|"""
+    r"""let package = Package\(|name: "[^"$\n]+"[,]?|products: \[|targets: \[|dependencies: \[|"""
+    r"""\.executable\(name: "[^"$\n]+", targets: \["[^"$\n]+"\]\)[,]?|"""
+    r"""\.library\(name: "[^"$\n]+", targets: \["[^"$\n]+"\]\)[,]?|"""
+    r"""\.executableTarget\(name: "[^"$\n]+"(?:, dependencies: \[[^\]$\n]*\])?\)[,]?|"""
+    r"""\.target\(name: "[^"$\n]+"(?:, dependencies: \[[^\]$\n]*\])?\)[,]?|"""
+    r"""\.testTarget\(name: "[^"$\n]+"(?:, dependencies: \[[^\]$\n]*\])?\)[,]?|"""
+    r"""\.package\(url: "https://[^"$\n]+", from: "[0-9][^"$\n]*"\)[,]?|"""
+    r"""\.product\(name: "[^"$\n]+", package: "[^"$\n]+"\)[,]?|"""
+    r"""\[|\],?|\)|\)\s*,?)$"""
+)
+
+
+def _swift_package_manifest_is_declarative(content: str) -> bool:
+    """Allow only a narrow static SwiftPM manifest DSL; Package.swift is executable Swift."""
+    depth = {"(": 0, "[": 0}
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("//"):
+            if line.startswith("// swift-tools-version:") and not _SWIFT_PACKAGE_ALLOWED_LINE.fullmatch(line):
+                return False
+            continue
+        if not _SWIFT_PACKAGE_ALLOWED_LINE.fullmatch(line):
+            return False
+        # All accepted statements are fixed DSL forms; reject multiline nested
+        # expression syntax except the standard Package declaration structure.
+        if line == "let package = Package(":
+            depth["("] += 1
+        elif line == ")":
+            depth["("] -= 1
+            if depth["("] < 0:
+                return False
+        elif line.endswith("["):
+            depth["["] += 1
+        elif line == "]" or line == "],":
+            depth["["] -= 1
+            if depth["["] < 0:
+                return False
+    return depth["("] == 0 and depth["["] == 0
+
+
+_FORBIDDEN_XML_EXTERNALS = re.compile(r"(?is)<!DOCTYPE\b|<!ENTITY\b|\b(?:SYSTEM|PUBLIC)\s+['\"]")
+
+
 _FORBIDDEN_BUILD_HOOKS = re.compile(
     r"(?i)(?:preinstall|postinstall|prepare\s*[:=]|build\.rs|<plugin\b|<executions\b|<exec\b|<target\b|usingtask|"
     r"\b(?:curl|wget|powershell|cmd\.exe|execute_process|add_custom_command)\b|"
@@ -154,6 +199,12 @@ def reconstruct_target_manifests(
             continue
         if path in {"settings.gradle.kts", "build.gradle.kts"} and not _gradle_manifest_is_declarative(body):
             warnings.append(f"Rejected non-declarative Gradle manifest: {path}; only a restricted static dependency DSL is allowed.")
+            continue
+        if path == "Package.swift" and not _swift_package_manifest_is_declarative(body):
+            warnings.append("Rejected non-declarative Package.swift; Swift package manifests are executable code and only a restricted static DSL is allowed.")
+            continue
+        if path == "pom.xml" and _FORBIDDEN_XML_EXTERNALS.search(body):
+            warnings.append("Rejected pom.xml containing a DTD, entity declaration, or external XML identifier.")
             continue
         if redact_payload({"content": body})["content"] != body:
             warnings.append(f"Rejected a target manifest containing recognizable secret material: {path}")

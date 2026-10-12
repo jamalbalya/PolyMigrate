@@ -204,5 +204,76 @@ class ManifestReconstructionTests(unittest.TestCase):
         self.assertTrue(any("secret material" in warning for warning in warnings))
 
 
+    def test_rejects_executable_swift_package_manifests(self):
+        malicious = (
+            'import Foundation\ntry! Process()',
+            'import PackageDescription\nlet payload = try! String(contentsOfFile: "/etc/passwd")\nlet package = Package(name: "demo")',
+            'import PackageDescription\nlet package = Package(name: "demo", targets: [])\n// extra\ntry! FileManager.default.removeItem(atPath: "/tmp/x")',
+        )
+        for body in malicious:
+            provider = ManifestFixtureProvider({
+                "files": [{"path": "Package.swift", "content": body}],
+                "warnings": [],
+            })
+            providers = ProviderRegistry()
+            providers.register(provider)
+            with self.subTest(body=body):
+                artifacts, warnings = reconstruct_target_manifests(
+                    "swift", [{"path": "source-manifest", "content": "fixture"}],
+                    [], [], providers, "fixture",
+                )
+                self.assertEqual(artifacts, [])
+                self.assertTrue(any("non-declarative Package.swift" in warning for warning in warnings), warnings)
+
+    def test_accepts_only_restricted_static_swift_package_manifest(self):
+        body = "\n".join([
+            "// swift-tools-version: 5.9",
+            "import PackageDescription",
+            "let package = Package(",
+            '    name: "demo",',
+            "    products: [",
+            '        .executable(name: "demo", targets: ["demo"]),',
+            "    ],",
+            "    targets: [",
+            '        .executableTarget(name: "demo"),',
+            "    ],",
+            ")",
+            "",
+        ])
+        provider = ManifestFixtureProvider({
+            "files": [{"path": "Package.swift", "content": body}],
+            "warnings": [],
+        })
+        providers = ProviderRegistry()
+        providers.register(provider)
+        artifacts, warnings = reconstruct_target_manifests(
+            "swift", [{"path": "source-manifest", "content": "fixture"}],
+            [], [], providers, "fixture",
+        )
+        self.assertEqual([item.relative_path for item in artifacts], ["Package.swift"])
+        self.assertTrue(any("unverified" in warning.lower() for warning in warnings))
+
+    def test_rejects_maven_xml_external_entities(self):
+        malicious = (
+            '<!DOCTYPE project [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><project><modelVersion>4.0.0</modelVersion>&xxe;</project>',
+            '<!ENTITY leak SYSTEM "https://example.invalid/leak"><project/>',
+            '<project><description>SYSTEM "file:///etc/passwd"</description></project>',
+        )
+        for body in malicious:
+            provider = ManifestFixtureProvider({
+                "files": [{"path": "pom.xml", "content": body}],
+                "warnings": [],
+            })
+            providers = ProviderRegistry()
+            providers.register(provider)
+            with self.subTest(body=body):
+                artifacts, warnings = reconstruct_target_manifests(
+                    "java", [{"path": "source-manifest", "content": "fixture"}],
+                    [], [], providers, "fixture",
+                )
+                self.assertEqual(artifacts, [])
+                self.assertTrue(any("DTD, entity declaration, or external XML identifier" in warning for warning in warnings), warnings)
+
+
 if __name__ == "__main__":
     unittest.main()
