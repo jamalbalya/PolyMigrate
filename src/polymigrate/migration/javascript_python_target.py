@@ -180,6 +180,32 @@ class _Parser:
         self.output.extend(f"    {line}" for line in body) if body else self.output.append("    pass")
 
     def _condition(self) -> tuple[str, str, Any]:
+        """Parse scalar truthiness, comparisons, negation, and short-circuit logic."""
+        return self._condition_or()
+
+    def _condition_or(self) -> tuple[str, str, Any]:
+        left_expr, _left_type, left_value = self._condition_and()
+        while self._peek("||"):
+            self._take("||")
+            right_expr, _right_type, right_value = self._condition_and()
+            left_expr = f"({left_expr} or {right_expr})"
+            left_value = bool(left_value) or bool(right_value)
+        return left_expr, "bool", left_value
+
+    def _condition_and(self) -> tuple[str, str, Any]:
+        left_expr, _left_type, left_value = self._condition_not()
+        while self._peek("&&"):
+            self._take("&&")
+            right_expr, _right_type, right_value = self._condition_not()
+            left_expr = f"({left_expr} and {right_expr})"
+            left_value = bool(left_value) and bool(right_value)
+        return left_expr, "bool", left_value
+
+    def _condition_not(self) -> tuple[str, str, Any]:
+        if self._peek("!"):
+            self._take("!")
+            expression, _value_type, value = self._condition_not()
+            return f"(not {expression})", "bool", not bool(value)
         left_expr, left_type, left_value = self._expression()
         operators = {"===", "!==", "==", "!=", "<", "<=", ">", ">="}
         if self.tokens[self.index][1] not in operators:
