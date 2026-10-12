@@ -50,7 +50,7 @@ func main() {
         unsupported = (
             'package other\nfunc main() {}\n',
             'package main\nimport "os"\nfunc main() {}\n',
-            'package main\nimport "fmt"\nfunc main() { unused := 1; fmt.Println("ok") }\n',
+            'package main\nimport "fmt"\nfunc main() {\n    unused := 1\n    fmt.Println("ok")\n}\n',
             'package main\nimport "fmt"\nfunc main() { fmt.Println("escaped\\\\nstring") }\n',
             'package main\nfunc main() { fmt.Println("missing import") }\n',
             'package main\nfunc main() { if true { fmt.Println("no") } }\n',
@@ -63,7 +63,7 @@ func main() {
         from polymigrate.migration.go_python_target import _Parser
         for source in (
             'package main\nimport "fmt"\nfunc main() {}\n',
-            'package main\nfunc main() { value := 1; value = "one"; fmt.Println(value) }\n',
+            'package main\nfunc main() {\n    value := 1\n    value = "one"\n    fmt.Println(value)\n}\n',
         ):
             with self.subTest(source=source), self.assertRaises(UnsupportedGoSyntax):
                 _Parser(source).parse()
