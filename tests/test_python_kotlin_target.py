@@ -173,6 +173,20 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
         self.assertNotIn("for (i in", code)
         self.assertIn('println(listOf<Any>(total).joinToString(" ") { pyString(it) })', code)
 
+    def test_range_loop_integer_augmented_assignments_update_bounded_static_facts(self):
+        code = self._translate(
+            "total = 0\\nfor i in range(4):\\n    total += i\\nprint(total)\\n"
+        )
+        self.assertIn("total += i", code)
+        cases = (
+            ("total = 2147483640\\nfor i in range(10):\\n    total += 1\\n", "signed 32-bit Kotlin Int range"),
+            ("for i in range(2):\\n    i += 1\\n", "loop index reassignment"),
+            ("label = 'x'\\nfor i in range(2):\\n    label += 'y'\\n", "existing integer variables only"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
     def test_range_loops_fail_closed_on_zero_step_large_ranges_and_undefined_loop_value(self):
         cases = (
             ("for i in range(0, 5, 0):\n    print(i)\n", "step cannot be zero"),
@@ -204,6 +218,8 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             "x = 1\nif x > 0:\n    x += 1\nelse:\n    x += 1\nprint(x + 1)\n"
             "count = 3\nwhile count > 0:\n    count -= 1\n    print(count)\nprint(count)\n"
             "total = 0\nfor idx in range(4):\n    total = total + idx\nprint(total)\n"
+            "accumulator = 0\nfor step in range(4):\n    accumulator += step\nprint(accumulator)\n"
+            "factorial = 1\nfor n in range(1, 5):\n    factorial *= n\nprint(factorial)\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
@@ -221,7 +237,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
                 capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n3\n1\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n2\nab\n3\n2\n1\n0\n0\n6\n")
+            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n3\n1\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n2\nab\n3\n2\n1\n0\n0\n6\n6\n24\n")
 
 
 if __name__ == "__main__":
