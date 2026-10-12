@@ -64,7 +64,7 @@ _SWIFT_PACKAGE_ALLOWED_LINE = re.compile(
     r"""\.testTarget\(name: "[^"$\n]+"(?:, dependencies: \[[^\]$\n]*\])?\)[,]?|"""
     r"""\.package\(url: "https://[^"$\n]+", from: "[0-9][^"$\n]*"\)[,]?|"""
     r"""\.product\(name: "[^"$\n]+", package: "[^"$\n]+"\)[,]?|"""
-    r"""\[|\]|\)|\)\s*,?)$"""
+    r"""\[|\],?|\)|\)\s*,?)$"""
 )
 
 
