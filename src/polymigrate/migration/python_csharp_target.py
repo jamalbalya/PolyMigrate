@@ -289,6 +289,14 @@ class PythonToCSharpTargetAdapter:
             raise UnsupportedPythonSyntax("range() loops are limited to 10000 actual iterations")
         if not node.body:
             raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported")
+        if count == 0:
+            # The body is unreachable. Preserve references in range arguments,
+            # which Python evaluates even when the resulting range is empty.
+            for statement in node.body:
+                for child in ast.walk(statement):
+                    if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load):
+                        referenced_counts[child.id] = referenced_counts.get(child.id, 0) - 1
+            return None
 
         counter_index = loop_index
         counter_name = f"polymigrateRangeCounter{counter_index}"
@@ -300,6 +308,12 @@ class PythonToCSharpTargetAdapter:
             if isinstance(child, ast.Name) and child.id == name and isinstance(child.ctx, ast.Load)
         )
         referenced_after = referenced_counts.get(name, 0) - name_loads_inside > 0
+        range_bound_names = {
+            child.id for argument in call.args for child in ast.walk(argument)
+            if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load)
+        }
+        base_integer_values = dict(integer_values)
+        simulated_values = dict(base_integer_values)
 
         loop_name_nodes = [
             child for statement in node.body for child in ast.walk(statement)
@@ -309,11 +323,12 @@ class PythonToCSharpTargetAdapter:
             child.id = counter_name
         assigned.add(counter_name)
         types[counter_name] = "int"
-        integer_values[counter_name] = start_value
-        validation_values = list(actual_range) if count else [start_value]
+        validation_values = list(actual_range)
         rendered_body: list[str] | None = None
         try:
             for loop_value in validation_values:
+                integer_values.clear()
+                integer_values.update(simulated_values)
                 integer_values[counter_name] = loop_value
                 body_lines: list[str] = []
                 for child in node.body:
@@ -321,29 +336,47 @@ class PythonToCSharpTargetAdapter:
                         body_lines.append(self._print_call(
                             child.value, assigned, types, integer_values, uses_boolean_string
                         ))
+                    elif isinstance(child, ast.Assign):
+                        if len(child.targets) != 1 or not isinstance(child.targets[0], ast.Name):
+                            raise UnsupportedPythonSyntax("range() loop assignments must target one existing variable")
+                        target = child.targets[0].id
+                        if target == name:
+                            raise UnsupportedPythonSyntax("range() loop bodies cannot reassign the loop variable")
+                        if target not in assigned:
+                            raise UnsupportedPythonSyntax("range() loop assignments must target existing variables")
+                        if target in range_bound_names:
+                            raise UnsupportedPythonSyntax("range() loop bodies cannot assign variables used to compute range bounds")
+                        expression, value_type = self._expr(
+                            child.value, assigned, types, integer_values, uses_boolean_string
+                        )
+                        if value_type != types[target]:
+                            raise UnsupportedPythonSyntax("range() loop assignments must preserve the variable type")
+                        if value_type == "int":
+                            integer_values[target] = self._int_value(child.value, integer_values)
+                        else:
+                            integer_values.pop(target, None)
+                        body_lines.append(f"{target} = {expression};")
                     elif (isinstance(child, ast.Expr) and isinstance(child.value, ast.Constant)
                           and isinstance(child.value.value, str)):
                         continue
                     else:
-                        raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
+                        raise UnsupportedPythonSyntax(
+                            "range() loop bodies may contain print() calls and same-type assignments to existing variables"
+                        )
                 if not body_lines:
-                    raise UnsupportedPythonSyntax("range() loop bodies must contain at least one print() statement")
+                    raise UnsupportedPythonSyntax("range() loop bodies must contain at least one supported statement")
                 if rendered_body is None:
                     rendered_body = body_lines
+                simulated_values = {
+                    key: value for key, value in integer_values.items() if key != counter_name
+                }
         finally:
             for child in loop_name_nodes:
                 child.id = name
             assigned.discard(counter_name)
             types.pop(counter_name, None)
-            integer_values.pop(counter_name, None)
-
-        if count == 0:
-            # The loop has no runtime effect. Remove references from its entire
-            # AST subtree so unused-variable checks reflect emitted code, not dead code.
-            for child in ast.walk(node):
-                if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load):
-                    referenced_counts[child.id] = referenced_counts.get(child.id, 0) - 1
-            return None
+            integer_values.clear()
+            integer_values.update(simulated_values)
 
         last_value = actual_range[-1]
         next_value = last_value + step_value
@@ -376,8 +409,8 @@ class PythonToCSharpTargetAdapter:
         except (SyntaxError, ValueError, RecursionError) as exc:
             raise UnsupportedPythonSyntax(f"Cannot parse {unit.relative_path}: {type(exc).__name__}") from None
         self.warnings = [
-            "Deterministic Python-to-C# translation supports single-file assignments, bounded integer/string/boolean expressions, str(), abs(), positional print(), print-only if/elif/else chains, and bounded print-only range() loops.",
-            "While loops, branch assignments, nested control flow, functions, imports, classes, collections, and full project migration are not supported by this subset.",
+            "Deterministic Python-to-C# translation supports single-file assignments, bounded integer/string/boolean expressions, str(), abs(), positional print(), print-only if/elif/else chains, and bounded range() loops with print() calls or same-type assignments to existing variables.",
+            "While loops, conditional branch assignments, nested control flow, functions, imports, classes, collections, and full project migration are not supported by this subset.",
         ]
         assigned: set[str] = set()
         types: dict[str, str] = {}
