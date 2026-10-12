@@ -30,6 +30,7 @@ from polymigrate.migration.javascript_python_target import JavaScriptToPythonTar
 from polymigrate.migration.javascript_go_target import JavaScriptToGoTargetAdapter
 from polymigrate.migration.go_python_target import GoToPythonTargetAdapter
 from polymigrate.migration.go_javascript_target import GoToJavaScriptTargetAdapter
+from polymigrate.migration.go_typescript_target import GoToTypeScriptTargetAdapter
 from polymigrate.migration.typescript_python_target import TypeScriptToPythonTargetAdapter
 from polymigrate.migration.python_typescript_target import PythonToTypeScriptTargetAdapter
 from polymigrate.migration.python_java_target import PythonToJavaTargetAdapter
@@ -446,10 +447,10 @@ def _derive_final_status(
 def _run_deterministic_migration(args, source_language, target_language) -> int:
     """Run an offline deterministic Python-to-target subset and local checks."""
     pair = (source_language.id, target_language.id)
-    if pair not in {("typescript", "python"), ("go", "python"), ("go", "javascript"), ("javascript", "python"), ("javascript", "go"), ("python", "go"), ("python", "javascript"), ("python", "typescript"), ("python", "kotlin"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp"), ("python", "c"), ("python", "swift")}:
+    if pair not in {("typescript", "python"), ("go", "python"), ("go", "javascript"), ("go", "typescript"), ("javascript", "python"), ("javascript", "go"), ("python", "go"), ("python", "javascript"), ("python", "typescript"), ("python", "kotlin"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp"), ("python", "c"), ("python", "swift")}:
         raise ValueError(
             "The deterministic strategy currently supports --from python --to go, javascript, typescript, kotlin, rust, java, php, ruby, cpp, csharp, c, or swift, "
-            "--from javascript --to python or go, --from go --to python or javascript, and --from typescript --to python"
+            "--from javascript --to python or go, --from go --to python, javascript, or typescript, and --from typescript --to python"
         )
 
     context = {}
@@ -480,6 +481,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         adapters.register_target(GoToPythonTargetAdapter())
     elif pair == ("go", "javascript"):
         adapters.register_target(GoToJavaScriptTargetAdapter())
+    elif pair == ("go", "typescript"):
+        adapters.register_target(GoToTypeScriptTargetAdapter())
     elif pair == ("typescript", "python"):
         adapters.register_target(TypeScriptToPythonTargetAdapter())
     elif target_language.id == "go":
