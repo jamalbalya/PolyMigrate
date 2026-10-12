@@ -206,9 +206,9 @@ class ManifestReconstructionTests(unittest.TestCase):
 
     def test_rejects_executable_swift_package_manifests(self):
         malicious = (
-            'import Foundation\\ntry! Process()',
-            'import PackageDescription\\nlet payload = try! String(contentsOfFile: "/etc/passwd")\\nlet package = Package(name: "demo")',
-            'import PackageDescription\\nlet package = Package(name: "demo", targets: [])\\n// extra\\ntry! FileManager.default.removeItem(atPath: "/tmp/x")',
+            'import Foundation\ntry! Process()',
+            'import PackageDescription\nlet payload = try! String(contentsOfFile: "/etc/passwd")\nlet package = Package(name: "demo")',
+            'import PackageDescription\nlet package = Package(name: "demo", targets: [])\n// extra\ntry! FileManager.default.removeItem(atPath: "/tmp/x")',
         )
         for body in malicious:
             provider = ManifestFixtureProvider({
@@ -226,7 +226,7 @@ class ManifestReconstructionTests(unittest.TestCase):
                 self.assertTrue(any("non-declarative Package.swift" in warning for warning in warnings), warnings)
 
     def test_accepts_only_restricted_static_swift_package_manifest(self):
-        body = "\\n".join([
+        body = "\n".join([
             "// swift-tools-version: 5.9",
             "import PackageDescription",
             "let package = Package(",
