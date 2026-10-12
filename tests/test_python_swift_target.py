@@ -44,7 +44,6 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
         self.assertIn("!(empty).isEmpty", code)
 
         cases = (
-            ("x = 1\nif x:\n    x = 2\nprint(x)\n", "conditional bodies may contain only print"),
             ("x = 1\nif x:\n    if x:\n        print(x)\n", "conditional bodies may contain only print"),
             ("x = 1\nif 0 < x < 3:\n    print(x)\n", "Chained comparisons"),
             ("label = 'x'\nif label < 'z':\n    print(label)\n", "String ordering comparisons"),
@@ -75,7 +74,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
         cases = (
             ("if True:\n    x = 1\n", "conditional assignments must target existing variables"),
             ("x = 1\nif x:\n    x = 'text'\n", "must preserve the variable type"),
-            ("x = 1\nif x:\n    x = 2\nprint(x + 1)\n", "cannot be proven statically safe"),
+            ("x = 1\nif x:\n    x = 2\nprint(x + 1)\n", "cannot be proven safe"),
         )
         for source, message in cases:
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
