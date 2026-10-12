@@ -191,8 +191,10 @@ class PythonToCppTargetAdapter:
         uses_boolean_string = [False]
         statements: list[str] = []
         loop_variables: set[str] = set()
-        referenced = {node.id for node in ast.walk(tree)
-                      if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
+        referenced_counts: dict[str, int] = {}
+        for reference in ast.walk(tree):
+            if isinstance(reference, ast.Name) and isinstance(reference.ctx, ast.Load):
+                referenced_counts[reference.id] = referenced_counts.get(reference.id, 0) + 1
         declarations = {"int": "std::int32_t", "string": "std::string", "bool": "bool"}
 
         def render_print(call: ast.Call) -> list[str]:
@@ -223,7 +225,7 @@ class PythonToCppTargetAdapter:
                 elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str):
                     continue
                 else:
-                    raise UnsupportedPythonSyntax("if/elif/else and range() loop bodies may contain only print() statements")
+                    raise UnsupportedPythonSyntax("if/elif/else bodies may contain only print() statements")
             if not rendered:
                 raise UnsupportedPythonSyntax("Empty control-flow bodies are not supported")
             return rendered
@@ -293,31 +295,69 @@ class PythonToCppTargetAdapter:
                 raise UnsupportedPythonSyntax("range() loops are limited to 10000 actual iterations")
             if not statement.body:
                 raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported")
+            if count == 0:
+                # Range arguments are evaluated, but an empty loop never executes its body.
+                for child_statement in statement.body:
+                    for child in ast.walk(child_statement):
+                        if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load):
+                            referenced_counts[child.id] = max(0, referenced_counts.get(child.id, 0) - 1)
+                return []
+
+            range_bound_names = {
+                child.id for argument in call.args for child in ast.walk(argument)
+                if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load)
+            }
             assigned.add(name)
             types[name] = "int"
-            integer_values[name] = start_value
-            validation_values = list(actual_range) if count else [start_value]
-            for loop_value in validation_values:
+            simulated_values = dict(integer_values)
+            rendered_body: list[str] | None = None
+            for loop_value in actual_range:
+                integer_values.clear()
+                integer_values.update(simulated_values)
                 integer_values[name] = loop_value
+                body_lines: list[str] = []
                 for child in statement.body:
                     if isinstance(child, ast.Expr) and isinstance(child.value, ast.Call):
                         call_node = child.value
                         if not isinstance(call_node.func, ast.Name) or call_node.func.id != "print":
-                            raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
+                            raise UnsupportedPythonSyntax("Only calls to print() are supported as expression statements")
                         if call_node.keywords or len(call_node.args) > 32:
                             raise UnsupportedPythonSyntax("print() supports at most 32 positional arguments and no keywords")
-                        for argument in call_node.args:
-                            self._expr(argument, assigned, types, integer_values, uses_boolean_string)
+                        body_lines.extend("    " + line for line in render_print(call_node))
+                    elif isinstance(child, ast.Assign):
+                        if len(child.targets) != 1 or not isinstance(child.targets[0], ast.Name):
+                            raise UnsupportedPythonSyntax("range() loop assignments must target one existing variable")
+                        target = child.targets[0].id
+                        if target == name:
+                            raise UnsupportedPythonSyntax("range() loop bodies cannot reassign the loop variable")
+                        if target not in assigned:
+                            raise UnsupportedPythonSyntax("range() loop assignments must target existing variables")
+                        if target in range_bound_names:
+                            raise UnsupportedPythonSyntax("range() loop bodies cannot assign variables used to compute range bounds")
+                        expression, value_type = self._expr(
+                            child.value, assigned, types, integer_values, uses_boolean_string
+                        )
+                        if value_type != types[target]:
+                            raise UnsupportedPythonSyntax("range() loop assignments must preserve the variable type")
+                        if value_type == "int":
+                            integer_values[target] = self._int_value(child.value, integer_values)
+                        else:
+                            integer_values.pop(target, None)
+                        body_lines.append(f"    {target} = {expression};")
                     elif isinstance(child, ast.Expr) and isinstance(child.value, ast.Constant) and isinstance(child.value.value, str):
                         continue
                     else:
-                        raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
-            body = render_body(statement.body, 4)
-            if count == 0:
-                assigned.remove(name)
-                types.pop(name, None)
-                integer_values.pop(name, None)
-                return []
+                        raise UnsupportedPythonSyntax(
+                            "range() loop bodies may contain print() calls and same-type assignments to existing variables"
+                        )
+                if not body_lines:
+                    raise UnsupportedPythonSyntax("range() loop bodies must contain at least one supported statement")
+                if rendered_body is None:
+                    rendered_body = body_lines
+                simulated_values = {
+                    key: value for key, value in integer_values.items() if key != name
+                }
+
             last_value = actual_range[-1]
             next_value = last_value + step_value
             if not _CPP_INT_MIN <= next_value <= _CPP_INT_MAX:
@@ -327,10 +367,12 @@ class PythonToCppTargetAdapter:
                 f"std::int32_t {name} = {start_expr};",
                 f"while ({name} {operator} {stop_expr}) {{",
             ]
-            rendered.extend(body)
+            rendered.extend(rendered_body or [])
             rendered.append(f"    {name} += {step_expr};")
             rendered.append("}")
             rendered.append(f"{name} = {last_value};")
+            integer_values.clear()
+            integer_values.update(simulated_values)
             integer_values[name] = last_value
             loop_variables.add(name)
             return rendered
@@ -369,6 +411,7 @@ class PythonToCppTargetAdapter:
             else:
                 raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}")
 
+        referenced = {name for name, count in referenced_counts.items() if count > 0}
         unused = sorted(assigned - referenced - loop_variables)
         if unused:
             raise UnsupportedPythonSyntax("Assigned variable(s) are never used: " + ", ".join(unused))
