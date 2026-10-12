@@ -125,6 +125,35 @@ if (false) { console.log("unreachable"); }
                 self.assertEqual(completed.stdout, expected)
                 self.assertIn("elif ", generated)
 
+    def test_translates_short_circuit_boolean_conditions(self):
+        from polymigrate.migration.javascript_python_target import _Parser
+        cases = (
+            (
+                'const count = 2;\\nconst enabled = true;\\n'
+                'if (count > 1 && enabled) { console.log("active"); }\\n'
+                'if (!enabled || count === 0) { console.log("fallback"); } else { console.log("still active"); }\\n',
+                "active" + chr(10) + "still active" + chr(10),
+            ),
+            (
+                'const count = 0;\\nconst enabled = false;\\n'
+                'if (count > 1 && enabled) { console.log("active"); } else { console.log("inactive"); }\\n'
+                'if (!enabled || count === 0) { console.log("fallback"); } else { console.log("still active"); }\\n',
+                "inactive" + chr(10) + "fallback" + chr(10),
+            ),
+        )
+        for source, expected in cases:
+            with self.subTest(source=source):
+                generated = _Parser(source).parse()
+                ast.parse(generated)
+                with tempfile.TemporaryDirectory() as tmp:
+                    target = Path(tmp) / "main.py"
+                    target.write_text(generated, encoding="utf-8")
+                    completed = subprocess.run(
+                        [sys.executable, str(target)], capture_output=True, text=True, check=False,
+                    )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(completed.stdout, expected)
+
     def test_rejects_assignment_nested_control_flow_and_string_ordering_in_branches(self):
         from polymigrate.migration.javascript_python_target import _Parser
         unsupported = (
