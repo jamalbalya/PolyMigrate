@@ -409,8 +409,8 @@ class PythonToCSharpTargetAdapter:
         except (SyntaxError, ValueError, RecursionError) as exc:
             raise UnsupportedPythonSyntax(f"Cannot parse {unit.relative_path}: {type(exc).__name__}") from None
         self.warnings = [
-            "Deterministic Python-to-C# translation supports single-file assignments, bounded integer/string/boolean expressions, str(), abs(), positional print(), print-only if/elif/else chains, and bounded print-only range() loops.",
-            "While loops, branch assignments, nested control flow, functions, imports, classes, collections, and full project migration are not supported by this subset.",
+            "Deterministic Python-to-C# translation supports single-file assignments, bounded integer/string/boolean expressions, str(), abs(), positional print(), print-only if/elif/else chains, and bounded range() loops with print() calls or same-type assignments to existing variables.",
+            "While loops, conditional branch assignments, nested control flow, functions, imports, classes, collections, and full project migration are not supported by this subset.",
         ]
         assigned: set[str] = set()
         types: dict[str, str] = {}
