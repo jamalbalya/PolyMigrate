@@ -20,6 +20,7 @@ Passing level 1 must never be described as passing levels 2 or 3. Live provider 
 
 - Python → Go
 - JavaScript → Go (composed bounded JavaScript → Python → Go subset)
+- JavaScript → C# (composed bounded JavaScript → Python → C# subset)
 - Go → Python
 - Go → JavaScript (composed bounded Go → Python → JavaScript subset)
 - Go → TypeScript (composed bounded Go → Python → TypeScript subset)
@@ -37,12 +38,12 @@ Passing level 1 must never be described as passing levels 2 or 3. Live provider 
 - Python → Ruby
 - Python → Swift
 
-Each implementation remains bounded by its own documented syntax and project-shape constraints. In the current registry, 18 of the 156 directions have a deterministic subset listed above; the remaining 138 directions have only the experimental LLM orchestration route and must not be presented as deterministic support or proven migrations. Every direction still needs pair-specific behavioral and project-level evidence.
+Each implementation remains bounded by its own documented syntax and project-shape constraints. In the current registry, 19 of the 156 directions have a deterministic subset listed above; the remaining 137 directions have only the experimental LLM orchestration route and must not be presented as deterministic support or proven migrations. Every direction still needs pair-specific behavioral and project-level evidence.
 
 ## Required next validation
 
 - Keep a test covering every directed pair in the current registry.
-- Add real runtime equivalence fixtures by language family and pair, including JavaScript → C# and its reverse direction when the implementation can support it safely.
+- Add real runtime equivalence fixtures by language family and pair, including C# → JavaScript and its reverse direction when the implementation can support it safely.
 - Record required compiler/runtime availability and explicit skips; do not count skipped toolchain tests as passes.
 - Validate multi-file projects, project manifests, dependency/API substitutions, tests, behavior, security, and autonomous repair before claiming broad project migration.
 - Grow the deterministic pair coverage only with focused parsers/generators and differential tests; do not silently route an unsupported deterministic pair through a generic generator.
