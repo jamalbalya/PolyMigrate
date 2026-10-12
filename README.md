@@ -95,6 +95,14 @@ The deterministic Python-to-C# subset emits a standalone .NET 8 project for one 
 
 The current experimental migrate command translates supported source files one file at a time. Each model request also receives a size-bounded, content-free project index of parser-derived file paths, symbols, imports/dependencies, call references, and content hashes to help preserve cross-file relationships without duplicating source contents. It scans a bounded allowlist of source manifests and can attempt constrained AI reconstruction of allowlisted target manifests when source manifests or resolved dependency-gap evidence exist; these outputs remain unverified and dependencies are never installed automatically. Dependency wiring, frameworks, tests, deployment configuration, and database schemas are not yet migrated end-to-end, and full-project target builds/regression tests are not yet run automatically for every project. Its output status is GENERATED_UNVERIFIED.
 
+The AI strategy uses the same provider-neutral route for any distinct source/target IDs in the current 13-language registry; for example, Go → JavaScript and JavaScript → C# can be attempted without a dedicated deterministic translator. This means a request can be made, **not** that the model can correctly translate every pair. It remains experimental, requires explicit source-upload consent, and must be treated as unverified until target compilation, tests, behavior comparison, dependency wiring, and security gates pass. The deterministic strategy is a separate, narrower allowlist and rejects unsupported pairs.
+
+Examples of cross-family AI attempts (these send source code to the configured provider):
+
+    polymigrate migrate --source ./go-project --from go --to javascript --output ./go-to-js --provider openai --allow-source-upload
+    polymigrate migrate --source ./js-project --from javascript --to csharp --output ./js-to-csharp --provider openai --allow-source-upload
+
+
 Configure a provider key and explicit model ID, then opt in to sending source code to that external provider:
 
     export OPENAI_API_KEY=...

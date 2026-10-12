@@ -33,20 +33,31 @@ class PairFixtureProvider:
         return ModelResponse(json.dumps(payload), self.provider_id, self.model_id)
 
 
+_REGISTERED_LANGUAGES = LanguageRegistry().all()
+
+
 class MultiPairMigrationE2ETests(unittest.TestCase):
-    # Exercise both directions for representative language families. The fake provider
-    # validates orchestration and path safety only; target semantics need real toolchains.
-    PAIRS = (
-        ("python", "go"), ("go", "python"),
-        ("javascript", "typescript"), ("typescript", "javascript"),
-        ("java", "kotlin"), ("kotlin", "java"),
-        ("rust", "c"), ("c", "rust"),
-        ("csharp", "java"), ("java", "csharp"),
-        ("ruby", "php"), ("php", "ruby"),
-        ("swift", "python"), ("python", "swift"),
+    # Exercise every directed, non-identity pair in the language registry. The fake
+    # provider validates orchestration, source isolation, and target path mapping only;
+    # it does not prove semantic equivalence or real-provider quality.
+    PAIRS = tuple(
+        (source.id, target.id)
+        for source in _REGISTERED_LANGUAGES
+        for target in _REGISTERED_LANGUAGES
+        if source.id != target.id
     )
 
-    def test_supported_language_pairs_write_isolated_unverified_artifacts(self):
+    def test_matrix_covers_every_directed_non_identity_pair(self):
+        language_ids = {language.id for language in _REGISTERED_LANGUAGES}
+        self.assertEqual(len(language_ids), len(_REGISTERED_LANGUAGES))
+        self.assertEqual(len(self.PAIRS), len(language_ids) * (len(language_ids) - 1))
+        self.assertEqual(len(set(self.PAIRS)), len(self.PAIRS))
+        for source_id in language_ids:
+            for target_id in language_ids:
+                if source_id != target_id:
+                    self.assertIn((source_id, target_id), self.PAIRS)
+
+    def test_all_registered_language_pairs_write_isolated_unverified_artifacts(self):
         languages = LanguageRegistry()
         for source_id, target_id in self.PAIRS:
             with self.subTest(source=source_id, target=target_id), tempfile.TemporaryDirectory() as tmp:
