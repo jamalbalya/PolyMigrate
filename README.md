@@ -70,7 +70,7 @@ For example:
 
     polymigrate migrate --source ./small-python-project --from python --to javascript --output ./migration-output --strategy deterministic
 
-The C subset translates one Python file with signed 32-bit integer arithmetic, simple string and boolean values, `abs()`, and positional `print()` with Python-style boolean text. It rejects control flow, loops, string concatenation, imports, functions, collections, and full-project migration. Generated `.c` files are compiled with C11, `-Wall -Wextra -Werror`, and runtime-smoke-tested when `gcc` is available.
+The C subset translates one Python file with signed 32-bit integer arithmetic, simple string and boolean values, `abs()`, positional `print()` with Python-style boolean text, and print-only `if`/`elif`/`else` chains with bounded scalar conditions. It rejects loops, conditional assignments, string concatenation, imports, functions, collections, and full-project migration. Generated `.c` files are compiled with C11, `-Wall -Wextra -Werror`, and runtime-smoke-tested when `gcc` is available.
 
 The TypeScript subset reuses the constrained Python-to-JavaScript translator and emits `.ts`; variables are inferred from the same fixed int/string/boolean model and the dedicated CI job compiles with `tsc --strict` before comparing runtime output with Python. TypeScript-specific reserved identifiers are rejected, and this does not imply full-project migration.
 

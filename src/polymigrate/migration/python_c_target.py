@@ -139,6 +139,90 @@ class PythonToCTargetAdapter:
         lines.append('printf("\\n");')
         return lines
 
+    def _condition(self, node: ast.expr, assigned: set[str], types: dict[str, str],
+                   integer_values: dict[str, int]) -> str:
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return "(!(" + self._condition(node.operand, assigned, types, integer_values) + "))"
+        if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
+            operator = " && " if isinstance(node.op, ast.And) else " || "
+            return "(" + operator.join(
+                self._condition(item, assigned, types, integer_values) for item in node.values
+            ) + ")"
+        if isinstance(node, ast.Compare):
+            if len(node.ops) != 1 or len(node.comparators) != 1:
+                raise UnsupportedPythonSyntax("Chained comparisons are not supported in C conditions")
+            left, left_type = self._expr(node.left, assigned, types, integer_values)
+            right, right_type = self._expr(node.comparators[0], assigned, types, integer_values)
+            if left_type != right_type:
+                raise UnsupportedPythonSyntax("C comparisons require operands of the same inferred type")
+            operator_node = node.ops[0]
+            operators = {
+                ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<",
+                ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=",
+            }
+            operator = operators.get(type(operator_node))
+            if operator is None:
+                raise UnsupportedPythonSyntax("Only simple equality and ordering comparisons are supported")
+            if left_type == "string":
+                if not isinstance(operator_node, (ast.Eq, ast.NotEq)):
+                    raise UnsupportedPythonSyntax("String ordering comparisons are not supported in C")
+                comparison = f"(strcmp({left}, {right}) {operator} 0)"
+                return comparison
+            if left_type == "bool" and not isinstance(operator_node, (ast.Eq, ast.NotEq)):
+                raise UnsupportedPythonSyntax("Boolean ordering comparisons are not supported in C")
+            return f"({left} {operator} {right})"
+        expression, value_type = self._expr(node, assigned, types, integer_values)
+        if value_type == "bool":
+            return expression
+        if value_type == "int":
+            return f"(({expression}) != 0)"
+        if value_type == "string":
+            return f"(({expression})[0] != 0)"
+        raise UnsupportedPythonSyntax("Condition type is not supported in C")
+
+    def _if_statement(self, node: ast.If, assigned: set[str], types: dict[str, str],
+                      integer_values: dict[str, int], *, depth: int = 1,
+                      keyword: str = "if", close_end: bool = True) -> list[str]:
+        if depth > 20:
+            raise UnsupportedPythonSyntax("if/elif chains are limited to 20 branches in C")
+        condition = self._condition(node.test, assigned, types, integer_values)
+        rendered = [f"{keyword} ({condition}) {{"]
+        for statement in node.body:
+            if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                rendered.extend("    " + line for line in self._print(
+                    statement.value, assigned, types, integer_values
+                ))
+            elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
+                  and isinstance(statement.value.value, str)):
+                continue
+            else:
+                raise UnsupportedPythonSyntax("C conditional bodies may contain only print() calls")
+        if len(rendered) == 1:
+            raise UnsupportedPythonSyntax("Empty conditional bodies are not supported in C")
+        if node.orelse:
+            if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
+                rendered.extend(self._if_statement(
+                    node.orelse[0], assigned, types, integer_values,
+                    depth=depth + 1, keyword="} else if", close_end=False,
+                ))
+            else:
+                rendered.append("} else {")
+                for statement in node.orelse:
+                    if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                        rendered.extend("    " + line for line in self._print(
+                            statement.value, assigned, types, integer_values
+                        ))
+                    elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
+                          and isinstance(statement.value.value, str)):
+                        continue
+                    else:
+                        raise UnsupportedPythonSyntax("C conditional bodies may contain only print() calls")
+                if rendered[-1] == "} else {":
+                    raise UnsupportedPythonSyntax("Empty conditional bodies are not supported in C")
+        if close_end:
+            rendered.append("}")
+        return rendered
+
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         del context
         if project.language_id != "python":
@@ -164,8 +248,8 @@ class PythonToCTargetAdapter:
             for item in ast.walk(tree)
         )
         self.warnings = [
-            "Deterministic Python-to-C supports one file, signed 32-bit integer arithmetic, simple string and boolean values, abs(), and positional print().",
-            "Control flow, loops, string concatenation, str(), imports, functions, classes, collections, and full-project migration are not supported by this subset.",
+            "Deterministic Python-to-C supports one file, signed 32-bit integer arithmetic, simple string and boolean values, abs(), positional print(), and print-only if/elif/else chains with bounded scalar conditions.",
+            "Loops, conditional assignments, string concatenation, str(), imports, functions, classes, collections, and full-project migration are not supported by this subset.",
         ]
         for node in tree.body:
             if isinstance(node, ast.Assign):
@@ -193,6 +277,8 @@ class PythonToCTargetAdapter:
                     integer_values.pop(name, None)
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
                 statements.extend(self._print(node.value, assigned, types, integer_values))
+            elif isinstance(node, ast.If):
+                statements.extend(self._if_statement(node, assigned, types, integer_values))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
             else:
@@ -201,7 +287,7 @@ class PythonToCTargetAdapter:
         unused = sorted(assigned - referenced)
         if unused:
             raise UnsupportedPythonSyntax("Assigned variable(s) are never used: " + ", ".join(unused))
-        includes = "#include <inttypes.h>\n#include <stdbool.h>\n#include <stdint.h>\n#include <stdio.h>\n"
+        includes = "#include <inttypes.h>\n#include <stdbool.h>\n#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n"
         if uses_abs:
             includes += "#include <stdlib.h>\n"
         body = "\n".join("    " + statement for statement in statements)

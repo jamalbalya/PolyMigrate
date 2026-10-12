@@ -35,12 +35,62 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             ("x = 1\nx = 'text'\nprint(x)\n", "Changing the type of 'x'"),
             ("print([1, 2])\n", "Unsupported expression syntax: List"),
             ("int = 2\nprint(int)\n", "not a supported C identifier"),
-            ("x = 1\nif x:\n    print(x)\n", "Unsupported statement syntax: If"),
             ("x = 'bad\\x00value'\nprint(x)\n", "unsupported control characters"),
         )
         for source, message in cases:
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
                 self._translate(source)
+
+    def test_print_only_if_elif_else_supports_scalar_truthiness_and_string_equality(self):
+        code = self._translate(
+            "score = 3\nlabel = 'ready'\nempty = ''\n"
+            "if score > 5:\n    print('high')\n"
+            "elif score > 0 and score < 5:\n    print('positive', score)\n"
+            "else:\n    print('other')\n"
+            "if label == 'ready':\n    print('match')\nelse:\n    print('miss')\n"
+            "if empty:\n    print('nonempty')\nelse:\n    print('empty')\n"
+            "active = True\nif active == True:\n    print('enabled')\nelse:\n    print('disabled')\n"
+        )
+        self.assertIn("} else if", code)
+        self.assertIn("strcmp(label, \"ready\") == 0", code)
+        self.assertIn("(empty)[0] != 0", code)
+
+    def test_c_conditionals_reject_assignments_chained_comparisons_and_string_ordering(self):
+        cases = (
+            ("x = 1\nif x:\n    x = 2\n", "conditional bodies may contain only print"),
+            ("x = 1\nif 0 < x < 3:\n    print(x)\n", "Chained comparisons are not supported"),
+            ("label = 'x'\nif label < 'z':\n    print(label)\n", "String ordering comparisons are not supported"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
+    @unittest.skipUnless(shutil.which("gcc"), "GCC is required for C runtime equivalence")
+    def test_compiled_c_conditionals_match_python_fixture(self):
+        source = (
+            "score = 3\nlabel = 'ready'\nempty = ''\n"
+            "if score > 5:\n    print('high')\n"
+            "elif score > 0 and score < 5:\n    print('positive', score)\n"
+            "else:\n    print('other')\n"
+            "if label == 'ready':\n    print('match')\nelse:\n    print('miss')\n"
+            "if empty:\n    print('nonempty')\nelse:\n    print('empty')\n"
+            "active = True\nif active == True:\n    print('enabled')\nelse:\n    print('disabled')\n"
+        )
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "main.c"
+            executable = root / "program"
+            source_path.write_text(code, encoding="utf-8")
+            compile_result = subprocess.run(
+                [shutil.which("gcc"), "-std=c11", "-Wall", "-Wextra", "-Werror",
+                 str(source_path), "-o", str(executable)],
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(compile_result.returncode, 0, compile_result.stdout + compile_result.stderr)
+            run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "positive 3\nmatch\nempty\nenabled\n")
 
     @unittest.skipUnless(shutil.which("gcc"), "GCC is required for C runtime equivalence")
     def test_compiled_c_output_matches_python_fixture(self):
