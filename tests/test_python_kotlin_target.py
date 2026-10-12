@@ -175,13 +175,13 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
 
     def test_range_loop_integer_augmented_assignments_update_bounded_static_facts(self):
         code = self._translate(
-            "total = 0\\nfor i in range(4):\\n    total += i\\nprint(total)\\n"
+            "total = 0\nfor i in range(4):\n    total += i\nprint(total)\n"
         )
         self.assertIn("total += i", code)
         cases = (
-            ("total = 2147483640\\nfor i in range(10):\\n    total += 1\\n", "signed 32-bit Kotlin Int range"),
-            ("for i in range(2):\\n    i += 1\\n", "loop index reassignment"),
-            ("label = 'x'\\nfor i in range(2):\\n    label += 'y'\\n", "existing integer variables only"),
+            ("total = 2147483640\nfor i in range(10):\n    total += 1\n", "signed 32-bit Kotlin Int range"),
+            ("for i in range(2):\n    i += 1\n", "loop index reassignment"),
+            ("label = 'x'\nfor i in range(2):\n    label += 'y'\n", "existing integer variables only"),
         )
         for source, message in cases:
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
