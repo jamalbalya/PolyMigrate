@@ -19,7 +19,7 @@ class DeterministicPythonSwiftCLITests(unittest.TestCase):
             root = Path(tmp)
             source = root / "source"
             source.mkdir()
-            (source / "main.py").write_text("x = 6\ny = x * 7\nprint(y)\n", encoding="utf-8")
+            (source / "main.py").write_text("x = 6\ny = x * 7\nif y > 40:\n    print(y)\nelse:\n    print(0)\n", encoding="utf-8")
             output = root / "out"
             stdout, stderr = StringIO(), StringIO()
             with patch("polymigrate.cli.build_provider_registry") as provider_setup, \
@@ -31,6 +31,7 @@ class DeterministicPythonSwiftCLITests(unittest.TestCase):
             provider_setup.assert_not_called()
             self.assertEqual(code, 3, stderr.getvalue())
             self.assertTrue((output / "main.swift").is_file())
+            self.assertIn("if (y > 40) {", (output / "main.swift").read_text(encoding="utf-8"))
             report = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))
             self.assertEqual(report["strategy"], "deterministic")
             self.assertEqual(report["target_language"], "swift")
