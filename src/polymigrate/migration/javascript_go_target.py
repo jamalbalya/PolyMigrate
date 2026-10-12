@@ -5,6 +5,7 @@ at unsupported syntax. It remains limited to the intersection of both subsets.
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 
 from polymigrate.migration.javascript_python_target import (
