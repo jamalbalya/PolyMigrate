@@ -42,6 +42,21 @@ class JavaScriptToGoTargetAdapter:
         if not python_artifacts:
             raise UnsupportedJavaScriptSyntax("JavaScript translation produced no intermediate Python artifact")
 
+        for artifact in python_artifacts:
+            try:
+                intermediate_tree = ast.parse(artifact.content)
+            except SyntaxError as exc:
+                raise UnsupportedJavaScriptSyntax(
+                    "The JavaScript-to-Python intermediate artifact is not valid Python"
+                ) from None
+            if any(
+                isinstance(node, ast.Constant) and type(node.value) is bool
+                for node in ast.walk(intermediate_tree)
+            ):
+                raise UnsupportedJavaScriptSyntax(
+                    "Boolean literals are not supported in the deterministic JavaScript-to-Go subset because their printed casing differs across runtimes"
+                )
+
         python_units = tuple(
             SourceUnit(
                 relative_path=artifact.relative_path,
