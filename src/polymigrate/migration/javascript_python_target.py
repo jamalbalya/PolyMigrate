@@ -85,7 +85,7 @@ class _Parser:
         if kind != "IDENT" or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
             raise UnsupportedJavaScriptSyntax("Only ordinary ASCII identifiers are supported")
         if name in _RESERVED_NAMES:
-            raise UnsupportedJavaScriptSyntax(f"Identifier {name!r} conflicts with Python syntax or builtins")
+            raise UnsupportedJavaScriptSyntax(f"Unsupported JavaScript identifier {name!r}: it conflicts with Python syntax or builtins")
         return name
 
     def _statement_end(self) -> None:
