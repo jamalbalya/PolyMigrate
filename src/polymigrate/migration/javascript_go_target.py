@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import hashlib
 
-from polymigrate.migration.go_python_target import UnsupportedGoSyntax
 from polymigrate.migration.javascript_python_target import (
     JavaScriptToPythonTargetAdapter,
     UnsupportedJavaScriptSyntax,
@@ -63,10 +62,6 @@ class JavaScriptToGoTargetAdapter:
         except UnsupportedPythonSyntax as exc:
             raise UnsupportedJavaScriptSyntax(
                 f"JavaScript syntax is outside the composable JavaScript-to-Go subset: {exc}"
-            ) from None
-        except UnsupportedGoSyntax as exc:
-            raise UnsupportedJavaScriptSyntax(
-                f"Cannot safely generate Go for this JavaScript input: {exc}"
             ) from None
 
         self.warnings = [
