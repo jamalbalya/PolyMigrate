@@ -66,14 +66,14 @@ class DeterministicBidirectionalEquivalenceTests(unittest.TestCase):
     def test_python_to_go_preserves_arithmetic_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source, generated = self._migrate(root, "python", "go", "print(7 * 6)\\n")
+            source, generated = self._migrate(root, "python", "go", "print(7 * 6)\n")
             self.assertEqual(self._run("python", source, root, "source"), self._run("go", generated, root, "target"))
 
     @unittest.skipUnless(shutil.which("go"), "Go toolchain is required")
     def test_go_to_python_preserves_arithmetic_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source_text = 'package main\\nimport "fmt"\\nfunc main() { fmt.Println(7 * 6) }\\n'
+            source_text = 'package main\nimport "fmt"\nfunc main() { fmt.Println(7 * 6) }\n'
             source, generated = self._migrate(root, "go", "python", source_text)
             self.assertEqual(self._run("go", source, root, "source"), self._run("python", generated, root, "target"))
 
@@ -81,14 +81,14 @@ class DeterministicBidirectionalEquivalenceTests(unittest.TestCase):
     def test_python_to_typescript_preserves_arithmetic_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source, generated = self._migrate(root, "python", "typescript", "print(7 * 6)\\n")
+            source, generated = self._migrate(root, "python", "typescript", "print(7 * 6)\n")
             self.assertEqual(self._run("python", source, root, "source"), self._run("typescript", generated, root, "target"))
 
     @unittest.skipUnless(shutil.which("tsc") and shutil.which("node"), "TypeScript compiler and Node.js are required")
     def test_typescript_to_python_preserves_arithmetic_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source, generated = self._migrate(root, "typescript", "python", "console.log(7 * 6);\\n")
+            source, generated = self._migrate(root, "typescript", "python", "console.log(7 * 6);\n")
             self.assertEqual(self._run("typescript", source, root, "source"), self._run("python", generated, root, "target"))
 
 
