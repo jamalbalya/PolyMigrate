@@ -19,7 +19,7 @@ Implemented in this foundation:
 - Deterministic Python-to-Go, Python-to-JavaScript, Python-to-TypeScript, Python-to-Rust, Python-to-Java, Python-to-Kotlin, Python-to-PHP, Python-to-Ruby, Python-to-C++, Python-to-C#, and Python-to-Swift translators for explicitly constrained syntax subsets, with target validation and explicit validation-gate reporting.
 - Spec-kit documents, initial skills, and GitHub Actions CI.
 
-The provider adapters have not yet been verified against live credentials in this repository environment. They intentionally do not advertise native tool calling. Graphify reads an existing graph and can query it through the graphify CLI; graph construction and updates are handled by the local Graphify workflow. Graphify runtime/version compatibility is not a CI validation gate for this project.
+The provider adapters have not yet been verified against live credentials in this repository environment; mocked contract tests cover request/response shapes. Responses explicitly marked as output-truncated or provider-filtered are rejected rather than accepted as complete generated code. The adapters intentionally do not advertise native tool calling. Graphify reads an existing graph and can query it through the graphify CLI; graph construction and updates are handled by the local Graphify workflow. Graphify runtime/version compatibility is not a CI validation gate for this project.
 
 ## Requirements
 

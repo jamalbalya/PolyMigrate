@@ -83,6 +83,41 @@ prompt"""
                 OpenAICompatibleProvider("openai","fake-key","test-model").generate(
                     ModelRequest("decision","return json",{},require_structured_output=True))
 
+    def test_openai_rejects_output_truncated_by_token_limit(self):
+        response = FakeHTTPResponse({"choices": [{"finish_reason": "length", "message": {"content": "partial"}}]})
+        with patch("urllib.request.urlopen", return_value=response):
+            with self.assertRaisesRegex(ProviderRequestError, "truncated at the output token limit"):
+                OpenAICompatibleProvider("openai", "fake-key", "test-model").generate(
+                    ModelRequest("translate", "prompt", {}))
+
+    def test_openai_rejects_provider_filtered_output(self):
+        response = FakeHTTPResponse({"choices": [{"finish_reason": "content_filter", "message": {"content": "partial"}}]})
+        with patch("urllib.request.urlopen", return_value=response):
+            with self.assertRaisesRegex(ProviderRequestError, "filtered by provider safety controls"):
+                OpenAICompatibleProvider("openai", "fake-key", "test-model").generate(
+                    ModelRequest("translate", "prompt", {}))
+
+    def test_anthropic_rejects_output_truncated_by_token_limit(self):
+        response = FakeHTTPResponse({"stop_reason": "max_tokens", "content": [{"type": "text", "text": "partial"}]})
+        with patch("urllib.request.urlopen", return_value=response):
+            with self.assertRaisesRegex(ProviderRequestError, "truncated at the output token limit"):
+                AnthropicProvider("fake-key", "test-model").generate(ModelRequest("translate", "prompt", {}))
+
+    def test_anthropic_rejects_context_window_truncation(self):
+        response = FakeHTTPResponse({"stop_reason": "model_context_window_exceeded", "content": [{"type": "text", "text": "partial"}]})
+        with patch("urllib.request.urlopen", return_value=response):
+            with self.assertRaisesRegex(ProviderRequestError, "truncated at the output token limit"):
+                AnthropicProvider("fake-key", "test-model").generate(ModelRequest("translate", "prompt", {}))
+
+    def test_gemini_rejects_truncated_or_filtered_candidate(self):
+        for reason in ("MAX_TOKENS", "SAFETY", "RECITATION", "OTHER"):
+            response = FakeHTTPResponse({
+                "candidates": [{"finishReason": reason, "content": {"parts": [{"text": "partial"}]}}]
+            })
+            with self.subTest(reason=reason), patch("urllib.request.urlopen", return_value=response):
+                with self.assertRaisesRegex(ProviderRequestError, "truncated or blocked"):
+                    GeminiProvider("fake-key", "test-model").generate(ModelRequest("translate", "prompt", {}))
+
     def test_oversized_provider_response_is_rejected(self):
         response=FakeHTTPResponse(b" " * 2_000_001)
         with patch("urllib.request.urlopen",return_value=response):

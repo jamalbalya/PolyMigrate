@@ -130,7 +130,15 @@ class OpenAICompatibleProvider:
         data = _request_json(f"{self.base_url}/chat/completions",
                              {"Authorization": f"Bearer {self.api_key}"}, payload, self.timeout)
         try:
-            content = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            if not isinstance(choice, dict):
+                raise ProviderRequestError("LLM provider response contains an invalid choice")
+            finish_reason = choice.get("finish_reason")
+            if finish_reason in ("length", "max_tokens"):
+                raise ProviderRequestError("LLM provider response was truncated at the output token limit")
+            if finish_reason == "content_filter":
+                raise ProviderRequestError("LLM provider response was filtered by provider safety controls")
+            content = choice["message"]["content"]
         except (KeyError, IndexError, TypeError):
             raise ProviderRequestError("LLM provider response is missing choices[0].message.content") from None
         if isinstance(content, list):
@@ -171,6 +179,9 @@ class AnthropicProvider:
             {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"},
             {"model": self.model_id, "max_tokens": self.max_output_tokens, "messages": [{"role": "user", "content": _prompt(request)}]},
             self.timeout)
+        stop_reason = data.get("stop_reason")
+        if stop_reason in ("max_tokens", "model_context_window_exceeded"):
+            raise ProviderRequestError("Anthropic response was truncated at the output token limit")
         try:
             content = "".join(item.get("text", "") for item in data["content"] if item.get("type") == "text")
         except (KeyError, TypeError, AttributeError):
@@ -211,7 +222,11 @@ class GeminiProvider:
              **({"generationConfig": generation_config} if generation_config else {})},
             self.timeout)
         try:
-            content = "".join(part.get("text", "") for part in data["candidates"][0]["content"]["parts"])
+            candidate = data["candidates"][0]
+            finish_reason = candidate.get("finishReason")
+            if isinstance(finish_reason, str) and finish_reason not in {"STOP", "FINISH_REASON_UNSPECIFIED"}:
+                raise ProviderRequestError("Gemini response was truncated or blocked by provider safety controls")
+            content = "".join(part.get("text", "") for part in candidate["content"]["parts"])
         except (KeyError, IndexError, TypeError, AttributeError):
             raise ProviderRequestError("Gemini response is missing candidate text content") from None
         if not content:
