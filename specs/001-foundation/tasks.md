@@ -19,7 +19,7 @@
 - [x] T017 Add best-effort secret redaction for model-boundary payloads.
 - [x] T018 Add evidence-constrained AI library decision engine that rejects unknown candidate names.
 - [x] T019 Add pluggable source/target adapter contracts and bounded safe output writing.
-- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; verified run `38160248177` on commit `5138abec` passed 613 tests per Python version with 6 environment-dependent skips, verified all 6 packaged skill assets, and passed the dedicated Kotlin compiler/runtime suite (19 tests), C# (18), PHP (15), Ruby (14), C++ (15), TypeScript (7), and sandboxed Docker behavior comparisons (2).
+- [x] T020 Run CI contract suite on Python 3.11, 3.12, and 3.13; verified run `38220835987` on commit `5a7d6c38` passed 676 tests per Python version with 8 environment-dependent skips, verified all 6 packaged skill assets, and passed the dedicated C, C++, C#, Kotlin, PHP, Ruby, Swift, TypeScript, and sandboxed Docker behavior E2E suites.
 - [x] T021 Add experimental per-file AI translation with explicit source-upload opt-in and an unverified review report.
 - [ ] T022 Verify provider adapters against current API contracts and live credentials; mocked request/response contract tests exist, but live provider responses and model-specific behavior remain unverified.
 - [ ] T023 Implement production source parsers and target generators across language pairs.
@@ -184,4 +184,5 @@
 - [x] T135 Extend the constrained Python-to-Ruby range-loop subset to support same-type assignments to existing variables, simulate each iteration for signed-32-bit overflow and post-loop facts, preserve zero-iteration semantics, and reject loop-target mutation, new/type-changing assignments, and writes to variables used to compute range bounds; add Ruby syntax/runtime equivalence fixtures.
 - [x] T136 Map JavaScript and TypeScript file suffixes using the source/target language pair (`.js`/`.ts`, `.jsx`/`.tsx`, `.mjs`/`.mts`, `.cjs`/`.cts`) and add regression tests for both migration directions while preserving suffixes for same-language migrations.
 - [x] T137 Correct escaped regular expressions in target manifest reconstruction so Python `[build-system]` sections and Cargo `[build-dependencies]` (including target-specific sections) / `build =` directives are actually detected; add regressions proving these unsafe manifest patterns are rejected.
-- [ ] T138 Reject executable SwiftPM `Package.swift` manifests outside a narrow static DSL and reject Maven XML DTD/entity/external identifiers; add malicious and positive fixtures and document the conservative behavior.
+- [x] T138 Reject executable SwiftPM `Package.swift` manifests outside a narrow static DSL and reject Maven XML DTD/entity/external identifiers; malicious and positive fixtures pass in the verified full CI run.
+- [x] T139 Add a fail-closed deterministic JavaScript-to-Python scalar subset with CLI integration, Python syntax/runtime smoke validation, and regression tests; full T023 parser/generator coverage remains open.
