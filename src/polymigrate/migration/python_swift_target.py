@@ -204,6 +204,11 @@ class PythonToSwiftTargetAdapter:
             node.id for node in ast.walk(tree)
             if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
         }
+        assignment_counts: dict[str, int] = {}
+        for statement in tree.body:
+            if isinstance(statement, ast.Assign) and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name):
+                target_name = statement.targets[0].id
+                assignment_counts[target_name] = assignment_counts.get(target_name, 0) + 1
         for node in tree.body:
             if isinstance(node, ast.Assign):
                 if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
@@ -219,7 +224,8 @@ class PythonToSwiftTargetAdapter:
                         raise UnsupportedPythonSyntax(f"Changing the type of '{name}' is not supported")
                     statements.append(f"{name} = {expression}")
                 else:
-                    statements.append(f"var {name}: {swift_types[inferred_type]} = {expression}")
+                    declaration = "var" if assignment_counts.get(name, 1) > 1 else "let"
+                    statements.append(f"{declaration} {name}: {swift_types[inferred_type]} = {expression}")
                     assigned.add(name)
                 self._types[name] = inferred_type
                 if inferred_type == "int":
