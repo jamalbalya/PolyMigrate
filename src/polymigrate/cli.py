@@ -844,7 +844,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         }
         warnings.extend(behavior["warnings"])
     else:
-        source_image = os.environ.get("POLYMIGRATE_DOCKER_IMAGE_PYTHON", "").strip() or None
+        source_image_variable = f"POLYMIGRATE_DOCKER_IMAGE_{source_language.id.upper()}"
+        source_image = os.environ.get(source_image_variable, "").strip() or None
         target_image = os.environ.get(target_image_variable, "").strip() or None
         comparison = compare_behavior(
             args.behavior_spec, args.source, result.output_root,
@@ -902,7 +903,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             "warnings": warnings,
         },
         "note": (
-            "Offline deterministic translation for a constrained Python-to-target subset. "
+            "Offline deterministic translation for constrained language-pair subsets. "
             "No source code is sent to an AI provider. Unsupported syntax is rejected. "
             "Build/vet checks do not prove full behavior equivalence; unrun gates remain "
             "NOT_RUN. Static security scanning is heuristic, not a comprehensive audit."
