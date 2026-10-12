@@ -167,3 +167,5 @@
 - [x] T124 Extend bounded C `range()` loops to update previously assigned integer variables with simple assignments or integer `+=`/`-=`/`*=`; statically simulate every iteration for overflow, reject loop-index mutation/new variables/type changes, preserve zero-iteration facts, and compare compiled C output with Python.
 
 - [x] T125 Support same-type assignments and integer augmented assignments to existing variables in C `if`/`elif`/`else` branches; merge static facts across all branches, retain facts only when every path agrees, reject undeclared/type-changing assignments and unprovable downstream arithmetic, and compare compiled output with Python.
+
+- [x] T126 Add a deterministic Python-to-Swift subset for one file with signed-Int32-safe arithmetic, strings/booleans, `str()`, `abs()`, Unicode-scalar-aware `len(string)`, and Python-style positional `print()`; reject unsupported syntax, add Swift compiler/runtime equivalence fixtures and a dedicated CI job, and keep T023 open because broad production parser/generator coverage remains incomplete.

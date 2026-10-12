@@ -35,6 +35,7 @@ from polymigrate.migration.python_csharp_target import PythonToCSharpTargetAdapt
 from polymigrate.migration.python_php_target import PythonToPHPTargetAdapter
 from polymigrate.migration.python_rust_target import PythonToRustTargetAdapter
 from polymigrate.migration.python_ruby_target import PythonToRubyTargetAdapter
+from polymigrate.migration.python_swift_target import PythonToSwiftTargetAdapter
 from polymigrate.migration.research import LibraryResolutionWorkflow
 from polymigrate.models import MigrationRequest
 from polymigrate.planner import PlanningError, create_plan
@@ -440,10 +441,10 @@ def _derive_final_status(
 def _run_deterministic_migration(args, source_language, target_language) -> int:
     """Run an offline deterministic Python-to-target subset and local checks."""
     pair = (source_language.id, target_language.id)
-    if pair not in {("python", "go"), ("python", "javascript"), ("python", "typescript"), ("python", "kotlin"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp"), ("python", "c")}:
+    if pair not in {("python", "go"), ("python", "javascript"), ("python", "typescript"), ("python", "kotlin"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp"), ("python", "c"), ("python", "swift")}:
         raise ValueError(
             "The deterministic strategy currently supports --from python --to go, "
-            "javascript, typescript, kotlin, rust, java, php, ruby, cpp, csharp, or c"
+            "javascript, typescript, kotlin, rust, java, php, ruby, cpp, csharp, c, or swift"
         )
 
     context = {}
@@ -479,6 +480,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         adapters.register_target(PythonToCTargetAdapter())
     elif target_language.id == "csharp":
         adapters.register_target(PythonToCSharpTargetAdapter())
+    elif target_language.id == "swift":
+        adapters.register_target(PythonToSwiftTargetAdapter())
     else:
         adapters.register_target(PythonToJavaTargetAdapter())
     result = MigrationEngine(adapters).execute(
@@ -563,7 +566,7 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         executions.append(record)
         return status
 
-    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "main.ts" if target_language.id == "typescript" else "Main.kt" if target_language.id == "kotlin" else "Main.java" if target_language.id == "java" else "main.php" if target_language.id == "php" else "main.rb" if target_language.id == "ruby" else "Program.cs" if target_language.id == "csharp" else "main.c" if target_language.id == "c" else "main.cpp")
+    main_source = result.output_root / ("main.go" if target_language.id == "go" else "src/main.rs" if target_language.id == "rust" else "main.js" if target_language.id == "javascript" else "main.ts" if target_language.id == "typescript" else "Main.kt" if target_language.id == "kotlin" else "Main.java" if target_language.id == "java" else "main.php" if target_language.id == "php" else "main.rb" if target_language.id == "ruby" else "Program.cs" if target_language.id == "csharp" else "main.c" if target_language.id == "c" else "main.swift" if target_language.id == "swift" else "main.cpp")
     if target_language.id == "go":
         go = shutil.which("go")
         gofmt = shutil.which("gofmt")
@@ -696,6 +699,24 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
             compile_status = run_check(
                 "target_build_c",
                 [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", str(c_files[0]), "-o", str(executable)],
+            )
+            gates["target_build"] = compile_status
+            if compile_status == "PASSED":
+                runtime_status = run_check("target_runtime_smoke", [str(executable)])
+                if runtime_status != "PASSED":
+                    gates["target_build"] = runtime_status
+        gates["go_vet"] = "NOT_APPLICABLE"
+    elif target_language.id == "swift":
+        compiler = shutil.which("swiftc")
+        swift_files = sorted(result.output_root.rglob("*.swift"))
+        executable = result.output_root / "polymigrate-runner"
+        if not compiler or len(swift_files) != 1:
+            gates["target_build"] = "BLOCKED"
+            warnings.append("Swift validation is blocked because swiftc must be available and exactly one generated .swift file must exist.")
+        else:
+            compile_status = run_check(
+                "target_build_swift",
+                [compiler, "-warnings-as-errors", str(swift_files[0]), "-o", str(executable)],
             )
             gates["target_build"] = compile_status
             if compile_status == "PASSED":
