@@ -131,7 +131,7 @@ class PythonToCSharpTranslatorTests(unittest.TestCase):
             assembly = root / "bin" / "Release" / "net8.0" / "PolyMigrate.dll"
             run = subprocess.run([dotnet, str(assembly)], capture_output=True, text=True, timeout=20)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "3 3\\n")
+            self.assertEqual(run.stdout, "3 3\n")
 
     def test_zero_iteration_range_does_not_define_loop_variable(self):
         generated = PythonToCSharpTargetAdapter().generate(
