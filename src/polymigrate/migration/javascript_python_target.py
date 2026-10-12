@@ -60,6 +60,8 @@ class _Parser:
         self.types: dict[str, str] = {}
         self.values: dict[str, Any] = {}
         self.constants: set[str] = set()
+        self.loop_variables: set[str] = set()
+        self.dynamic_references: set[str] = set()
         self.output: list[str] = []
 
     def _peek(self, value: str | None = None) -> bool:
@@ -110,6 +112,71 @@ class _Parser:
             self._separators()
         self._take("}")
         return body
+
+    def _for_statement(self) -> None:
+        self._take("for")
+        self._take("(")
+        if not self._peek("let"):
+            raise UnsupportedJavaScriptSyntax("Only for-loops with a let integer initializer are supported")
+        self._take("let")
+        name = self._identifier()
+        if name in self.types:
+            raise UnsupportedJavaScriptSyntax(f"Loop variable {name!r} shadows an existing binding")
+        self._take("=")
+        start_expr, start_type, start_value = self._expression()
+        if start_type != "int":
+            raise UnsupportedJavaScriptSyntax("For-loop start must be a statically known integer")
+        self._take(";")
+        condition_name = self._identifier()
+        if condition_name != name:
+            raise UnsupportedJavaScriptSyntax("For-loop condition must compare its loop variable")
+        operator = self._take()[1]
+        if operator not in {"<", "<=", ">", ">="}:
+            raise UnsupportedJavaScriptSyntax("For-loop condition must use <, <=, >, or >=")
+        bound_expr, bound_type, bound_value = self._expression()
+        if bound_type != "int":
+            raise UnsupportedJavaScriptSyntax("For-loop bound must be a statically known integer")
+        self._take(";")
+        increment_name = self._identifier()
+        if increment_name != name:
+            raise UnsupportedJavaScriptSyntax("For-loop increment must update its loop variable")
+        if self._peek("+"):
+            self._take("+")
+            self._take("+")
+            step = 1
+        elif self._peek("-"):
+            self._take("-")
+            self._take("-")
+            step = -1
+        else:
+            raise UnsupportedJavaScriptSyntax("For-loop increment must be i++ or i--")
+        if operator in {"<", "<="} and step != 1:
+            raise UnsupportedJavaScriptSyntax("Ascending loop conditions require i++")
+        if operator in {">", ">="} and step != -1:
+            raise UnsupportedJavaScriptSyntax("Descending loop conditions require i--")
+        self._take(")")
+
+        stop = bound_value
+        if operator == "<=":
+            stop += 1
+        elif operator == ">=":
+            stop -= 1
+        iteration_count = len(range(start_value, stop, step))
+        if iteration_count > 10_000:
+            raise UnsupportedJavaScriptSyntax("For-loop exceeds the 10,000-iteration safety limit")
+
+        self.types[name] = "int"
+        self.values[name] = start_value
+        self.loop_variables.add(name)
+        body = self._block()
+        # A loop variable is dynamic. It may be logged directly, but arithmetic
+        # involving it is rejected unless a future analysis proves bounds.
+        self.types.pop(name, None)
+        self.values.pop(name, None)
+        self.loop_variables.discard(name)
+        self.dynamic_references.clear()
+        self.output.append(f"for {name} in range({start_expr}, {stop}, {step}):")
+        self.output.extend(f"    {line}" for line in body) if body else self.output.append("    pass")
 
     def _condition(self) -> tuple[str, str, Any]:
         left_expr, left_type, left_value = self._expression()
@@ -164,6 +231,10 @@ class _Parser:
         kind, value = self.tokens[self.index]
         if kind == "IDENT" and value == "if":
             self._if_statement()
+            return
+
+        if kind == "IDENT" and value == "for":
+            self._for_statement()
             return
 
         if kind == "IDENT" and value in {"const", "let", "var"}:
@@ -228,10 +299,15 @@ class _Parser:
         return self._additive()
 
     def _additive(self) -> tuple[str, str, Any]:
+        before_dynamic = set(self.dynamic_references)
         left_expr, left_type, left_value = self._multiplicative()
         while self._peek("+") or self._peek("-"):
+            if self.dynamic_references - before_dynamic:
+                raise UnsupportedJavaScriptSyntax("Arithmetic on a loop variable is not supported")
             operator = self._take()[1]
             right_expr, right_type, right_value = self._multiplicative()
+            if self.dynamic_references - before_dynamic:
+                raise UnsupportedJavaScriptSyntax("Arithmetic on a loop variable is not supported")
             if left_type != right_type:
                 raise UnsupportedJavaScriptSyntax("Mixed-type arithmetic and JavaScript coercion are not supported")
             if operator == "+" and left_type == "string":
@@ -245,10 +321,15 @@ class _Parser:
         return left_expr, left_type, left_value
 
     def _multiplicative(self) -> tuple[str, str, Any]:
+        before_dynamic = set(self.dynamic_references)
         left_expr, left_type, left_value = self._unary()
         while self._peek("*"):
+            if self.dynamic_references - before_dynamic:
+                raise UnsupportedJavaScriptSyntax("Arithmetic on a loop variable is not supported")
             self.index += 1
             right_expr, right_type, right_value = self._unary()
+            if self.dynamic_references - before_dynamic:
+                raise UnsupportedJavaScriptSyntax("Arithmetic on a loop variable is not supported")
             if left_type != "int" or right_type != "int":
                 raise UnsupportedJavaScriptSyntax("Multiplication supports integer operands only")
             left_value *= right_value
@@ -298,6 +379,8 @@ class _Parser:
             name = self._identifier()
             if name not in self.types:
                 raise UnsupportedJavaScriptSyntax(f"Variable {name!r} is used before assignment")
+            if name in self.loop_variables:
+                self.dynamic_references.add(name)
             return name, self.types[name], self.values[name]
         if value == "(":
             self.index += 1
@@ -321,7 +404,7 @@ class JavaScriptToPythonTargetAdapter:
         if not project.units:
             raise ValueError("No JavaScript source units were supplied")
         self.warnings = [
-            "Deterministic JavaScript-to-Python subset only: functions, modules/imports, objects, arrays, loops, nested control flow, async code, and dynamic coercion are unsupported; if/else branches may contain console.log() only.",
+            "Deterministic JavaScript-to-Python subset only: functions, modules/imports, objects, arrays, while-loops, nested control flow, async code, and dynamic coercion are unsupported; if/else branches may contain console.log() only, and bounded for-loops may log scalar values.",
             "Generated output is limited to the explicitly supported scalar cases; project-level behavior is not implied.",
         ]
         artifacts: list[GeneratedArtifact] = []
