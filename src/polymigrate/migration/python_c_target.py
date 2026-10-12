@@ -177,7 +177,7 @@ class PythonToCTargetAdapter:
         if value_type == "int":
             return f"(({expression}) != 0)"
         if value_type == "string":
-            return f"(({expression})[0] != '\\0')"
+            return f"(({expression})[0] != 0)"
         raise UnsupportedPythonSyntax("Condition type is not supported in C")
 
     def _if_statement(self, node: ast.If, assigned: set[str], types: dict[str, str],
