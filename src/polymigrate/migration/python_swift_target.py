@@ -248,35 +248,87 @@ class PythonToSwiftTargetAdapter:
         stop_expression, _ = self._expr(stop_node, assigned)
         step_expression, _ = self._expr(step_node, assigned)
 
+        base_ints = dict(self._int_values)
+        base_strings = dict(self._string_values)
+        base_bools = dict(self._bool_values)
+        local_ints = dict(base_ints)
+        local_strings = dict(base_strings)
+        local_bools = dict(base_bools)
         assigned.add(name)
         self._types[name] = "int"
         rendered_body: list[str] | None = None
-        # Check every reachable iteration value so expressions such as i + 1
-        # cannot overflow only on a later loop iteration.
+        # Simulate every reachable iteration. This proves each assignment and
+        # expression safe and leaves static facts at the post-loop values.
         for loop_value in (values if values else [0]):
+            self._int_values = local_ints
+            self._string_values = local_strings
+            self._bool_values = local_bools
             self._int_values[name] = loop_value
             body: list[str] = []
             for statement in node.body:
                 if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
                     body.extend("    " + line for line in self._print_call(statement.value, assigned))
+                elif isinstance(statement, ast.Assign):
+                    if len(statement.targets) != 1 or not isinstance(statement.targets[0], ast.Name):
+                        raise UnsupportedPythonSyntax("Swift range-loop assignments must target one existing variable")
+                    target = statement.targets[0].id
+                    if target == name:
+                        raise UnsupportedPythonSyntax("Swift range-loop bodies cannot reassign the loop variable")
+                    if target not in assigned:
+                        raise UnsupportedPythonSyntax("Swift range-loop assignments must target existing variables")
+                    expression, value_type = self._expr(statement.value, assigned)
+                    if value_type != self._types.get(target):
+                        raise UnsupportedPythonSyntax("Swift range-loop assignments must preserve the variable type")
+                    if value_type == "int":
+                        self._int_values[target] = self._checked_int(statement.value, self._int_values)
+                    elif value_type == "string":
+                        static_value = self._static_string_value(statement.value)
+                        if static_value is None:
+                            self._string_values.pop(target, None)
+                        else:
+                            self._string_values[target] = static_value
+                    elif value_type == "bool":
+                        if isinstance(statement.value, ast.Constant) and type(statement.value.value) is bool:
+                            self._bool_values[target] = statement.value.value
+                        elif isinstance(statement.value, ast.Name) and statement.value.id in self._bool_values:
+                            self._bool_values[target] = self._bool_values[statement.value.id]
+                        else:
+                            self._bool_values.pop(target, None)
+                    body.append(f"    {target} = {expression}")
                 elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
                       and isinstance(statement.value.value, str)):
                     continue
                 else:
                     raise UnsupportedPythonSyntax(
-                        "Swift range-loop bodies may contain only print() calls; assignments and nested control flow are rejected"
+                        "Swift range-loop bodies may contain print() calls and same-type assignments to existing variables; nested control flow is rejected"
                     )
             if not body:
                 raise UnsupportedPythonSyntax("Empty range-loop bodies are not supported in Swift")
             if rendered_body is None:
                 rendered_body = body
+
         assigned.remove(name)
         self._types.pop(name, None)
         self._int_values.pop(name, None)
+        self._string_values.pop(name, None)
+        self._bool_values.pop(name, None)
+        if values:
+            self._int_values = local_ints
+            self._string_values = local_strings
+            self._bool_values = local_bools
+        else:
+            self._int_values = base_ints
+            self._string_values = base_strings
+            self._bool_values = base_bools
 
         assert rendered_body is not None
+        loop_variable_used = any(
+            isinstance(child, ast.Name) and child.id == name and isinstance(child.ctx, ast.Load)
+            for statement in node.body for child in ast.walk(statement)
+        )
+        swift_loop_name = name if loop_variable_used else "_"
         return [
-            f"for {name} in stride(from: Int32({start_expression}), to: Int32({stop_expression}), by: Int({step_expression})) {{",
+            f"for {swift_loop_name} in stride(from: Int32({start_expression}), to: Int32({stop_expression}), by: Int({step_expression})) {{",
             *rendered_body,
             "}",
         ]
@@ -456,7 +508,7 @@ class PythonToSwiftTargetAdapter:
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         self.warnings = [
             "Deterministic Python-to-Swift translation supports one file and a strict expression/assignment/print subset only.",
-            "Functions, imports, collections, nested control flow, assignments inside loops, project dependencies, and full-project migration are unsupported.",
+            "Functions, imports, collections, nested control flow, new variables and type-changing assignments inside loops, project dependencies, and full-project migration are unsupported.",
         ]
         if project.language_id != "python":
             raise ValueError("Python-to-Swift target requires a Python source project")
@@ -518,11 +570,32 @@ class PythonToSwiftTargetAdapter:
                         self._bool_values.pop(name, None)
             elif isinstance(node, ast.For):
                 loop_name = node.target.id if isinstance(node.target, ast.Name) else None
-                if loop_name and any(
-                    isinstance(child, ast.Name) and child.id == loop_name and isinstance(child.ctx, ast.Load)
-                    for following in tree.body[node_index + 1:] for child in ast.walk(following)
-                ):
-                    raise UnsupportedPythonSyntax("Use of a Swift range-loop variable after its loop is not supported")
+                if loop_name:
+                    for following in tree.body[node_index + 1:]:
+                        if (isinstance(following, ast.For) and isinstance(following.target, ast.Name)
+                                and following.target.id == loop_name):
+                            used_in_iterator = any(
+                                isinstance(child, ast.Name) and child.id == loop_name and isinstance(child.ctx, ast.Load)
+                                for child in ast.walk(following.iter)
+                            )
+                            if used_in_iterator:
+                                raise UnsupportedPythonSyntax("Use of a Swift range-loop variable after its loop is not supported")
+                            break
+                        if isinstance(following, ast.Assign) and any(
+                            isinstance(target, ast.Name) and target.id == loop_name for target in following.targets
+                        ):
+                            used_in_value = any(
+                                isinstance(child, ast.Name) and child.id == loop_name and isinstance(child.ctx, ast.Load)
+                                for child in ast.walk(following.value)
+                            )
+                            if used_in_value:
+                                raise UnsupportedPythonSyntax("Use of a Swift range-loop variable after its loop is not supported")
+                            break
+                        if any(
+                            isinstance(child, ast.Name) and child.id == loop_name and isinstance(child.ctx, ast.Load)
+                            for child in ast.walk(following)
+                        ):
+                            raise UnsupportedPythonSyntax("Use of a Swift range-loop variable after its loop is not supported")
                 statements.extend(self._for_statement(node, assigned))
             elif isinstance(node, ast.If):
                 statements.extend(self._if_statement(node, assigned))

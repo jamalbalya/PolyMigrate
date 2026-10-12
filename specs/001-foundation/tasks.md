@@ -175,3 +175,5 @@
 - [x] T128 Extend deterministic Python-to-Swift with statically bounded `for i in range(...)` loops, negative steps, at most 10000 iterations, per-iteration signed-Int32 safety checks, print-only bodies, and explicit rejection of loop-variable escape and unsupported statements; validate with Swift compiler/runtime and CLI E2E fixtures.
 
 - [x] T129 Support same-type assignments to existing variables inside Swift `if`/`elif`/`else` branches, merge integer/string/boolean static facts only when every path agrees, emit mutable bindings when reassigned, and reject unsafe post-branch arithmetic when facts disagree; add compiler/runtime and CLI fixtures.
+
+- [x] T130 Allow bounded Swift `range()` loop bodies to update existing variables with same-type assignments, simulate every iteration for overflow and static-fact updates, preserve post-loop facts only when the loop executes, and reject new variables, loop-target reassignment, type changes, and nested control flow; add compiler/runtime and CLI fixtures.
