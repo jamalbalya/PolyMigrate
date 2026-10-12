@@ -40,11 +40,11 @@ class JavaScriptToGoTargetTests(unittest.TestCase):
         self.assertEqual(original.stdout, target.stdout)
 
     @unittest.skipUnless(shutil.which("node") and shutil.which("go"), "Node.js and Go are required")
-    def test_string_and_boolean_output_preserve_stdout(self):
+    def test_string_and_multiple_arguments_preserve_stdout(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             result, source, generated = self._migrate(
-                'console.log("value=", 42, true);\n', root
+                'console.log("value=", 42);\n', root
             )
             self.assertEqual(result.status, "GENERATED_UNVERIFIED")
             original = subprocess.run(["node", str(source)], capture_output=True, text=True, timeout=30)
@@ -53,6 +53,18 @@ class JavaScriptToGoTargetTests(unittest.TestCase):
         self.assertEqual(original.returncode, 0, original.stderr)
         self.assertEqual(target.returncode, 0, target.stderr)
         self.assertEqual(original.stdout, target.stdout)
+
+    def test_boolean_literals_are_rejected_to_avoid_output_semantic_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.js").write_text("console.log(true);\\n", encoding="utf-8")
+            adapters = AdapterRegistry()
+            adapters.register_source(InventorySourceAdapter("javascript", (".js",)))
+            adapters.register_target(JavaScriptToGoTargetAdapter())
+            with self.assertRaisesRegex(ValueError, "Boolean literals are not supported"):
+                MigrationEngine(adapters).execute(source, "javascript", "go", root / "generated")
 
     def test_multiple_files_are_rejected_by_composed_subset(self):
         with tempfile.TemporaryDirectory() as tmp:
