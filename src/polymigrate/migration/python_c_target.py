@@ -10,7 +10,7 @@ from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject
 
 _INT_MIN = -(2**31)
 _INT_MAX = 2**31 - 1
-_BUILTINS = {"print", "abs", "printf", "main"}
+_BUILTINS = {"print", "abs", "printf", "main", "range"}
 _RESERVED = {
     "auto", "break", "case", "char", "const", "continue", "default", "do",
     "double", "else", "enum", "extern", "float", "for", "goto", "if",
@@ -223,6 +223,97 @@ class PythonToCTargetAdapter:
             rendered.append("}")
         return rendered
 
+    def _for_statement(self, node: ast.For, assigned: set[str], types: dict[str, str],
+                       integer_values: dict[str, int], loop_variables: set[str]) -> list[str]:
+        if not isinstance(node.target, ast.Name):
+            raise UnsupportedPythonSyntax("range() loop targets must be simple variable names")
+        name = node.target.id
+        if (not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)
+                or name in _RESERVED or name in _BUILTINS
+                or name.startswith("__")
+                or (name.startswith("_") and len(name) > 1 and name[1].isupper())):
+            raise UnsupportedPythonSyntax(f"Loop variable '{name}' is not a supported C identifier")
+        if name in assigned:
+            raise UnsupportedPythonSyntax("range() loop variables cannot shadow assigned variables")
+        if node.orelse:
+            raise UnsupportedPythonSyntax("for/else statements are not supported in C")
+        if (not isinstance(node.iter, ast.Call) or not isinstance(node.iter.func, ast.Name)
+                or node.iter.func.id != "range"):
+            raise UnsupportedPythonSyntax("Only range() loops are supported in C")
+        call = node.iter
+        if call.keywords or len(call.args) not in {1, 2, 3}:
+            raise UnsupportedPythonSyntax("range() supports one, two, or three positional integer arguments")
+        rendered_args: list[str] = []
+        values: list[int] = []
+        for argument in call.args:
+            expression, value_type = self._expr(argument, assigned, types, integer_values)
+            if value_type != "int":
+                raise UnsupportedPythonSyntax("range() arguments must be integers, not booleans or strings")
+            rendered_args.append(expression)
+            values.append(self._int_value(argument, integer_values))
+        if len(values) == 1:
+            start_expr, start_value = "0", 0
+            stop_expr, stop_value = rendered_args[0], values[0]
+            step_expr, step_value = "1", 1
+        elif len(values) == 2:
+            start_expr, start_value = rendered_args[0], values[0]
+            stop_expr, stop_value = rendered_args[1], values[1]
+            step_expr, step_value = "1", 1
+        else:
+            start_expr, start_value = rendered_args[0], values[0]
+            stop_expr, stop_value = rendered_args[1], values[1]
+            step_expr, step_value = rendered_args[2], values[2]
+        if step_value == 0:
+            raise UnsupportedPythonSyntax("range() step cannot be zero")
+        actual_range = range(start_value, stop_value, step_value)
+        count = len(actual_range)
+        if count > 10_000:
+            raise UnsupportedPythonSyntax("range() loops are limited to 10000 actual iterations")
+        if not node.body:
+            raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported in C")
+
+        assigned.add(name)
+        types[name] = "int"
+        rendered_body: list[str] | None = None
+        validation_values = list(actual_range) if count else [start_value]
+        for loop_value in validation_values:
+            integer_values[name] = loop_value
+            body_lines: list[str] = []
+            for statement in node.body:
+                if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    body_lines.extend(self._print(statement.value, assigned, types, integer_values))
+                elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
+                      and isinstance(statement.value.value, str)):
+                    continue
+                else:
+                    raise UnsupportedPythonSyntax("C range() loop bodies may contain only print() calls")
+            if not body_lines:
+                raise UnsupportedPythonSyntax("Empty range() loop bodies are not supported in C")
+            if rendered_body is None:
+                rendered_body = body_lines
+
+        if count == 0:
+            assigned.discard(name)
+            types.pop(name, None)
+            integer_values.pop(name, None)
+            return []
+        last_value = actual_range[-1]
+        next_value = last_value + step_value
+        if not _INT_MIN <= next_value <= _INT_MAX:
+            raise UnsupportedPythonSyntax("range() loop counter could overflow the signed 32-bit C integer range")
+        operator = "<" if step_value > 0 else ">"
+        rendered = [
+            f"int32_t {name} = {start_expr};",
+            f"while ({name} {operator} {stop_expr}) {{",
+        ]
+        rendered.extend("    " + line for line in (rendered_body or []))
+        rendered.append(f"    {name} += {step_expr};")
+        rendered.append("}")
+        rendered.append(f"{name} = {last_value};")
+        integer_values[name] = last_value
+        loop_variables.add(name)
+        return rendered
+
     def generate(self, project: SourceProject, context: dict) -> list[GeneratedArtifact]:
         del context
         if project.language_id != "python":
@@ -238,6 +329,7 @@ class PythonToCTargetAdapter:
         types: dict[str, str] = {}
         integer_values: dict[str, int] = {}
         statements: list[str] = []
+        loop_variables: set[str] = set()
         referenced = {
             item.id for item in ast.walk(tree)
             if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load)
@@ -248,8 +340,8 @@ class PythonToCTargetAdapter:
             for item in ast.walk(tree)
         )
         self.warnings = [
-            "Deterministic Python-to-C supports one file, signed 32-bit integer arithmetic, simple string and boolean values, abs(), positional print(), and print-only if/elif/else chains with bounded scalar conditions.",
-            "Loops, conditional assignments, string concatenation, str(), imports, functions, classes, collections, and full-project migration are not supported by this subset.",
+            "Deterministic Python-to-C supports one file, signed 32-bit integer arithmetic, simple string and boolean values, abs(), positional print(), print-only if/elif/else chains with bounded scalar conditions, and bounded print-only range() loops.",
+            "Conditional assignments, string concatenation, str(), while loops, imports, functions, classes, collections, and full-project migration are not supported by this subset.",
         ]
         for node in tree.body:
             if isinstance(node, ast.Assign):
@@ -279,12 +371,14 @@ class PythonToCTargetAdapter:
                 statements.extend(self._print(node.value, assigned, types, integer_values))
             elif isinstance(node, ast.If):
                 statements.extend(self._if_statement(node, assigned, types, integer_values))
+            elif isinstance(node, ast.For):
+                statements.extend(self._for_statement(node, assigned, types, integer_values, loop_variables))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
             else:
                 raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}")
 
-        unused = sorted(assigned - referenced)
+        unused = sorted(assigned - referenced - loop_variables)
         if unused:
             raise UnsupportedPythonSyntax("Assigned variable(s) are never used: " + ", ".join(unused))
         includes = "#include <inttypes.h>\n#include <stdbool.h>\n#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n"

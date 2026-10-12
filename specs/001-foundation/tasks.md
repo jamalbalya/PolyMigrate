@@ -159,3 +159,5 @@
 - [x] T120 Add a constrained offline Python-to-C11 translator for one file with signed 32-bit integer arithmetic, simple string/boolean values, `abs()`, and Python-style positional `print()`; reject unsupported syntax, add compiler/runtime equivalence fixtures, wire CLI build checks, and run the C suite in CI.
 
 - [x] T121 Extend the constrained Python-to-C11 subset with print-only `if`/`elif`/`else` chains, short-circuit boolean conditions, scalar truthiness, and string equality via `strcmp`; reject branch assignments, nested control flow, chained comparisons, and string ordering, with GCC runtime-equivalence tests.
+
+- [x] T122 Extend the constrained Python-to-C11 translator with bounded print-only `for i in range(...)` loops; statically validate one to three integer arguments, reject zero steps and ranges above 10,000 iterations, preserve the last loop value when referenced, and compare compiled C output with Python including negative steps and zero-iteration semantics.
