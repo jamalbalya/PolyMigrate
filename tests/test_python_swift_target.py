@@ -112,8 +112,8 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             ("for i in range(0, 3, 0):\n    print(i)\n", "step cannot be zero"),
             ("for i in range(10001):\n    print(i)\n", "limited to 10000 iterations"),
             ("i = 2\nfor i in range(3):\n    print(i)\n", "cannot shadow assigned variables"),
-            ("for i in range(3):\n    i = i + 1\n", "loop bodies may contain only print"),
-            ("for i in range(3):\n    if i:\n        print(i)\n", "loop bodies may contain only print"),
+            ("for i in range(3):\n    i = i + 1\n", "cannot reassign the loop variable"),
+            ("for i in range(3):\n    if i:\n        print(i)\n", "nested control flow is rejected"),
         )
         for source, message in cases:
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
