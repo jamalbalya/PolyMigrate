@@ -150,12 +150,35 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
         self.assertIn("for (i in 0..2 step 1)", code)
         self.assertIn("var i: Int = 2", code)
 
+    def test_range_loop_assigns_existing_integer_variables_and_updates_static_facts(self):
+        code = self._translate("total = 0\nfor i in range(4):\n    total = total + i\nprint(total)\n")
+        self.assertIn("for (i in 0..3 step 1)", code)
+        self.assertIn("total = (total + i)", code)
+        self.assertIn('println(listOf<Any>(total).joinToString(" ") { pyString(it) })', code)
+
+    def test_range_loop_assignments_reject_new_variables_index_reassignment_and_overflow(self):
+        cases = (
+            ("for i in range(2):\n    total = i\n", "previously assigned integer variables"),
+            ("total = 0\nfor i in range(2):\n    i = i + 1\n", "loop index reassignment"),
+            ("total = 2147483647\nfor i in range(1):\n    total = total + 1\n", "signed 32-bit Kotlin Int range"),
+            ("total = 2147483640\nfor i in range(10):\n    total = total + 1\n", "signed 32-bit Kotlin Int range"),
+            ("total = 0\nfor i in range(2):\n    total = 'wrong'\n", "must remain integer-valued"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
+    def test_zero_iteration_loop_does_not_change_existing_integer_facts(self):
+        code = self._translate("total = 1\nfor i in range(0):\n    total = total + 1\nprint(total)\n")
+        self.assertNotIn("for (i in", code)
+        self.assertIn('println(listOf<Any>(total).joinToString(" ") { pyString(it) })', code)
+
     def test_range_loops_fail_closed_on_zero_step_large_ranges_and_undefined_loop_value(self):
         cases = (
             ("for i in range(0, 5, 0):\n    print(i)\n", "step cannot be zero"),
             ("for i in range(10001):\n    print(i)\n", "limited to 10000"),
             ("for i in range(0):\n    print(i)\nprint(i)\n", "loop variable undefined"),
-            ("for i in range(3):\n    i = 4\n", "loop bodies may contain only print"),
+            ("for i in range(3):\n    i = 4\n", "loop index reassignment"),
             ("range = 3\nfor i in range(3):\n    print(i)\n", "Shadowing the range\\(\\) builtin is not supported"),
         )
         for source, message in cases:
@@ -180,6 +203,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             "word = 'a'\nif score > 0:\n    word += 'b'\nelse:\n    word += 'b'\nprint(word)\n"
             "x = 1\nif x > 0:\n    x += 1\nelse:\n    x += 1\nprint(x + 1)\n"
             "count = 3\nwhile count > 0:\n    count -= 1\n    print(count)\nprint(count)\n"
+            "total = 0\nfor idx in range(4):\n    total = total + idx\nprint(total)\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
@@ -197,7 +221,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
                 capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n3\n1\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n2\nab\n3\n2\n1\n0\n0\n")
+            self.assertEqual(run.stdout, "positive 3\n-2 1\n$value\n3\n1\n0\n2\n4\n5\n3\n1\n0\n1\n2\n2\n2\nab\n3\n2\n1\n0\n0\n6\n")
 
 
 if __name__ == "__main__":
