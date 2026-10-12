@@ -80,6 +80,9 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             "if label == 'ready':\n    print('match')\nelse:\n    print('miss')\n"
             "if empty:\n    print('nonempty')\nelse:\n    print('empty')\n"
             "active = True\nif active == True:\n    print('enabled')\nelse:\n    print('disabled')\n"
+            "value = 0\nif score > 5:\n    value = 10\nelif score > 0:\n    value = score + 2\nelse:\n    value = -1\nprint(value)\n"
+            "label2 = 'ready'\nif label2 == 'ready':\n    label2 = 'go'\nelse:\n    label2 = 'stop'\nprint(label2)\n"
+            "counter = 0\nif active:\n    counter += 1\nelse:\n    counter += 2\nprint(counter)\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
