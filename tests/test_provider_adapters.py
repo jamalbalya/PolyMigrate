@@ -108,5 +108,56 @@ class ProviderAdapterTests(unittest.TestCase):
         self.assertIn("HTTP 401", str(captured.exception))
 
 
+    def test_openai_compatible_success_contract_and_structured_output(self):
+        response = BytesIO(b'{"choices":[{"finish_reason":"stop","message":{"content":"{\\"answer\\":42}"}}]}')
+        with patch("urllib.request.urlopen", return_value=response) as urlopen:
+            provider = OpenAICompatibleProvider("openai", "test-key", "gpt-test",
+                                                base_url="https://api.example.test/v1")
+            result = provider.generate(ModelRequest("test-task", "return JSON", {}, require_structured_output=True))
+        request = urlopen.call_args.args[0]
+        payload = __import__("json").loads(request.data.decode("utf-8"))
+        self.assertEqual(request.full_url, "https://api.example.test/v1/chat/completions")
+        self.assertEqual(request.get_header("Authorization"), "Bearer test-key")
+        self.assertEqual(payload["model"], "gpt-test")
+        self.assertEqual(payload["max_completion_tokens"], 8192)
+        self.assertEqual(payload["response_format"], {"type": "json_object"})
+        self.assertEqual(result.structured_data, {"answer": 42})
+
+    def test_anthropic_messages_request_and_response_contract(self):
+        response = BytesIO(b'{"stop_reason":"end_turn","content":[{"type":"text","text":"migration plan"}]}')
+        with patch("urllib.request.urlopen", return_value=response) as urlopen:
+            provider = AnthropicProvider("test-key", "claude-test", base_url="https://api.example.test/v1")
+            result = provider.generate(ModelRequest("test-task", "make a plan", {}))
+        request = urlopen.call_args.args[0]
+        payload = __import__("json").loads(request.data.decode("utf-8"))
+        self.assertEqual(request.full_url, "https://api.example.test/v1/messages")
+        self.assertEqual(request.get_header("X-api-key"), "test-key")
+        self.assertEqual(request.get_header("Anthropic-version"), "2023-06-01")
+        self.assertEqual(payload["model"], "claude-test")
+        self.assertEqual(payload["max_tokens"], 8192)
+        self.assertEqual(result.content, "migration plan")
+
+    def test_gemini_generate_content_structured_request_contract(self):
+        response = BytesIO(b'{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"{\\"ok\\":true}"}]}}]}')
+        with patch("urllib.request.urlopen", return_value=response) as urlopen:
+            provider = GeminiProvider("test-key", "model with/slash", base_url="https://api.example.test/v1beta")
+            result = provider.generate(ModelRequest("test-task", "return JSON", {}, require_structured_output=True))
+        request = urlopen.call_args.args[0]
+        payload = __import__("json").loads(request.data.decode("utf-8"))
+        self.assertEqual(request.full_url, "https://api.example.test/v1beta/models/model%20with%2Fslash:generateContent")
+        self.assertEqual(request.get_header("X-goog-api-key"), "test-key")
+        self.assertEqual(payload["generationConfig"]["responseMimeType"], "application/json")
+        self.assertEqual(payload["generationConfig"]["maxOutputTokens"], 8192)
+        self.assertEqual(result.structured_data, {"ok": True})
+
+    def test_openai_truncated_response_is_rejected(self):
+        response = BytesIO(b'{"choices":[{"finish_reason":"length","message":{"content":"partial"}}]}')
+        with patch("urllib.request.urlopen", return_value=response):
+            provider = OpenAICompatibleProvider("openai", "test-key", "gpt-test",
+                                                base_url="https://api.example.test/v1")
+            with self.assertRaisesRegex(ProviderRequestError, "truncated"):
+                provider.generate(ModelRequest("test-task", "prompt", {}))
+
+
 if __name__ == "__main__":
     unittest.main()
