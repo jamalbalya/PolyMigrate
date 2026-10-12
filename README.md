@@ -54,6 +54,7 @@ This can incur a small provider charge and verifies connectivity/response shape 
 ### Deterministic translation subset
 
 The offline deterministic strategy currently supports these deliberately narrow pairs:
+- Go → Python
 - JavaScript → Python
 - Python → Go
 - Python → C
@@ -73,6 +74,8 @@ For example:
     polymigrate migrate --source ./small-python-project --from python --to javascript --output ./migration-output --strategy deterministic
 
 The JavaScript → Python subset accepts one scalar statement per line: \`const\`/\`let\`/\`var\` declarations, same-type reassignment of existing \`let\`/\`var\` bindings, safe-integer arithmetic, string concatenation, booleans, and \`console.log()\` for scalar values. It also supports \`if\`/\`else\` branches with scalar truthiness or same-type comparisons, but branch bodies may contain only \`console.log()\` statements; nested control flow and branch assignments are rejected. Bounded C-style \`for\` loops are supported only with \`let\` integer counters, static integer bounds, \`i++\`/\`i--\` increments, at most 10,000 iterations, and print-only bodies; the loop counter may be logged directly but not used in arithmetic or after its scope. Escaped string literals, \`while\` loops, functions, imports, objects/arrays, dynamic coercion, and other unsupported syntax are rejected. Generated \`.py\` files are syntax-checked and \`main.py\` receives a runtime smoke check when Python is available. This is a constrained reverse-direction pair, not general JavaScript/Node.js project migration.
+
+The Go → Python subset requires a single root \`main.go\` containing \`package main\` and one \`func main()\`. It supports optional \`import "fmt"\`, scalar \`:=\` declarations, typed \`var\` declarations for \`int\`/\`string\`/\`bool\`, same-type assignments, signed 64-bit integer arithmetic, string concatenation, booleans, and \`fmt.Println()\`. It rejects extra Go files, imports other than \`fmt\`, other functions, control flow, collections, structs, methods, concurrency, escaped strings, unused locals, and unsupported syntax. This is not general Go project migration.
 
 The C subset translates one Python file with signed 32-bit integer arithmetic, simple string and boolean values, `abs()`, positional `print()` with Python-style boolean text, `if`/`elif`/`else` chains with bounded scalar conditions and same-type assignments to existing variables, and bounded `for i in range(...)` loops whose bodies may print or update existing integer variables with simple assignments or integer `+=`/`-=`/`*=`; loop arguments must be statically known integers, non-zero steps, and at most 10,000 iterations. The loop variable retains its last yielded value, while zero-iteration loops leave it undefined. It also supports statically simulated `while` loops with one integer-comparison condition proven to terminate within 10,000 iterations; loop bodies may print or update existing integer variables with simple assignments or integer `+=`/`-=`/`*=`. It rejects nested control flow, `while/else`, string concatenation, imports, functions, collections, and full-project migration. Generated `.c` files are compiled with C11, `-Wall -Wextra -Werror`, and runtime-smoke-tested when `gcc` is available.
 
