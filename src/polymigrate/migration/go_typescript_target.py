@@ -10,7 +10,7 @@ import hashlib
 
 from polymigrate.migration.go_python_target import GoToPythonTargetAdapter, UnsupportedGoSyntax
 from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject, SourceUnit
-from polymigrate.migration.python_javascript_target import (
+from polymigrate.migration.python_typescript_target import (
     PythonToTypeScriptTargetAdapter,
     UnsupportedPythonSyntax,
 )
@@ -29,7 +29,7 @@ class GoToTypeScriptTargetAdapter:
             raise ValueError("Go-to-TypeScript adapter requires a Go source project")
         if len(project.units) != 1:
             raise UnsupportedGoSyntax(
-                "Deterministic Go-to-JavaScript translation currently requires exactly one source file"
+                "Deterministic Go-to-TypeScript translation currently requires exactly one source file"
             )
 
         intermediate = GoToPythonTargetAdapter()
@@ -45,7 +45,7 @@ class GoToTypeScriptTargetAdapter:
 
         if any(isinstance(node, ast.Constant) and type(node.value) is bool for node in ast.walk(tree)):
             raise UnsupportedGoSyntax(
-                "Boolean literals are not supported in deterministic Go-to-JavaScript output because their printed casing differs across runtimes"
+                "Boolean literals are intentionally excluded from the composed Go-to-TypeScript subset"
             )
 
         # Go-to-Python preserves fmt.Println argument formatting with
@@ -74,16 +74,16 @@ class GoToTypeScriptTargetAdapter:
             ),),
             metadata={"composed_from": ("go", "python")},
         )
-        target = PythonToJavaScriptTargetAdapter()
+        target = PythonToTypeScriptTargetAdapter()
         try:
             artifacts = target.generate(python_project, context)
         except UnsupportedPythonSyntax as exc:
             raise UnsupportedGoSyntax(
-                f"Go syntax is outside the composable Go-to-JavaScript subset: {exc}"
+                f"Go syntax is outside the composable Go-to-TypeScript subset: {exc}"
             ) from None
 
         self.warnings = [
-            "Deterministic Go-to-JavaScript subset: composes the bounded Go-to-Python and Python-to-TypeScript translators; syntax outside their intersection is rejected.",
+            "Deterministic Go-to-TypeScript subset: composes the bounded Go-to-Python and Python-to-TypeScript translators; syntax outside their intersection is rejected.",
             "Only a single source file is supported; this is not a full project, dependency, or framework migration.",
         ]
         return artifacts
