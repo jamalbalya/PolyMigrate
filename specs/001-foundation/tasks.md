@@ -155,3 +155,5 @@
 - [x] T118 Add bounded Kotlin `range()` loop assignments to previously assigned integer variables, statically simulate every iteration to reject signed-32-bit overflow, reject loop-index reassignment/new variables/type changes, preserve zero-iteration state, and compare generated Kotlin runtime output with Python.
 
 - [x] T119 Support integer `+=`, `-=`, and `*=` updates to existing variables inside bounded Kotlin `range()` loops; statically simulate every iteration, reject loop-index and non-integer augmented assignments, validate overflow, and compare generated runtime output with Python.
+
+- [x] T120 Add a constrained offline Python-to-C11 translator for one file with signed 32-bit integer arithmetic, simple string/boolean values, `abs()`, and Python-style positional `print()`; reject unsupported syntax, add compiler/runtime equivalence fixtures, wire CLI build checks, and run the C suite in CI.
