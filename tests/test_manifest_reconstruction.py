@@ -112,6 +112,34 @@ class ManifestReconstructionTests(unittest.TestCase):
         self.assertTrue(any("unapproved" in warning for warning in warnings))
         self.assertTrue(any("package.json" in warning for warning in warnings))
 
+    def test_rejects_pyproject_custom_build_system_and_cargo_build_dependencies(self):
+        cases = (
+            (
+                "python", "pyproject.toml",
+                '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n',
+                "executable custom build backend",
+            ),
+            (
+                "rust", "Cargo.toml",
+                '[package]\nname = "demo"\nversion = "0.1.0"\n\n[build-dependencies]\ncc = "1"\n',
+                "build script or build dependencies",
+            ),
+        )
+        for target, path, content, warning_text in cases:
+            provider = ManifestFixtureProvider({
+                "files": [{"path": path, "content": content}],
+                "warnings": [],
+            })
+            providers = ProviderRegistry()
+            providers.register(provider)
+            with self.subTest(path=path):
+                artifacts, warnings = reconstruct_target_manifests(
+                    target, [{"path": "source-manifest", "content": "fixture"}],
+                    [], [], providers, "fixture",
+                )
+                self.assertEqual(artifacts, [])
+                self.assertTrue(any(warning_text in warning for warning in warnings), warnings)
+
     def test_rejects_recognizable_secrets_in_manifest_content(self):
         providers = ProviderRegistry()
         provider = ManifestFixtureProvider({
