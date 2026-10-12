@@ -202,19 +202,34 @@ class _Parser:
         return f"({left_expr} {py_operator} {right_expr})", "bool", result
 
     def _if_statement(self) -> None:
+        """Translate a flat if / else-if / else chain with print-only bodies."""
         self._take("if")
-        self._take("(")
-        condition, _condition_type, _condition_value = self._condition()
-        self._take(")")
-        then_body = self._block()
-        while self.tokens[self.index][0] == "NEWLINE":
-            self.index += 1
+        branches: list[tuple[str, list[str]]] = []
         else_body: list[str] | None = None
-        if self.tokens[self.index] == ("IDENT", "else"):
+
+        while True:
+            self._take("(")
+            condition, _condition_type, _condition_value = self._condition()
+            self._take(")")
+            branches.append((condition, self._block()))
+
+            while self.tokens[self.index][0] == "NEWLINE":
+                self.index += 1
+            if self.tokens[self.index] != ("IDENT", "else"):
+                break
             self.index += 1
+            while self.tokens[self.index][0] == "NEWLINE":
+                self.index += 1
+            if self.tokens[self.index] == ("IDENT", "if"):
+                self.index += 1
+                continue
             else_body = self._block()
-        self.output.append(f"if {condition}:")
-        self.output.extend(f"    {line}" for line in then_body) if then_body else self.output.append("    pass")
+            break
+
+        for index, (condition, body) in enumerate(branches):
+            keyword = "if" if index == 0 else "elif"
+            self.output.append(f"{keyword} {condition}:")
+            self.output.extend(f"    {line}" for line in body) if body else self.output.append("    pass")
         if else_body is not None:
             self.output.append("else:")
             self.output.extend(f"    {line}" for line in else_body) if else_body else self.output.append("    pass")
