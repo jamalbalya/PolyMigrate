@@ -1,5 +1,6 @@
 """CLI tests for deterministic Python-to-Swift migration."""
 import json
+import os
 import shutil
 import tempfile
 import unittest
@@ -11,7 +12,7 @@ from unittest.mock import patch
 from polymigrate.cli import main
 
 
-@unittest.skipUnless(shutil.which("swiftc"), "Swift compiler is required")
+@unittest.skipUnless(os.environ.get("POLYMIGRATE_RUN_SWIFT_E2E") == "1" and shutil.which("swiftc"), "Run in the dedicated Swift CI job")
 class DeterministicPythonSwiftCLITests(unittest.TestCase):
     def test_migration_generates_and_runs_swift_without_initializing_ai(self):
         with tempfile.TemporaryDirectory() as tmp:
