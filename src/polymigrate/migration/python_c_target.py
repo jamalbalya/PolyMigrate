@@ -223,6 +223,142 @@ class PythonToCTargetAdapter:
             rendered.append("}")
         return rendered
 
+    def _while_condition_value(self, node: ast.expr, assigned: set[str], types: dict[str, str],
+                               integer_values: dict[str, int]) -> bool:
+        if not isinstance(node, ast.Compare) or len(node.ops) != 1 or len(node.comparators) != 1:
+            raise UnsupportedPythonSyntax("C while conditions must be one integer comparison")
+        _, left_type = self._expr(node.left, assigned, types, integer_values)
+        _, right_type = self._expr(node.comparators[0], assigned, types, integer_values)
+        if left_type != "int" or right_type != "int":
+            raise UnsupportedPythonSyntax("C while conditions support only integer comparisons")
+        left = self._int_value(node.left, integer_values)
+        right = self._int_value(node.comparators[0], integer_values)
+        operator_node = node.ops[0]
+        if isinstance(operator_node, ast.Eq):
+            return left == right
+        if isinstance(operator_node, ast.NotEq):
+            return left != right
+        if isinstance(operator_node, ast.Lt):
+            return left < right
+        if isinstance(operator_node, ast.LtE):
+            return left <= right
+        if isinstance(operator_node, ast.Gt):
+            return left > right
+        if isinstance(operator_node, ast.GtE):
+            return left >= right
+        raise UnsupportedPythonSyntax("C while conditions support only simple integer comparisons")
+
+    def _augmented_assignment(self, node: ast.AugAssign, assigned: set[str], types: dict[str, str],
+                              integer_values: dict[str, int]) -> str:
+        if not isinstance(node.target, ast.Name):
+            raise UnsupportedPythonSyntax("C augmented assignments must target one existing integer variable")
+        name = node.target.id
+        if name not in assigned or types.get(name) != "int":
+            raise UnsupportedPythonSyntax("C augmented assignments require an existing integer variable")
+        operators = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*"}
+        operator = operators.get(type(node.op))
+        if operator is None:
+            raise UnsupportedPythonSyntax("C supports only integer +=, -=, and *= augmented assignments")
+        expression, value_type = self._expr(node.value, assigned, types, integer_values)
+        if value_type != "int":
+            raise UnsupportedPythonSyntax("C augmented assignments must remain integer-valued")
+        combined = ast.BinOp(
+            left=ast.Name(id=name, ctx=ast.Load()), op=node.op, right=node.value
+        )
+        integer_values[name] = self._int_value(combined, integer_values)
+        return f"{name} {operator}= {expression};"
+
+    def _while_statement(self, node: ast.While, assigned: set[str], types: dict[str, str],
+                         integer_values: dict[str, int]) -> list[str]:
+        if node.orelse:
+            raise UnsupportedPythonSyntax("while/else statements are not supported in C")
+        if not node.body:
+            raise UnsupportedPythonSyntax("Empty C while bodies are not supported")
+        modified_names: set[str] = set()
+        condition_names = {
+            item.id for item in ast.walk(node.test)
+            if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load)
+        }
+        for statement in node.body:
+            if isinstance(statement, ast.Assign):
+                if len(statement.targets) != 1 or not isinstance(statement.targets[0], ast.Name):
+                    raise UnsupportedPythonSyntax("C while assignments must target one existing integer variable")
+                name = statement.targets[0].id
+                if name not in assigned or types.get(name) != "int":
+                    raise UnsupportedPythonSyntax("C while bodies may only update existing integer variables")
+                modified_names.add(name)
+            elif isinstance(statement, ast.AugAssign):
+                if not isinstance(statement.target, ast.Name):
+                    raise UnsupportedPythonSyntax("C while augmented assignments must target one existing integer variable")
+                name = statement.target.id
+                if (name not in assigned or types.get(name) != "int"
+                        or not isinstance(statement.op, (ast.Add, ast.Sub, ast.Mult))):
+                    raise UnsupportedPythonSyntax("C while loops support only integer +=/-=/*= updates to existing variables")
+                modified_names.add(name)
+            elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                if not isinstance(statement.value.func, ast.Name) or statement.value.func.id != "print":
+                    raise UnsupportedPythonSyntax("C while bodies may contain only print() or integer assignments")
+            elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
+                  and isinstance(statement.value.value, str)):
+                continue
+            else:
+                raise UnsupportedPythonSyntax("C while bodies may contain only print() or integer assignments")
+
+        facts = dict(integer_values)
+        initial_condition = self._while_condition_value(node.test, assigned, types, facts)
+        if initial_condition and not condition_names.intersection(modified_names):
+            raise UnsupportedPythonSyntax("C while loop does not update its condition variables and cannot be proven to terminate")
+
+        def render_body(values: dict[str, int]) -> list[str]:
+            rendered: list[str] = []
+            local_values = dict(values)
+            for statement in node.body:
+                if isinstance(statement, ast.Assign):
+                    name = statement.targets[0].id
+                    expression, value_type = self._expr(statement.value, assigned, types, local_values)
+                    if value_type != "int":
+                        raise UnsupportedPythonSyntax("C while assignments must remain integer-valued")
+                    local_values[name] = self._int_value(statement.value, local_values)
+                    rendered.append(f"{name} = {expression};")
+                elif isinstance(statement, ast.AugAssign):
+                    rendered.append(self._augmented_assignment(statement, assigned, types, local_values))
+                elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    rendered.extend(self._print(statement.value, assigned, types, local_values))
+                elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
+                      and isinstance(statement.value.value, str)):
+                    continue
+            if not rendered:
+                raise UnsupportedPythonSyntax("C while bodies must contain at least one print() or integer assignment")
+            return rendered
+
+        rendered_body = render_body(integer_values)
+        iterations = 0
+        while self._while_condition_value(node.test, assigned, types, facts):
+            if iterations >= 10_000:
+                raise UnsupportedPythonSyntax("C while loop could not be proven to terminate within 10000 iterations")
+            previous_facts = dict(facts)
+            for statement in node.body:
+                if isinstance(statement, ast.Assign):
+                    name = statement.targets[0].id
+                    _, value_type = self._expr(statement.value, assigned, types, facts)
+                    if value_type != "int":
+                        raise UnsupportedPythonSyntax("C while assignments must remain integer-valued")
+                    facts[name] = self._int_value(statement.value, facts)
+                elif isinstance(statement, ast.AugAssign):
+                    self._augmented_assignment(statement, assigned, types, facts)
+                elif isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    self._print(statement.value, assigned, types, facts)
+            iterations += 1
+            if facts == previous_facts and self._while_condition_value(node.test, assigned, types, facts):
+                raise UnsupportedPythonSyntax("C while loop made no progress toward termination")
+        integer_values.clear()
+        integer_values.update(facts)
+        condition = self._condition(node.test, assigned, types, integer_values)
+        rendered = [f"while ({condition}) {{"]
+        rendered.extend("    " + line for line in rendered_body)
+        rendered.append("}")
+        return rendered
+
     def _for_statement(self, node: ast.For, assigned: set[str], types: dict[str, str],
                        integer_values: dict[str, int], loop_variables: set[str]) -> list[str]:
         if not isinstance(node.target, ast.Name):
@@ -340,8 +476,8 @@ class PythonToCTargetAdapter:
             for item in ast.walk(tree)
         )
         self.warnings = [
-            "Deterministic Python-to-C supports one file, signed 32-bit integer arithmetic, simple string and boolean values, abs(), positional print(), print-only if/elif/else chains with bounded scalar conditions, and bounded print-only range() loops.",
-            "Conditional assignments, string concatenation, str(), while loops, imports, functions, classes, collections, and full-project migration are not supported by this subset.",
+            "Deterministic Python-to-C supports one file, signed 32-bit integer arithmetic, simple string and boolean values, abs(), positional print(), print-only if/elif/else chains with bounded scalar conditions, bounded print-only range() loops, and statically simulated while loops that update existing integer variables.",
+            "Conditional assignments, string concatenation, str(), nested control flow, while/else, imports, functions, classes, collections, and full-project migration are not supported by this subset.",
         ]
         for node in tree.body:
             if isinstance(node, ast.Assign):
@@ -371,6 +507,8 @@ class PythonToCTargetAdapter:
                 statements.extend(self._print(node.value, assigned, types, integer_values))
             elif isinstance(node, ast.If):
                 statements.extend(self._if_statement(node, assigned, types, integer_values))
+            elif isinstance(node, ast.While):
+                statements.extend(self._while_statement(node, assigned, types, integer_values))
             elif isinstance(node, ast.For):
                 statements.extend(self._for_statement(node, assigned, types, integer_values, loop_variables))
             elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
