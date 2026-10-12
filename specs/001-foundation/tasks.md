@@ -157,3 +157,5 @@
 - [x] T119 Support integer `+=`, `-=`, and `*=` updates to existing variables inside bounded Kotlin `range()` loops; statically simulate every iteration, reject loop-index and non-integer augmented assignments, validate overflow, and compare generated runtime output with Python.
 
 - [x] T120 Add a constrained offline Python-to-C11 translator for one file with signed 32-bit integer arithmetic, simple string/boolean values, `abs()`, and Python-style positional `print()`; reject unsupported syntax, add compiler/runtime equivalence fixtures, wire CLI build checks, and run the C suite in CI.
+
+- [x] T121 Extend the constrained Python-to-C11 subset with print-only `if`/`elif`/`else` chains, short-circuit boolean conditions, scalar truthiness, and string equality via `strcmp`; reject branch assignments, nested control flow, chained comparisons, and string ordering, with GCC runtime-equivalence tests.
