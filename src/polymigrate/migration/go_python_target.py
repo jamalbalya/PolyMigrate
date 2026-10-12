@@ -52,6 +52,8 @@ class _Parser:
         self.types: dict[str, str] = {}
         self.values: dict[str, Any] = {}
         self.reads: set[str] = set()
+        self.loop_variables: set[str] = set()
+        self.dynamic_references: set[str] = set()
         self.output: list[str] = []
         self.imported_fmt = False
         self.used_fmt = False
@@ -133,6 +135,13 @@ class _Parser:
 
     def _statement(self) -> None:
         kind, value = self.tokens[self.index]
+        if kind == "IDENT" and value == "if":
+            self._if_statement()
+            return
+        if kind == "IDENT" and value == "for":
+            self._for_statement()
+            return
+
         if kind == "IDENT" and value == "fmt":
             self._take("fmt")
             self._take(".")
@@ -202,14 +211,130 @@ class _Parser:
 
         raise UnsupportedGoSyntax(f"Unsupported statement starting with {value!r}")
 
+    def _print_block(self) -> list[str]:
+        self._take("{")
+        self._separators()
+        body: list[str] = []
+        while not self._peek("}"):
+            if self._peek():
+                raise UnsupportedGoSyntax("Unclosed Go block")
+            kind, value = self.tokens[self.index]
+            if kind != "IDENT" or value != "fmt":
+                raise UnsupportedGoSyntax("Control-flow bodies may contain fmt.Println() statements only")
+            start = len(self.output)
+            self._statement()
+            body.extend(self.output[start:])
+            del self.output[start:]
+            self._separators()
+        self._take("}")
+        return body
+
+    def _condition(self) -> tuple[str, str, Any]:
+        left_expr, left_type, left_value = self._expression()
+        operators = {"==", "!=", "<", "<=", ">", ">="}
+        if self.tokens[self.index][1] not in operators:
+            if left_type != "bool":
+                raise UnsupportedGoSyntax("Go if conditions must be boolean expressions")
+            return left_expr, "bool", left_value
+        operator = self._take()[1]
+        right_expr, right_type, right_value = self._expression()
+        if left_type != right_type:
+            raise UnsupportedGoSyntax("Go condition comparisons require operands of the same type")
+        if operator in {"<", "<=", ">", ">="} and left_type != "int":
+            raise UnsupportedGoSyntax("Ordering comparisons are supported for integers only")
+        result = {
+            "==": left_value == right_value,
+            "!=": left_value != right_value,
+            "<": left_value < right_value if left_type == "int" else False,
+            "<=": left_value <= right_value if left_type == "int" else False,
+            ">": left_value > right_value if left_type == "int" else False,
+            ">=": left_value >= right_value if left_type == "int" else False,
+        }[operator]
+        return f"({left_expr} {operator} {right_expr})", "bool", result
+
+    def _if_statement(self) -> None:
+        self._take("if")
+        condition, _condition_type, _condition_value = self._condition()
+        then_body = self._print_block()
+        else_body: list[str] | None = None
+        # Go requires else on the same line as the closing brace.
+        if self._peek("else"):
+            self._take("else")
+            else_body = self._print_block()
+        self.output.append(f"if {condition}:")
+        self.output.extend(f"    {line}" for line in then_body) if then_body else self.output.append("    pass")
+        if else_body is not None:
+            self.output.append("else:")
+            self.output.extend(f"    {line}" for line in else_body) if else_body else self.output.append("    pass")
+
+    def _for_statement(self) -> None:
+        self._take("for")
+        name = self._identifier()
+        if name in self.types:
+            raise UnsupportedGoSyntax(f"Loop variable {name!r} shadows an existing binding")
+        self._take(":=")
+        start_expr, start_type, start_value = self._expression()
+        if start_type != "int":
+            raise UnsupportedGoSyntax("For-loop start must be a statically known integer")
+        self._take(";")
+        condition_name = self._identifier()
+        if condition_name != name:
+            raise UnsupportedGoSyntax("For-loop condition must compare its loop variable")
+        operator = self._take()[1]
+        if operator not in {"<", "<=", ">", ">="}:
+            raise UnsupportedGoSyntax("For-loop condition must use <, <=, >, or >=")
+        _bound_expr, bound_type, bound_value = self._expression()
+        if bound_type != "int":
+            raise UnsupportedGoSyntax("For-loop bound must be a statically known integer")
+        self._take(";")
+        increment_name = self._identifier()
+        if increment_name != name:
+            raise UnsupportedGoSyntax("For-loop increment must update its loop variable")
+        if self._peek("+"):
+            self._take("+")
+            self._take("+")
+            step = 1
+        elif self._peek("-"):
+            self._take("-")
+            self._take("-")
+            step = -1
+        else:
+            raise UnsupportedGoSyntax("For-loop increment must be i++ or i--")
+        if operator in {"<", "<="} and step != 1:
+            raise UnsupportedGoSyntax("Ascending loop conditions require i++")
+        if operator in {">", ">="} and step != -1:
+            raise UnsupportedGoSyntax("Descending loop conditions require i--")
+        if (operator == "<=" and bound_value == _MAX_INT64) or (operator == ">=" and bound_value == _MIN_INT64):
+            raise UnsupportedGoSyntax("Inclusive loop bound would overflow the Go int range")
+        stop = bound_value + 1 if operator == "<=" else bound_value - 1 if operator == ">=" else bound_value
+        iteration_count = len(range(start_value, stop, step))
+        if iteration_count > 10_000:
+            raise UnsupportedGoSyntax("For-loop exceeds the 10,000-iteration safety limit")
+
+        self.types[name] = "int"
+        self.values[name] = start_value
+        self.loop_variables.add(name)
+        body = self._print_block()
+        self.types.pop(name, None)
+        self.values.pop(name, None)
+        self.loop_variables.discard(name)
+        self.dynamic_references.clear()
+        self.output.append(f"for {name} in range({start_expr}, {stop}, {step}):")
+        self.output.extend(f"    {line}" for line in body) if body else self.output.append("    pass")
+
     def _expression(self) -> tuple[str, str, Any]:
         return self._additive()
 
     def _additive(self) -> tuple[str, str, Any]:
+        before_dynamic = set(self.dynamic_references)
         left_expr, left_type, left_value = self._multiplicative()
         while self._peek("+") or self._peek("-"):
+            if self.dynamic_references - before_dynamic:
+                raise UnsupportedGoSyntax("Arithmetic on a loop variable is not supported")
             operator = self._take()[1]
             right_expr, right_type, right_value = self._multiplicative()
+            if self.dynamic_references - before_dynamic:
+                raise UnsupportedGoSyntax("Arithmetic on a loop variable is not supported")
             if left_type != right_type:
                 raise UnsupportedGoSyntax("Mixed-type arithmetic and Go coercion are not supported")
             if operator == "+" and left_type == "string":
@@ -223,10 +348,15 @@ class _Parser:
         return left_expr, left_type, left_value
 
     def _multiplicative(self) -> tuple[str, str, Any]:
+        before_dynamic = set(self.dynamic_references)
         left_expr, left_type, left_value = self._unary()
         while self._peek("*"):
+            if self.dynamic_references - before_dynamic:
+                raise UnsupportedGoSyntax("Arithmetic on a loop variable is not supported")
             self.index += 1
             right_expr, right_type, right_value = self._unary()
+            if self.dynamic_references - before_dynamic:
+                raise UnsupportedGoSyntax("Arithmetic on a loop variable is not supported")
             if left_type != "int" or right_type != "int":
                 raise UnsupportedGoSyntax("Multiplication supports integer operands only")
             left_value *= right_value
@@ -277,6 +407,8 @@ class _Parser:
             if name not in self.types:
                 raise UnsupportedGoSyntax(f"Variable {name!r} is used before assignment")
             self.reads.add(name)
+            if name in self.loop_variables:
+                self.dynamic_references.add(name)
             return name, self.types[name], self.values[name]
         if value == "(":
             self.index += 1
@@ -300,8 +432,8 @@ class GoToPythonTargetAdapter:
         if len(project.units) != 1 or project.units[0].relative_path != "main.go":
             raise UnsupportedGoSyntax("Go-to-Python subset currently requires one root main.go file")
         self.warnings = [
-            "Deterministic Go-to-Python subset only: a single package main/main.go file with scalar declarations, assignments, integer arithmetic, string concatenation, booleans, and fmt.Println is supported.",
-            "Imports other than fmt, functions other than main, control flow, collections, structs, methods, concurrency, and full-project migration are unsupported.",
+            "Deterministic Go-to-Python subset only: a single package main/main.go file with scalar declarations, assignments, integer arithmetic, string concatenation, booleans, fmt.Println, print-only if/else branches, and bounded integer for-loops is supported.",
+            "Imports other than fmt, functions other than main, nested control flow, collections, structs, methods, concurrency, and full-project migration are unsupported.",
         ]
         generated = _Parser(project.units[0].source_text).parse()
         return [GeneratedArtifact("main.py", generated)]

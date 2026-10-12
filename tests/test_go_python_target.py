@@ -68,6 +68,41 @@ func main() {
             with self.subTest(source=source), self.assertRaises(UnsupportedGoSyntax):
                 _Parser(source).parse()
 
+    def test_translates_print_only_if_else_and_bounded_for_loop(self):
+        source = '''package main
+import "fmt"
+func main() {
+    count := 2
+    if count > 1 { fmt.Println("many") } else { fmt.Println("few") }
+    for i := 0; i < 3; i++ { fmt.Println(i) }
+}
+'''
+        from polymigrate.migration.go_python_target import _Parser
+        generated = _Parser(source).parse()
+        ast.parse(generated)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "main.py"
+            target.write_text(generated, encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(target)], capture_output=True, text=True, check=False,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "many\n0\n1\n2\n")
+
+    def test_rejects_unsafe_go_control_flow_and_loop_shapes(self):
+        from polymigrate.migration.go_python_target import _Parser
+        unsupported = (
+            'package main\nfunc main() {\n    count := 1\n    if count { fmt.Println("bad") }\n}\n',
+            'package main\nimport "fmt"\nfunc main() { for i := 0; i < 10001; i++ { fmt.Println(i) } }\n',
+            'package main\nimport "fmt"\nfunc main() { for i := 0; i < 3; i-- { fmt.Println(i) } }\n',
+            'package main\nimport "fmt"\nfunc main() { for i := 0; i < 3; i++ { fmt.Println(i + 1) } }\n',
+            'package main\nimport "fmt"\nfunc main() { for i := 0; i < 3; i++ { fmt.Println(i) }\n fmt.Println(i)\n}\n',
+            'package main\nimport "fmt"\nfunc main() { for i := 0; i <= 9223372036854775807; i++ { fmt.Println(i) } }\n',
+        )
+        for source in unsupported:
+            with self.subTest(source=source), self.assertRaises(UnsupportedGoSyntax):
+                _Parser(source).parse()
+
     def test_adapter_requires_single_root_main_go(self):
         from polymigrate.migration.pipeline import SourceProject, SourceUnit
         import hashlib
