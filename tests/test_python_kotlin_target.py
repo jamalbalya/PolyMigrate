@@ -151,24 +151,24 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
         self.assertIn("var i: Int = 2", code)
 
     def test_range_loop_assigns_existing_integer_variables_and_updates_static_facts(self):
-        code = self._translate("total = 0\\nfor i in range(4):\\n    total = total + i\\nprint(total)\\n")
+        code = self._translate("total = 0\nfor i in range(4):\n    total = total + i\nprint(total)\n")
         self.assertIn("for (i in 0..3 step 1)", code)
         self.assertIn("total = (total + i)", code)
         self.assertIn('println(listOf<Any>(total).joinToString(" ") { pyString(it) })', code)
 
     def test_range_loop_assignments_reject_new_variables_index_reassignment_and_overflow(self):
         cases = (
-            ("for i in range(2):\\n    total = i\\n", "previously assigned integer variables"),
-            ("total = 0\\nfor i in range(2):\\n    i = i + 1\\n", "loop index reassignment"),
-            ("total = 2147483647\\nfor i in range(1):\\n    total = total + 1\\n", "signed 32-bit Kotlin Int range"),
-            ("total = 0\\nfor i in range(2):\\n    total = 'wrong'\\n", "must remain integer-valued"),
+            ("for i in range(2):\n    total = i\n", "previously assigned integer variables"),
+            ("total = 0\nfor i in range(2):\n    i = i + 1\n", "loop index reassignment"),
+            ("total = 2147483647\nfor i in range(1):\n    total = total + 1\n", "signed 32-bit Kotlin Int range"),
+            ("total = 0\nfor i in range(2):\n    total = 'wrong'\n", "must remain integer-valued"),
         )
         for source, message in cases:
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
                 self._translate(source)
 
     def test_zero_iteration_loop_does_not_change_existing_integer_facts(self):
-        code = self._translate("total = 1\\nfor i in range(0):\\n    total = total + 1\\nprint(total)\\n")
+        code = self._translate("total = 1\nfor i in range(0):\n    total = total + 1\nprint(total)\n")
         self.assertNotIn("for (i in", code)
         self.assertIn('println(listOf<Any>(total).joinToString(" ") { pyString(it) })', code)
 
