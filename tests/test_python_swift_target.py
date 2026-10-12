@@ -80,6 +80,23 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
                 self._translate(source)
 
+    def test_range_loops_can_update_existing_variables_safely(self):
+        code = self._translate(
+            "counter = 0\nfor i in range(3):\n    counter = counter + 1\nprint(counter)\n"
+        )
+        self.assertIn("var counter: Int32 = 0", code)
+        self.assertIn("counter = (counter + 1)", code)
+
+        cases = (
+            ("x = 2147483646\nfor i in range(2):\n    x = x + 1\n", "signed Int32 range"),
+            ("for i in range(3):\n    x = 1\n", "must target existing variables"),
+            ("x = 1\nfor i in range(3):\n    x = 'text'\n", "must preserve the variable type"),
+            ("for i in range(3):\n    i = i + 1\n", "cannot reassign the loop variable"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
     def test_generates_bounded_range_loops_and_rejects_unsafe_forms(self):
         code = self._translate(
             "start = 1\nstop = 5\n"
@@ -147,6 +164,8 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             "x = 1\nif score > 0:\n    x = 2\nelse:\n    x = 2\nprint(x + 1)\n"
             "label3 = 'before'\nif score > 0:\n    label3 = 'same'\nelse:\n    label3 = 'same'\n"
             "length = len(label3)\nprint(length)\n"
+            "counter = 0\nfor k in range(3):\n    counter = counter + 1\nprint(counter)\n"
+            "counter2 = 0\nfor j in range(3):\n    counter2 = counter2 + j\nprint(counter2)\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
@@ -161,7 +180,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\npositive 3\nmatch\nunicode-different\nempty\nenabled\n1\n2\n3\n3\n1\n5\n3\n4\n")
+            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\npositive 3\nmatch\nunicode-different\nempty\nenabled\n1\n2\n3\n3\n1\n5\n3\n4\n3\n3\n")
 
 
 if __name__ == "__main__":
