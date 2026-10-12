@@ -60,7 +60,7 @@ console.log(label, false);
         from polymigrate.migration.javascript_python_target import _Parser
         unsupported = (
             'let value = "count: " + 3;\n',
-            'if (true) { console.log("unsafe"); }\n',
+            'while (true) { console.log("unsafe"); }\n',
             'const value = 9007199254740992;\n',
             'console.log(process.env.SECRET);\n',
             'const true = 1;\n',
@@ -96,7 +96,7 @@ if (false) { console.log("unreachable"); }
                 [sys.executable, str(target)], capture_output=True, text=True, check=False,
             )
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(completed.stdout, "many\nTrue\n")
+        self.assertEqual(completed.stdout, "many\ntrue\n")
 
     def test_rejects_assignment_nested_control_flow_and_string_ordering_in_branches(self):
         from polymigrate.migration.javascript_python_target import _Parser
