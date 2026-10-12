@@ -24,7 +24,7 @@ class DeterministicPythonCSharpCLITests(unittest.TestCase):
                  redirect_stdout(stdout), redirect_stderr(stderr):
                 code = main([
                     "migrate", "--source", str(source), "--from", "python",
-                    "--to", "javascript", "--output", str(output), "--strategy", "deterministic",
+                    "--to", "csharp", "--output", str(output), "--strategy", "deterministic",
                 ])
             provider_setup.assert_not_called()
             self.assertEqual(code, 3, stderr.getvalue())
