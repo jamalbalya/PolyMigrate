@@ -40,7 +40,6 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
         )
         self.assertIn("if (score > 5) {", code)
         self.assertIn("} else if ((score > 0) && (score < 5)) {", code)
-        self.assertIn('strcmp', code) if False else None
         self.assertIn('(label == "ready")', code)
         self.assertIn("!(empty).isEmpty", code)
 
