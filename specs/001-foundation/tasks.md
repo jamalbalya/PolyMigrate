@@ -190,3 +190,5 @@
 - [x] T140 Extend the constrained JavaScript-to-Python subset with print-only `if`/`else` branches and bounded integer `for` loops; reject unsupported control flow, unsafe bounds, nested branch/loop bodies, and loop-variable scope leaks, with Python syntax/runtime equivalence fixtures and dedicated CI validation.
 
 - [x] T141 Extend JavaScript-to-Python translation to flat `if`/`else if`/`else` chains with print-only branch bodies; preserve branch ordering, reject nested control flow and unsupported expressions, and verify generated Python syntax and runtime output.
+
+- [x] T142 Support JavaScript `&&`, `||`, and unary `!` in scalar conditions with JavaScript-compatible short-circuit precedence and scalar truthiness; validate both true and false branch outcomes against generated Python runtime output.
