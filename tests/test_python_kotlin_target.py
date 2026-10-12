@@ -177,7 +177,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             ("for i in range(0, 5, 0):\n    print(i)\n", "step cannot be zero"),
             ("for i in range(10001):\n    print(i)\n", "limited to 10000"),
             ("for i in range(0):\n    print(i)\nprint(i)\n", "loop variable undefined"),
-            ("for i in range(3):\n    i = 4\n", "loop bodies may contain only print"),
+            ("for i in range(3):\n    i = 4\n", "loop index reassignment"),
             ("range = 3\nfor i in range(3):\n    print(i)\n", "Shadowing the range\\(\\) builtin is not supported"),
         )
         for source, message in cases:
