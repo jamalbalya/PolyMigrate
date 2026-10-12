@@ -133,6 +133,28 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "2\n1\n0\n0\n")
 
+    def test_range_loop_integer_updates_preserve_static_facts_and_reject_unsafe_cases(self):
+        code = self._translate(
+            "total = 0\nfor i in range(4):\n    total += i\nprint(total)\n"
+        )
+        self.assertIn("total += i;", code)
+        cases = (
+            ("for i in range(2):\n    total = i\n", "existing integer variables"),
+            ("total = 0\nfor i in range(2):\n    i += 1\n", "loop index reassignment"),
+            ("total = 0\nfor i in range(2):\n    total = 'bad'\n", "remain integer-valued"),
+            ("total = 2147483640\nfor i in range(10):\n    total += 1\n", "signed 32-bit C range"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
+    def test_zero_iteration_range_loop_preserves_variable_values(self):
+        code = self._translate(
+            "total = 1\nfor i in range(0):\n    total = total + 1\nprint(total)\n"
+        )
+        self.assertNotIn("while (i", code)
+        self.assertIn('printf("%" PRId32, (int32_t)(total));', code)
+
     def test_bounded_range_loop_generation_and_fail_closed_cases(self):
         code = self._translate("for i in range(5, 0, -2):\n    print(i)\n")
         self.assertIn("int32_t i = 5;", code)
