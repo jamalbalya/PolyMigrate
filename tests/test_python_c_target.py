@@ -162,7 +162,7 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
         self.assertIn("i += -2;", code)
         self.assertIn("i = 1;", code)
         cases = (
-            ("for i in range(2):\n    i = 1\n", "loop bodies may contain only print"),
+            ("for i in range(2):\n    i = 1\n", "loop index reassignment"),
             ("for i in range(2):\n    print(i)\nelse:\n    print(0)\n", "for/else"),
             ("for i in range(3, 1, 0):\n    print(i)\n", "step cannot be zero"),
             ("for i in range(10001):\n    print(i)\n", "limited to 10000"),
