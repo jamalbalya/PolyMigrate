@@ -534,12 +534,22 @@ class PythonToKotlinTargetAdapter:
                             raise UnsupportedPythonSyntax("range() loop assignments must remain integer-valued")
                         integer_values[target] = self._int_value(statement.value, integer_values, string_values)
                         body_lines.append(f"{target} = {expression}")
+                    elif isinstance(statement, ast.AugAssign):
+                        if not isinstance(statement.target, ast.Name):
+                            raise UnsupportedPythonSyntax("range() augmented assignments must target an existing integer variable")
+                        if statement.target.id == name:
+                            raise UnsupportedPythonSyntax("range() loop index reassignment is not supported")
+                        if types.get(statement.target.id) != "int":
+                            raise UnsupportedPythonSyntax("range() augmented assignments support existing integer variables only")
+                        body_lines.append(self._augmented_assignment(
+                            statement, assigned, types, integer_values, string_values
+                        ))
                     elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
                           and isinstance(statement.value.value, str)):
                         continue
                     else:
                         raise UnsupportedPythonSyntax(
-                            "range() loop bodies may contain only print() calls and assignments to existing integer variables"
+                            "range() loop bodies may contain only print() calls, assignments, and integer augmented assignments to existing variables"
                         )
                 if not body_lines:
                     raise UnsupportedPythonSyntax("range() loop bodies must contain at least one supported statement")
@@ -582,8 +592,8 @@ class PythonToKotlinTargetAdapter:
         if len(project.units) != 1:
             raise UnsupportedPythonSyntax("This adapter currently accepts exactly one source file")
         self.warnings = [
-            "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), len(string), print(), if/elif/else chains with print and same-type assignments to existing variables, bounded range() loops, and while loops with statically proven termination.",
-            "Only Int +=/-=/*= and String += augmented assignments are supported; while bodies allow only integer updates, range loops remain print-only, nested control flow and unbounded while loops are rejected, and functions, imports, classes, collections, and full project migration are not supported by this subset."
+            "Deterministic Python-to-Kotlin translation supports one file, bounded Int/String/Boolean expressions, str(), abs(), len(string), print(), if/elif/else chains with print and same-type assignments to existing variables, bounded range() loops with existing-integer-variable assignments and integer +=/-=/*= updates, and while loops with statically proven termination.",
+            "Only Int +=/-=/*= and String += augmented assignments are supported; while bodies allow only integer updates, range loops allow only integer augmented assignments and same-type assignments to existing integer variables, nested control flow and unbounded while loops are rejected, and functions, imports, classes, collections, and full project migration are not supported by this subset."
         ]
         try:
             tree = ast.parse(project.units[0].source_text)

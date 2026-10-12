@@ -153,3 +153,5 @@
 - [x] T118 Support bounded integer `+=`, `-=`, `*=` and statically known string `+=` at top level and in conditionals; permit only integer augmented updates inside statically bounded `while` loops, prove signed-32-bit safety on each iteration, and reject unsupported augmented operators/types. Pinned Kotlin runtime fixtures verify integer and string augmented assignment output against Python.
 
 - [x] T118 Add bounded Kotlin `range()` loop assignments to previously assigned integer variables, statically simulate every iteration to reject signed-32-bit overflow, reject loop-index reassignment/new variables/type changes, preserve zero-iteration state, and compare generated Kotlin runtime output with Python.
+
+- [x] T119 Support integer `+=`, `-=`, and `*=` updates to existing variables inside bounded Kotlin `range()` loops; statically simulate every iteration, reject loop-index and non-integer augmented assignments, validate overflow, and compare generated runtime output with Python.
