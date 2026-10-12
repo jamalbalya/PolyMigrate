@@ -165,6 +165,8 @@ Without `--behavior-spec`, behavior comparison remains `NOT_RUN`. With a behavio
 
 The generated `migration-review.json` records the validation gates and overall status. Pass `--security-evidence path/to/evidence.json` to include externally produced scanner evidence. The JSON object must contain `required_scanners` (a list of scanner IDs) and `evidence` (a list of objects with `scanner_id`, `scanner_version`, `complete`, `exit_code`, `report_sha256`, and `findings`). Each finding requires a `severity` (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`) and a `rule_id`. Missing or malformed evidence is `INCOMPLETE`, not a pass. The report explicitly marks scanner provenance as unverified; this input is evidence aggregation only, not trusted scanner execution or a comprehensive audit. Treat this feature as an experimental, subset-specific translator, not a general-purpose or production-ready project migrator.
 
+JavaScript/TypeScript migrations map extensions according to the source/target pair: `.js` ↔ `.ts`, `.jsx` ↔ `.tsx`, `.mjs` ↔ `.mts`, and `.cjs` ↔ `.cts`. This avoids keeping a JavaScript suffix simply because that suffix is accepted in a mixed TypeScript project.
+
 ### Optional local knowledge cache
 
 Set POLYMIGRATE_KNOWLEDGE_DB to a local SQLite file to enable evidence-gated migration knowledge lookup. To also cache unverified translation drafts within the same project scope, set POLYMIGRATE_CACHE_DRAFTS=1. Draft caching is disabled by default because the local database may contain generated source code. Drafts are never treated as verified and are not shared across projects. Source-content and Graphify-context fingerprints invalidate stale draft matches. Only explicitly shareable, verified knowledge records can be reused across projects.
