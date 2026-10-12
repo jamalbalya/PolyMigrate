@@ -182,45 +182,96 @@ class PythonToCTargetAdapter:
 
     def _if_statement(self, node: ast.If, assigned: set[str], types: dict[str, str],
                       integer_values: dict[str, int], *, depth: int = 1,
-                      keyword: str = "if", close_end: bool = True) -> list[str]:
+                      keyword: str = "if", close_end: bool = True,
+                      base_values: dict[str, int] | None = None,
+                      modified_names: set[str] | None = None,
+                      branch_facts: list[dict[str, int]] | None = None) -> list[str]:
+        root_call = base_values is None
+        if base_values is None:
+            base_values = dict(integer_values)
+        if modified_names is None:
+            modified_names = set()
+        if branch_facts is None:
+            branch_facts = []
         if depth > 20:
             raise UnsupportedPythonSyntax("if/elif chains are limited to 20 branches in C")
-        condition = self._condition(node.test, assigned, types, integer_values)
+        condition = self._condition(node.test, assigned, types, base_values)
         rendered = [f"{keyword} ({condition}) {{"]
-        for statement in node.body:
-            if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
-                rendered.extend("    " + line for line in self._print(
-                    statement.value, assigned, types, integer_values
-                ))
-            elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
-                  and isinstance(statement.value.value, str)):
-                continue
-            else:
-                raise UnsupportedPythonSyntax("C conditional bodies may contain only print() calls")
-        if len(rendered) == 1:
-            raise UnsupportedPythonSyntax("Empty conditional bodies are not supported in C")
+
+        def render_branch(statements: list[ast.stmt], values: dict[str, int]) -> list[str]:
+            lines: list[str] = []
+            for statement in statements:
+                if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+                    lines.extend("    " + line for line in self._print(
+                        statement.value, assigned, types, values
+                    ))
+                elif isinstance(statement, ast.Assign):
+                    if len(statement.targets) != 1 or not isinstance(statement.targets[0], ast.Name):
+                        raise UnsupportedPythonSyntax("C conditional assignments must target one existing variable")
+                    target = statement.targets[0].id
+                    if target not in assigned:
+                        raise UnsupportedPythonSyntax("C conditional assignments must target existing variables")
+                    expression, value_type = self._expr(
+                        statement.value, assigned, types, values
+                    )
+                    if value_type != types.get(target):
+                        raise UnsupportedPythonSyntax("C conditional assignments must preserve the variable type")
+                    if value_type == "int":
+                        values[target] = self._int_value(statement.value, values)
+                    else:
+                        values.pop(target, None)
+                    modified_names.add(target)
+                    lines.append(f"    {target} = {expression};")
+                elif isinstance(statement, ast.AugAssign):
+                    if not isinstance(statement.target, ast.Name):
+                        raise UnsupportedPythonSyntax("C conditional augmented assignments must target an existing integer variable")
+                    target = statement.target.id
+                    if target not in assigned or types.get(target) != "int":
+                        raise UnsupportedPythonSyntax("C conditional augmented assignments require an existing integer variable")
+                    lines.append("    " + self._augmented_assignment(
+                        statement, assigned, types, values
+                    ))
+                    modified_names.add(target)
+                elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
+                      and isinstance(statement.value.value, str)):
+                    continue
+                else:
+                    raise UnsupportedPythonSyntax(
+                        "C conditional bodies may contain only print() calls and same-type assignments to existing variables"
+                    )
+            if not lines:
+                raise UnsupportedPythonSyntax("Empty conditional bodies are not supported in C")
+            return lines
+
+        local_values = dict(base_values)
+        rendered.extend(render_branch(node.body, local_values))
+        branch_facts.append(dict(local_values))
         if node.orelse:
             if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
                 rendered.extend(self._if_statement(
                     node.orelse[0], assigned, types, integer_values,
                     depth=depth + 1, keyword="} else if", close_end=False,
+                    base_values=base_values, modified_names=modified_names,
+                    branch_facts=branch_facts,
                 ))
             else:
                 rendered.append("} else {")
-                for statement in node.orelse:
-                    if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
-                        rendered.extend("    " + line for line in self._print(
-                            statement.value, assigned, types, integer_values
-                        ))
-                    elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
-                          and isinstance(statement.value.value, str)):
-                        continue
-                    else:
-                        raise UnsupportedPythonSyntax("C conditional bodies may contain only print() calls")
-                if rendered[-1] == "} else {":
-                    raise UnsupportedPythonSyntax("Empty conditional bodies are not supported in C")
+                else_values = dict(base_values)
+                rendered.extend(render_branch(node.orelse, else_values))
+                branch_facts.append(dict(else_values))
+        else:
+            # The condition may be false, so merge against an unchanged path.
+            branch_facts.append(dict(base_values))
         if close_end:
             rendered.append("}")
+
+        if root_call:
+            for name in modified_names:
+                values = [facts.get(name) for facts in branch_facts]
+                if values and values[0] is not None and all(value == values[0] for value in values):
+                    integer_values[name] = values[0]
+                else:
+                    integer_values.pop(name, None)
         return rendered
 
     def _while_condition_value(self, node: ast.expr, assigned: set[str], types: dict[str, str],
