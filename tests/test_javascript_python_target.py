@@ -99,21 +99,29 @@ if (false) { console.log("unreachable"); }
         self.assertEqual(completed.stdout, "many\ntrue\n")
 
     def test_translates_else_if_chains_with_python_runtime_equivalence(self):
-        source = '''const count = 2;
-if (count > 3) { console.log("large"); } else if (count === 2) { console.log("two"); } else if (count === 1) { console.log("one"); } else { console.log("other"); }
-'''
         from polymigrate.migration.javascript_python_target import _Parser
-        generated = _Parser(source).parse()
-        ast.parse(generated)
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "main.py"
-            target.write_text(generated, encoding="utf-8")
-            completed = subprocess.run(
-                [sys.executable, str(target)], capture_output=True, text=True, check=False,
-            )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(completed.stdout, "two\n")
-        self.assertIn("elif ", generated)
+        cases = (
+            (4, "large\\n"),
+            (2, "two\\n"),
+            (1, "one\\n"),
+            (0, "other\\n"),
+        )
+        for count, expected in cases:
+            source = f\'''const count = {count};
+if (count > 3) { console.log("large"); } else if (count === 2) { console.log("two"); } else if (count === 1) { console.log("one"); } else { console.log("other"); }
+\'''
+            with self.subTest(count=count):
+                generated = _Parser(source).parse()
+                ast.parse(generated)
+                with tempfile.TemporaryDirectory() as tmp:
+                    target = Path(tmp) / "main.py"
+                    target.write_text(generated, encoding="utf-8")
+                    completed = subprocess.run(
+                        [sys.executable, str(target)], capture_output=True, text=True, check=False,
+                    )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(completed.stdout, expected)
+                self.assertIn("elif ", generated)
 
     def test_rejects_assignment_nested_control_flow_and_string_ordering_in_branches(self):
         from polymigrate.migration.javascript_python_target import _Parser
