@@ -199,6 +199,6 @@
 
 - [x] T145 Add constrained TypeScript-to-Python deterministic migration for a single root `main.ts`, validate `number`/`string`/`boolean` annotations, reject unsupported module/type syntax, and add CLI plus runtime regression tests.
 
-- [ ] T146 Add end-to-end deterministic behavior-equivalence smoke tests for Python ↔ Go and Python ↔ TypeScript: execute both original and generated artifacts, compile Go/TypeScript outputs where applicable, and compare stdout. These fixtures prove only a narrow arithmetic case; expand the corpus before making broader equivalence claims.
+- [x] T146 Add end-to-end deterministic behavior-equivalence tests for Python ↔ Go and Python ↔ TypeScript: execute both original and generated artifacts, compile Go/TypeScript outputs where applicable, and compare stdout. Expanded beyond arithmetic to string/boolean formatting, branching, and bounded loops in PR #104. Evidence remains limited to these explicit fixtures and does not establish general pair/project equivalence.
 
 - [x] T147 Expand migration orchestration contract coverage to every directed non-identity pair in the registered language catalog; separately track deterministic translator support, AI-assisted experimental support, and proven semantic equivalence so registry coverage is never mistaken for production migration coverage. Verified in PR #102: 156 directed routes, duplicate/missing-pair assertions, and separate coverage documentation; this does not claim semantic equivalence.
