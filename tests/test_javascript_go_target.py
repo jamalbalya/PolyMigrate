@@ -44,7 +44,7 @@ class JavaScriptToGoTargetTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             result, source, generated = self._migrate(
-                'console.log("value=" + String(42));\nconsole.log(true);\n', root
+                'console.log("value=", 42, true);\n', root
             )
             self.assertEqual(result.status, "GENERATED_UNVERIFIED")
             original = subprocess.run(["node", str(source)], capture_output=True, text=True, timeout=30)
