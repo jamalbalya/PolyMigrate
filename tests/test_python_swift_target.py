@@ -1,0 +1,79 @@
+"""Tests for the deterministic Python-to-Swift subset."""
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+from polymigrate.migration.adapters import InventorySourceAdapter
+from polymigrate.migration.python_swift_target import PythonToSwiftTargetAdapter, UnsupportedPythonSyntax
+
+
+class PythonToSwiftTargetAdapterTests(unittest.TestCase):
+    def _translate(self, source: str) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            root.mkdir()
+            (root / "main.py").write_text(source, encoding="utf-8")
+            project = InventorySourceAdapter("python", (".py",)).analyze(root)
+            artifacts = PythonToSwiftTargetAdapter().generate(project, {})
+        self.assertEqual(len(artifacts), 1)
+        self.assertEqual(artifacts[0].relative_path, "main.swift")
+        return artifacts[0].content
+
+    def test_generates_typed_swift_and_python_style_print(self):
+        code = self._translate('count = 6\nlabel = "value"\nactive = True\nprint(label, count, active)\n')
+        self.assertIn("var count: Int32 = 6", code)
+        self.assertIn('var label: String = "value"', code)
+        self.assertIn("var active: Bool = true", code)
+        self.assertIn('print((active ? "True" : "False"), terminator: "")', code)
+
+    def test_rejects_unsupported_syntax_type_changes_and_overflow(self):
+        cases = (
+            ("x = 1\nprint(x + 2147483647)\n", "signed Int32 range"),
+            ('x = 1\nx = "text"\nprint(x)\n', "Changing the type"),
+            ("print([1, 2])\n", "Unsupported expression syntax: List"),
+            ("var = 2\nprint(var)\n", "not supported in Swift"),
+            ("print(value)\n", "used before assignment"),
+            ("x = 1\nif x:\n    print(x)\n", "Unsupported statement syntax: If"),
+            ('x = "bad\\x00value"\nprint(x)\n', "unsupported control characters"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
+    def test_rejects_shadowed_builtins_and_unsafe_abs(self):
+        cases = (
+            ("abs = 2\nprint(abs)\n", "not supported in Swift"),
+            ("x = abs(-2147483648)\nprint(x)\n", "signed Int32 range"),
+            ("print(str=True)\n", "no keywords"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
+    @unittest.skipUnless(shutil.which("swiftc"), "Swift compiler is required for runtime equivalence")
+    def test_compiled_swift_matches_python_output(self):
+        source = (
+            'count = 6\nlabel = "value"\nactive = True\n'
+            "print(label, count, active)\nprint(-3 * 2, abs(-7))\nprint()\n"
+            "print(str(False))\nprint(len('😀'))\n"
+        )
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            swift_file = root / "main.swift"
+            executable = root / "program"
+            swift_file.write_text(code, encoding="utf-8")
+            compiled = subprocess.run(
+                [shutil.which("swiftc"), "-warnings-as-errors", str(swift_file), "-o", str(executable)],
+                capture_output=True, text=True, timeout=90,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
+            run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "value 6 True\n-6 7\n\nFalse\n1\n")
+
+
+if __name__ == "__main__":
+    unittest.main()
