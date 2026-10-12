@@ -107,9 +107,9 @@ if (false) { console.log("unreachable"); }
             (0, "other\\n"),
         )
         for count, expected in cases:
-            source = f\'''const count = {count};
+            source = f'''const count = {count};
 if (count > 3) { console.log("large"); } else if (count === 2) { console.log("two"); } else if (count === 1) { console.log("one"); } else { console.log("other"); }
-\'''
+'''
             with self.subTest(count=count):
                 generated = _Parser(source).parse()
                 ast.parse(generated)
