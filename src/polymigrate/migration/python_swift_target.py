@@ -188,8 +188,13 @@ class PythonToSwiftTargetAdapter:
             operator = operators.get(type(operator_node))
             if operator is None:
                 raise UnsupportedPythonSyntax("Only simple equality and ordering comparisons are supported in Swift")
-            if left_type == "string" and not isinstance(operator_node, (ast.Eq, ast.NotEq)):
-                raise UnsupportedPythonSyntax("String ordering comparisons are not supported in Swift")
+            if left_type == "string":
+                if not isinstance(operator_node, (ast.Eq, ast.NotEq)):
+                    raise UnsupportedPythonSyntax("String ordering comparisons are not supported in Swift")
+                # Swift String equality uses Unicode canonical equivalence, while Python
+                # compares code-point sequences. Compare Unicode scalars to preserve Python semantics.
+                comparison = f"({left}).unicodeScalars.elementsEqual(({right}).unicodeScalars)"
+                return f"({comparison})" if isinstance(operator_node, ast.Eq) else f"(!{comparison})"
             if left_type == "bool" and not isinstance(operator_node, (ast.Eq, ast.NotEq)):
                 raise UnsupportedPythonSyntax("Boolean ordering comparisons are not supported in Swift")
             return f"({left} {operator} {right})"
