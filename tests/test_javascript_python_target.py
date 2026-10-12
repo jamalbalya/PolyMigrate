@@ -105,6 +105,7 @@ if (false) { console.log("unreachable"); }
             'if (true) { if (false) { console.log("nested"); } }\n',
             'if ("a" < "b") { console.log("ordered"); }\n',
             'if (1 < 2 < 3) { console.log("chained"); }\n',
+            'if (true) { console.log("then"); }; else { console.log("else"); }\n',
         )
         for source in unsupported:
             with self.subTest(source=source), self.assertRaises(UnsupportedJavaScriptSyntax):
