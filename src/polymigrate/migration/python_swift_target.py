@@ -55,8 +55,7 @@ class PythonToSwiftTargetAdapter:
         self._string_values: dict[str, str] = {}
         self._bool_values: dict[str, bool] = {}
 
-    @staticmethod
-    def _checked_int(node: ast.expr, values: dict[str, int]) -> int:
+    def _checked_int(self, node: ast.expr, values: dict[str, int]) -> int:
         minimum, maximum = -(2**31), 2**31 - 1
         if isinstance(node, ast.Constant) and type(node.value) is int:
             value = node.value
@@ -67,15 +66,24 @@ class PythonToSwiftTargetAdapter:
         elif isinstance(node, ast.Name) and node.id in values:
             value = values[node.id]
         elif isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
-            operand = PythonToSwiftTargetAdapter._checked_int(node.operand, values)
+            operand = self._checked_int(node.operand, values)
             value = operand if isinstance(node.op, ast.UAdd) else -operand
         elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult)):
-            left = PythonToSwiftTargetAdapter._checked_int(node.left, values)
-            right = PythonToSwiftTargetAdapter._checked_int(node.right, values)
+            left = self._checked_int(node.left, values)
+            right = self._checked_int(node.right, values)
             value = left + right if isinstance(node.op, ast.Add) else left - right if isinstance(node.op, ast.Sub) else left * right
         elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
               and node.func.id == "abs" and len(node.args) == 1 and not node.keywords):
-            value = abs(PythonToSwiftTargetAdapter._checked_int(node.args[0], values))
+            value = abs(self._checked_int(node.args[0], values))
+        elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+              and node.func.id == "len" and len(node.args) == 1 and not node.keywords):
+            argument = node.args[0]
+            if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                value = len(argument.value)
+            elif isinstance(argument, ast.Name) and argument.id in self._string_values:
+                value = len(self._string_values[argument.id])
+            else:
+                raise UnsupportedPythonSyntax("len() result cannot be proven statically safe for integer arithmetic")
         else:
             raise UnsupportedPythonSyntax("Integer expression cannot be proven safe for Swift Int32")
         if not minimum <= value <= maximum:
@@ -171,7 +179,8 @@ class PythonToSwiftTargetAdapter:
             expression, value_type = self._expr(arg, assigned)
             if value_type == "bool":
                 expression = f"({expression} ? \"True\" : \"False\")"
-            lines.append(f"print({expression}, terminator: {'\" \"' if index < len(call.args) - 1 else '\"\"'})")
+            terminator = '" "' if index < len(call.args) - 1 else '""'
+            lines.append(f"print({expression}, terminator: {terminator})")
         lines.append('print("")')
         return lines
 
