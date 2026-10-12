@@ -55,6 +55,7 @@ This can incur a small provider charge and verifies connectivity/response shape 
 
 The offline deterministic strategy currently supports these deliberately narrow pairs:
 - JavaScript → Python
+- TypeScript → Python (a constrained single-file `main.ts` subset)
 - Python → Go
 - Python → C
 - Python → C++
