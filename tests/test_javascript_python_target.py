@@ -129,15 +129,23 @@ if (false) { console.log("unreachable"); }
         from polymigrate.migration.javascript_python_target import _Parser
         cases = (
             (
-                'const count = 2;\\nconst enabled = true;\\n'
-                'if (count > 1 && enabled) { console.log("active"); }\\n'
-                'if (!enabled || count === 0) { console.log("fallback"); } else { console.log("still active"); }\\n',
+                chr(10).join((
+                    "const count = 2;",
+                    "const enabled = true;",
+                    'if (count > 1 && enabled) { console.log("active"); }',
+                    'if (!enabled || count === 0) { console.log("fallback"); } else { console.log("still active"); }',
+                    "",
+                )),
                 "active" + chr(10) + "still active" + chr(10),
             ),
             (
-                'const count = 0;\\nconst enabled = false;\\n'
-                'if (count > 1 && enabled) { console.log("active"); } else { console.log("inactive"); }\\n'
-                'if (!enabled || count === 0) { console.log("fallback"); } else { console.log("still active"); }\\n',
+                chr(10).join((
+                    "const count = 0;",
+                    "const enabled = false;",
+                    'if (count > 1 && enabled) { console.log("active"); } else { console.log("inactive"); }',
+                    'if (!enabled || count === 0) { console.log("fallback"); } else { console.log("still active"); }',
+                    "",
+                )),
                 "inactive" + chr(10) + "fallback" + chr(10),
             ),
         )
