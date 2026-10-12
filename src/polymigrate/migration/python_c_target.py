@@ -329,6 +329,7 @@ class PythonToCTargetAdapter:
         types: dict[str, str] = {}
         integer_values: dict[str, int] = {}
         statements: list[str] = []
+        loop_variables: set[str] = set()
         referenced = {
             item.id for item in ast.walk(tree)
             if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load)
@@ -377,7 +378,7 @@ class PythonToCTargetAdapter:
             else:
                 raise UnsupportedPythonSyntax(f"Unsupported statement syntax: {type(node).__name__}")
 
-        unused = sorted(assigned - referenced)
+        unused = sorted(assigned - referenced - loop_variables)
         if unused:
             raise UnsupportedPythonSyntax("Assigned variable(s) are never used: " + ", ".join(unused))
         includes = "#include <inttypes.h>\n#include <stdbool.h>\n#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n"
