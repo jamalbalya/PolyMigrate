@@ -204,6 +204,7 @@ jobs:
     timeout-minutes: 15
     env:
       PYTHONPATH: src
+      POLYMIGRATE_RUN_SWIFT_E2E: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
