@@ -96,7 +96,7 @@ class DeterministicBidirectionalEquivalenceTests(unittest.TestCase):
     def test_python_to_go_preserves_string_and_boolean_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source_text = 'x = 42\\nprint("value=" + str(x))\\nprint(str(True))\\n'
+            source_text = 'x = 42\nprint("value=" + str(x))\nprint(str(True))\n'
             source, generated = self._migrate(root, "python", "go", source_text)
             self.assertEqual(
                 self._run("python", source, root, "source"),
@@ -125,7 +125,7 @@ func main() {
     def test_python_to_typescript_preserves_branch_and_bounded_loop_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source_text = "x = 2\\nif x > 1:\\n    print('go', x)\\nfor i in range(3):\\n    print(i)\\n"
+            source_text = "x = 2\nif x > 1:\n    print('go', x)\nfor i in range(3):\n    print(i)\n"
             source, generated = self._migrate(root, "python", "typescript", source_text)
             self.assertEqual(
                 self._run("python", source, root, "source"),
