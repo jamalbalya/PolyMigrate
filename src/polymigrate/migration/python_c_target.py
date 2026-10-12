@@ -164,11 +164,11 @@ class PythonToCTargetAdapter:
             if operator is None:
                 raise UnsupportedPythonSyntax("Only simple equality and ordering comparisons are supported")
             if left_type == "string":
-                if operator_node not in (ast.Eq, ast.NotEq):
+                if not isinstance(operator_node, (ast.Eq, ast.NotEq)):
                     raise UnsupportedPythonSyntax("String ordering comparisons are not supported in C")
                 comparison = f"(strcmp({left}, {right}) {operator} 0)"
                 return comparison
-            if left_type == "bool" and operator_node not in (ast.Eq, ast.NotEq):
+            if left_type == "bool" and not isinstance(operator_node, (ast.Eq, ast.NotEq)):
                 raise UnsupportedPythonSyntax("Boolean ordering comparisons are not supported in C")
             return f"({left} {operator} {right})"
         expression, value_type = self._expr(node, assigned, types, integer_values)
