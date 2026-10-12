@@ -161,6 +161,7 @@ class PythonToKotlinTargetAdapterTests(unittest.TestCase):
             ("for i in range(2):\n    total = i\n", "previously assigned integer variables"),
             ("total = 0\nfor i in range(2):\n    i = i + 1\n", "loop index reassignment"),
             ("total = 2147483647\nfor i in range(1):\n    total = total + 1\n", "signed 32-bit Kotlin Int range"),
+            ("total = 2147483640\nfor i in range(10):\n    total = total + 1\n", "signed 32-bit Kotlin Int range"),
             ("total = 0\nfor i in range(2):\n    total = 'wrong'\n", "must remain integer-valued"),
         )
         for source, message in cases:
