@@ -111,6 +111,35 @@ if (false) { console.log("unreachable"); }
             with self.subTest(source=source), self.assertRaises(UnsupportedJavaScriptSyntax):
                 _Parser(source).parse()
 
+    def test_translates_bounded_ascending_and_descending_for_loops(self):
+        source = '''for (let i = 0; i < 3; i++) { console.log(i); }
+for (let j = 3; j > 0; j--) { console.log("tick", j); }
+'''
+        from polymigrate.migration.javascript_python_target import _Parser
+        generated = _Parser(source).parse()
+        ast.parse(generated)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "main.py"
+            target.write_text(generated, encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(target)], capture_output=True, text=True, check=False,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "0\n1\n2\ntick 3\ntick 2\ntick 1\n")
+
+    def test_rejects_unsafe_for_loop_shapes_and_scope_leaks(self):
+        from polymigrate.migration.javascript_python_target import _Parser
+        unsupported = (
+            'for (let i = 0; i < 10001; i++) { console.log(i); }\n',
+            'for (let i = 0; i < 3; i--) { console.log(i); }\n',
+            'for (let i = 0; i < 3; i++) { console.log(i + 1); }\n',
+            'for (let i = 0; i < 3; i++) { i = 4; }\n',
+            'for (let i = 0; i < 3; i++) { console.log(i); }\nconsole.log(i);\n',
+        )
+        for source in unsupported:
+            with self.subTest(source=source), self.assertRaises(UnsupportedJavaScriptSyntax):
+                _Parser(source).parse()
+
     def test_rejects_jsx_instead_of_mislabeling_it_as_javascript(self):
         from polymigrate.migration.pipeline import SourceProject, SourceUnit
         import hashlib
