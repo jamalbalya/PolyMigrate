@@ -17,6 +17,12 @@ from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject
 _MAX_SAFE_INTEGER = 2**53 - 1
 _RESERVED_NAMES = set(keyword.kwlist) | {
     "print", "str", "int", "bool", "len", "abs", "range", "None", "True", "False",
+    "console", "await", "break", "case", "catch", "class", "continue", "debugger",
+    "default", "delete", "do", "else", "export", "extends", "finally", "for",
+    "function", "if", "import", "in", "instanceof", "new", "return", "super",
+    "switch", "this", "throw", "try", "typeof", "var", "void", "while", "with",
+    "yield", "enum", "implements", "interface", "package", "private", "protected",
+    "public", "null", "true", "false", "const", "let", "static",
 }
 _TOKEN = re.compile(
     r"(?P<SPACE>[ \t\r]+)|(?P<NEWLINE>\n+)|(?P<COMMENT>//[^\n]*|/\*[\s\S]*?\*/)|"
@@ -212,6 +218,8 @@ class _Parser:
             return value, "int", number
         if kind == "STRING":
             self.index += 1
+            if "\\" in value[1:-1]:
+                raise UnsupportedJavaScriptSyntax("Escaped string literals are not yet supported")
             try:
                 decoded = ast.literal_eval(value)
             except (SyntaxError, ValueError):
