@@ -509,6 +509,7 @@ class PythonToKotlinTargetAdapter:
         assigned.add(name)
         types[name] = "int"
         previous_value = integer_values.get(name)
+        facts_before_loop = dict(integer_values)
         rendered_body: list[str] | None = None
         validation_values = list(actual_range) if count else [start_value]
         try:
@@ -518,18 +519,38 @@ class PythonToKotlinTargetAdapter:
                 for statement in node.body:
                     if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
                         body_lines.append(self._print_call(statement.value, assigned, types, integer_values, string_values))
+                    elif isinstance(statement, ast.Assign):
+                        if len(statement.targets) != 1 or not isinstance(statement.targets[0], ast.Name):
+                            raise UnsupportedPythonSyntax("range() assignments must target one existing integer variable")
+                        target = statement.targets[0].id
+                        if target == name:
+                            raise UnsupportedPythonSyntax("range() loop index reassignment is not supported")
+                        if target not in assigned or types.get(target) != "int":
+                            raise UnsupportedPythonSyntax("range() loop assignments must target previously assigned integer variables")
+                        expression, value_type = self._expr(
+                            statement.value, assigned, types, integer_values, string_values
+                        )
+                        if value_type != "int":
+                            raise UnsupportedPythonSyntax("range() loop assignments must remain integer-valued")
+                        integer_values[target] = self._int_value(statement.value, integer_values, string_values)
+                        body_lines.append(f"{target} = {expression}")
                     elif (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)
                           and isinstance(statement.value.value, str)):
                         continue
                     else:
-                        raise UnsupportedPythonSyntax("range() loop bodies may contain only print() statements")
+                        raise UnsupportedPythonSyntax(
+                            "range() loop bodies may contain only print() calls and assignments to existing integer variables"
+                        )
                 if not body_lines:
-                    raise UnsupportedPythonSyntax("range() loop bodies must contain at least one print() statement")
+                    raise UnsupportedPythonSyntax("range() loop bodies must contain at least one supported statement")
                 if rendered_body is None:
                     rendered_body = body_lines
         finally:
             assigned.discard(name)
             types.pop(name, None)
+            if count == 0:
+                integer_values.clear()
+                integer_values.update(facts_before_loop)
             if previous_value is None:
                 integer_values.pop(name, None)
             else:
