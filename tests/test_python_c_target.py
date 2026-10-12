@@ -49,6 +49,7 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             "else:\n    print('other')\n"
             "if label == 'ready':\n    print('match')\nelse:\n    print('miss')\n"
             "if empty:\n    print('nonempty')\nelse:\n    print('empty')\n"
+            "active = True\nif active == True:\n    print('enabled')\nelse:\n    print('disabled')\n"
         )
         self.assertIn("} else if", code)
         self.assertIn("strcmp(label, \"ready\") == 0", code)
@@ -73,6 +74,7 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             "else:\n    print('other')\n"
             "if label == 'ready':\n    print('match')\nelse:\n    print('miss')\n"
             "if empty:\n    print('nonempty')\nelse:\n    print('empty')\n"
+            "active = True\nif active == True:\n    print('enabled')\nelse:\n    print('disabled')\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
@@ -88,7 +90,7 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             self.assertEqual(compile_result.returncode, 0, compile_result.stdout + compile_result.stderr)
             run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "positive 3\nmatch\nempty\n")
+            self.assertEqual(run.stdout, "positive 3\nmatch\nempty\nenabled\n")
 
     @unittest.skipUnless(shutil.which("gcc"), "GCC is required for C runtime equivalence")
     def test_compiled_c_output_matches_python_fixture(self):
