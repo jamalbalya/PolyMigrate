@@ -104,7 +104,7 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             ("count = 2147483647\nwhile count > 0:\n    count += 1\n", "signed 32-bit C range"),
             ("while True:\n    print(1)\n", "one integer comparison"),
             ("count = 1\nwhile count > 0:\n    other = count - 1\n", "existing integer variables"),
-            ("count = 1\nwhile count > 0:\n    count = 'bad'\n", "existing integer variables"),
+            ("count = 1\nwhile count > 0:\n    count = 'bad'\n", "must remain integer-valued"),
             ("count = 1\nwhile count > 0:\n    count -= 1\nelse:\n    print(count)\n", "while/else"),
         )
         for source, message in cases:
