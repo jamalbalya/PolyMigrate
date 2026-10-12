@@ -1,4 +1,5 @@
 """Tests for the deterministic Python-to-Swift subset."""
+import os
 import shutil
 import subprocess
 import tempfile
@@ -52,7 +53,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
                 self._translate(source)
 
-    @unittest.skipUnless(shutil.which("swiftc"), "Swift compiler is required for runtime equivalence")
+    @unittest.skipUnless(os.environ.get("POLYMIGRATE_RUN_SWIFT_E2E") == "1" and shutil.which("swiftc"), "Run in the dedicated Swift CI job")
     def test_compiled_swift_matches_python_output(self):
         source = (
             'count = 6\nlabel = "value"\nactive = True\n'
