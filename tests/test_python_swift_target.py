@@ -24,9 +24,9 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
 
     def test_generates_typed_swift_and_python_style_print(self):
         code = self._translate('count = 6\nlabel = "value"\nactive = True\nprint(label, count, active)\n')
-        self.assertIn("var count: Int32 = 6", code)
-        self.assertIn('var label: String = "value"', code)
-        self.assertIn("var active: Bool = true", code)
+        self.assertIn("let count: Int32 = 6", code)
+        self.assertIn('let label: String = "value"', code)
+        self.assertIn("let active: Bool = true", code)
         self.assertIn('print((active ? "True" : "False"), terminator: "")', code)
 
     def test_rejects_unsupported_syntax_type_changes_and_overflow(self):
