@@ -68,7 +68,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
         )
         self.assertIn("var value: Int32 = 0", code)
         self.assertIn("var x: Int32 = 1", code)
-        self.assertIn("var label: String = \\"before\\"", code)
+        self.assertIn('var label: String = "before"', code)
         self.assertIn("x = 2", code)
         self.assertIn("length = Int32((label).unicodeScalars.count)", code)
 
@@ -86,12 +86,6 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             "start = 1\nstop = 5\n"
             "for i in range(start, stop, 2):\n    print(i)\n"
             "for j in range(3, -1, -2):\n    print(j)\n"
-            "value = 0\nif score > 5:\n    value = 10\n"
-            "elif score > 0:\n    value = score + 2\n"
-            "else:\n    value = -1\nprint(value)\n"
-            "x = 1\nif score > 0:\n    x = 2\nelse:\n    x = 2\nprint(x + 1)\n"
-            "label3 = 'before'\nif score > 0:\n    label3 = 'same'\nelse:\n    label3 = 'same'\n"
-            "length = len(label3)\nprint(length)\n"
         )
         self.assertIn("for i in stride(from: Int32(start), to: Int32(stop), by: Int(2)) {", code)
         self.assertIn("for j in stride(from: Int32(3), to: Int32(-1), by: Int(-2)) {", code)
@@ -148,6 +142,12 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
             "active = True\nif active == True:\n    print('enabled')\nelse:\n    print('disabled')\n"
             "for i in range(3):\n    print(i + 1)\n"
             "for j in range(3, -1, -2):\n    print(j)\n"
+            "value = 0\nif score > 5:\n    value = 10\n"
+            "elif score > 0:\n    value = score + 2\n"
+            "else:\n    value = -1\nprint(value)\n"
+            "x = 1\nif score > 0:\n    x = 2\nelse:\n    x = 2\nprint(x + 1)\n"
+            "label3 = 'before'\nif score > 0:\n    label3 = 'same'\nelse:\n    label3 = 'same'\n"
+            "length = len(label3)\nprint(length)\n"
         )
         code = self._translate(source)
         with tempfile.TemporaryDirectory() as tmp:
