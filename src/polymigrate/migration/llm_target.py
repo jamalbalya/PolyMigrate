@@ -56,6 +56,20 @@ class LLMTargetAdapter:
         self.cache_drafts = cache_drafts
         self.warnings: list[str] = []
 
+    def _select_target_suffix(self, source_suffix: str) -> str:
+        """Choose an output suffix using the source/target language pair, not overlap alone."""
+        mapping: dict[str, str] = {}
+        if self.source_language == "javascript" and self.language_id == "typescript":
+            mapping = {".js": ".ts", ".mjs": ".mts", ".cjs": ".cts", ".jsx": ".tsx"}
+        elif self.source_language == "typescript" and self.language_id == "javascript":
+            mapping = {".ts": ".js", ".mts": ".mjs", ".cts": ".cjs", ".tsx": ".jsx"}
+        mapped = mapping.get(source_suffix)
+        if mapped in self.target_extensions:
+            return mapped
+        if source_suffix == ".jsx" and ".tsx" in self.target_extensions:
+            return ".tsx"
+        return source_suffix if source_suffix in self.target_extensions else self.target_extension
+
     @staticmethod
     def _parse_solution(raw: Any, relative_path: str) -> tuple[str, list[str], list[str]]:
         if not isinstance(raw, dict) or not isinstance(raw.get("content"), str) or not raw["content"].strip():
@@ -106,10 +120,7 @@ class LLMTargetAdapter:
             if safe_source != unit.source_text:
                 self.warnings.append(f"Recognizable secret patterns were redacted in {unit.relative_path}; output semantics may be affected.")
             source_suffix = PurePosixPath(unit.relative_path).suffix.lower()
-            if source_suffix == ".jsx" and ".tsx" in self.target_extensions:
-                selected_suffix = ".tsx"
-            else:
-                selected_suffix = source_suffix if source_suffix in self.target_extensions else self.target_extension
+            selected_suffix = self._select_target_suffix(source_suffix)
             target_relative_path = PurePosixPath(unit.relative_path).with_suffix(selected_suffix).as_posix()
             problem_fingerprint = fingerprint_payload({
                 "source_sha256": unit.content_sha256, "source_language": self.source_language,
