@@ -198,6 +198,25 @@ jobs:
       - name: Run strict TypeScript compile and runtime fixtures
         run: python -m unittest tests.test_python_typescript_target tests.test_cli_deterministic_typescript -v
 
+  swift-deterministic-e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+      - name: Install package
+        run: python -m pip install --editable .
+      - name: Run Swift compiler and runtime fixtures
+        run: python -m unittest tests.test_python_swift_target tests.test_cli_deterministic_swift -v
+
   kotlin-deterministic-e2e:
     needs: test
     runs-on: ubuntu-latest
