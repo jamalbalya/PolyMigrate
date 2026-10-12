@@ -25,6 +25,35 @@ _ALLOWED_MANIFESTS = {
     "php": ("composer.json",),
     "swift": ("Package.swift",),
 }
+_GRADLE_ALLOWED_LINE = re.compile(
+    r"""^(?:rootProject\\.name\\s*=\\s*["'][^"'$\\n]*["']|"""
+    r"""include\\(\\s*["'][^"'$\\n]*["'](?:\\s*,\\s*["'][^"'$\\n]*["'])*\\s*\\)|"""
+    r"""(?:dependencyResolutionManagement|repositories|dependencies)\\s*\\{|"""
+    r"""(?:mavenCentral|google)\\(\\)|"""
+    r"""(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testCompileOnly|"""
+    r"""testRuntimeOnly|annotationProcessor|kapt)\\(\\s*["'][^"'$\\n]+["']\\s*\\)|"""
+    r"""\\})$"""
+)
+
+
+def _gradle_manifest_is_declarative(content: str) -> bool:
+    """Accept only a tiny static Gradle DSL subset; never trust generated Kotlin scripts."""
+    depth = 0
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("//"):
+            continue
+        if not _GRADLE_ALLOWED_LINE.fullmatch(line):
+            return False
+        if line.endswith("{"):
+            depth += 1
+        elif line == "}":
+            depth -= 1
+            if depth < 0:
+                return False
+    return depth == 0
+
+
 _FORBIDDEN_BUILD_HOOKS = re.compile(
     r"(?i)(?:preinstall|postinstall|prepare\s*[:=]|build\.rs|<plugin\b|<executions\b|<exec\b|<target\b|usingtask|"
     r"\b(?:curl|wget|powershell|cmd\.exe|execute_process|add_custom_command)\b|"
@@ -122,6 +151,9 @@ def reconstruct_target_manifests(
             continue
         if path == "Cargo.toml" and re.search(r"(?im)^\s*(?:build\s*=|\[[^\]]*build-dependencies[^\]]*\]\s*$)", body):
             warnings.append("Rejected Cargo.toml with a build script or build dependencies.")
+            continue
+        if path in {"settings.gradle.kts", "build.gradle.kts"} and not _gradle_manifest_is_declarative(body):
+            warnings.append(f"Rejected non-declarative Gradle manifest: {path}; only a restricted static dependency DSL is allowed.")
             continue
         if redact_payload({"content": body})["content"] != body:
             warnings.append(f"Rejected a target manifest containing recognizable secret material: {path}")
