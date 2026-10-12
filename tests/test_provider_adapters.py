@@ -121,7 +121,7 @@ class ProviderAdapterTests(unittest.TestCase):
         self.assertEqual(payload["model"], "gpt-test")
         self.assertEqual(payload["max_completion_tokens"], 8192)
         self.assertEqual(payload["response_format"], {"type": "json_object"})
-        self.assertEqual(result.structured, {"answer": 42})
+        self.assertEqual(result.structured_data, {"answer": 42})
 
     def test_anthropic_messages_request_and_response_contract(self):
         response = BytesIO(b'{"stop_reason":"end_turn","content":[{"type":"text","text":"migration plan"}]}')
@@ -148,7 +148,7 @@ class ProviderAdapterTests(unittest.TestCase):
         self.assertEqual(request.get_header("X-goog-api-key"), "test-key")
         self.assertEqual(payload["generationConfig"]["responseMimeType"], "application/json")
         self.assertEqual(payload["generationConfig"]["maxOutputTokens"], 8192)
-        self.assertEqual(result.structured, {"ok": True})
+        self.assertEqual(result.structured_data, {"ok": True})
 
     def test_openai_truncated_response_is_rejected(self):
         response = BytesIO(b'{"choices":[{"finish_reason":"length","message":{"content":"partial"}}]}')
