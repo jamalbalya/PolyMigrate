@@ -110,6 +110,63 @@ class PythonToRubyTranslatorTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "3\n2\n1\n")
 
+    def test_range_loop_assignments_update_existing_variables_safely(self):
+        generated = PythonToRubyTargetAdapter().generate(
+            project_for(
+                "counter = 0\n"
+                "for i in range(3):\n    counter = counter + 1\n"
+                "total = 0\n"
+                "for j in range(3):\n    total = total + j\n"
+                "print(counter, total)\n"
+            ), {}
+        )[0].content
+        self.assertIn("counter = (counter + 1)", generated)
+        self.assertIn("total = (total + j)", generated)
+
+    def test_range_loop_assignments_reject_unsafe_cases(self):
+        cases = (
+            ("for i in range(3):\n    i = i + 1\n", "cannot reassign the loop variable"),
+            ("for i in range(3):\n    value = 1\n", "must target existing variables"),
+            ("value = 1\nfor i in range(3):\n    value = 'text'\nprint(value)\n", "must preserve the variable type"),
+            ("limit = 3\nfor i in range(limit):\n    limit = limit - 1\nprint(limit)\n", "variables used to compute range bounds"),
+            ("value = 2147483646\nfor i in range(2):\n    value = value + 1\nprint(value)\n", "signed 32-bit range"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                PythonToRubyTargetAdapter().generate(project_for(source), {})
+
+    def test_zero_iteration_loop_preserves_state_and_skips_unreachable_assignments(self):
+        generated = PythonToRubyTargetAdapter().generate(
+            project_for(
+                "value = 2147483647\n"
+                "for i in range(0):\n    value = value + 1\n"
+                "print(value)\n"
+            ), {}
+        )[0].content
+        self.assertNotIn("while i", generated)
+        self.assertIn("value = 2147483647", generated)
+
+    def test_generated_ruby_loop_assignments_match_python_output(self):
+        ruby = shutil.which("ruby")
+        if ruby is None:
+            self.skipTest("Ruby CLI is not installed in this test environment")
+        source = (
+            "counter = 0\n"
+            "for i in range(3):\n    counter = counter + 1\n"
+            "total = 0\n"
+            "for j in range(3):\n    total = total + j\n"
+            "print(counter, total)\n"
+        )
+        generated = PythonToRubyTargetAdapter().generate(project_for(source), {})[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / generated.relative_path
+            path.write_text(generated.content, encoding="utf-8")
+            lint = subprocess.run([ruby, "-c", str(path)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(lint.returncode, 0, lint.stderr + lint.stdout)
+            run = subprocess.run([ruby, str(path)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "3 3\n")
+
     def test_zero_iteration_range_does_not_define_loop_variable(self):
         with self.assertRaisesRegex(UnsupportedPythonSyntax, "used before assignment"):
             PythonToRubyTargetAdapter().generate(
