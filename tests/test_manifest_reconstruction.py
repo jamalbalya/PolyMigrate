@@ -112,7 +112,7 @@ class ManifestReconstructionTests(unittest.TestCase):
         self.assertTrue(any("unapproved" in warning for warning in warnings))
         self.assertTrue(any("package.json" in warning for warning in warnings))
 
-    def test_rejects_pyproject_custom_build_system_and_cargo_build_dependencies(self):
+    def test_rejects_pyproject_build_system_and_cargo_build_dependencies(self):
         cases = (
             (
                 "python", "pyproject.toml",
@@ -122,6 +122,11 @@ class ManifestReconstructionTests(unittest.TestCase):
             (
                 "rust", "Cargo.toml",
                 '[package]\nname = "demo"\nversion = "0.1.0"\n\n[build-dependencies]\ncc = "1"\n',
+                "build script or build dependencies",
+            ),
+            (
+                "rust", "Cargo.toml",
+                '[package]\nname = "demo"\nversion = "0.1.0"\n\n[target.\'cfg(unix)\'.build-dependencies]\ncc = "1"\n',
                 "build script or build dependencies",
             ),
         )

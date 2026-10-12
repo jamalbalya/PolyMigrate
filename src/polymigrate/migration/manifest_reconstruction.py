@@ -120,7 +120,7 @@ def reconstruct_target_manifests(
         if path == "pyproject.toml" and re.search(r"(?m)^\s*\[build-system\]\s*$", body):
             warnings.append("Rejected pyproject.toml with a build-system section because build backends can execute code.")
             continue
-        if path == "Cargo.toml" and re.search(r"(?im)^\s*(?:build\s*=|\[build-dependencies\])", body):
+        if path == "Cargo.toml" and re.search(r"(?im)^\s*(?:build\s*=|\[[^\]]*build-dependencies[^\]]*\]\s*$)", body):
             warnings.append("Rejected Cargo.toml with a build script or build dependencies.")
             continue
         if redact_payload({"content": body})["content"] != body:
