@@ -115,5 +115,52 @@ class CrossFamilyLLMRouteEquivalenceTests(unittest.TestCase):
         self.assertEqual(original.stdout, generated.stdout)
 
 
+    @unittest.skipUnless(shutil.which("node") and shutil.which("go"), "Node.js and Go are required")
+    def test_javascript_to_go_fixture_preserves_stdout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, target = self._migrate(
+                root, "javascript", "go",
+                "console.log(42);\\n",
+                'package main\\nimport "fmt"\\nfunc main() { fmt.Println(42) }\\n',
+            )
+            original = subprocess.run(["node", str(source)], capture_output=True, text=True, timeout=30)
+            env = dict(os.environ, GO111MODULE="off", GOTOOLCHAIN="local")
+            generated = subprocess.run(["go", "run", str(target)], capture_output=True, text=True, env=env, timeout=60)
+        self.assertEqual(original.returncode, 0, original.stderr)
+        self.assertEqual(generated.returncode, 0, generated.stderr)
+        self.assertEqual(original.stdout, generated.stdout)
+
+    @unittest.skipUnless(shutil.which("dotnet") and shutil.which("node"), ".NET SDK and Node.js are required")
+    def test_csharp_to_javascript_fixture_preserves_stdout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, target = self._migrate(
+                root, "csharp", "javascript",
+                'using System;\\nclass Program { static void Main() { Console.WriteLine(42); } }\\n',
+                "console.log(42);\\n",
+            )
+            source_project = root / "source" / "Original.csproj"
+            source_project.write_text(
+                '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType>'
+                '<TargetFramework>net8.0</TargetFramework><ImplicitUsings>disable</ImplicitUsings>'
+                '<Nullable>enable</Nullable></PropertyGroup></Project>\\n',
+                encoding="utf-8",
+            )
+            original_build = subprocess.run(
+                ["dotnet", "build", str(source_project), "--nologo", "--verbosity", "quiet"],
+                capture_output=True, text=True, timeout=120,
+            )
+            self.assertEqual(original_build.returncode, 0, original_build.stdout + original_build.stderr)
+            original = subprocess.run(
+                ["dotnet", str(root / "source" / "bin" / "Debug" / "net8.0" / "Original.dll")],
+                capture_output=True, text=True, timeout=30,
+            )
+            generated = subprocess.run(["node", str(target)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(original.returncode, 0, original.stderr)
+        self.assertEqual(generated.returncode, 0, generated.stderr)
+        self.assertEqual(original.stdout, generated.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
