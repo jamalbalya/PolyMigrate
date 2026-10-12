@@ -92,6 +92,47 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "positive 3\nmatch\nempty\nenabled\n")
 
+    def test_bounded_range_loop_generation_and_fail_closed_cases(self):
+        code = self._translate("for i in range(5, 0, -2):\\n    print(i)\\n")
+        self.assertIn("int32_t i = 5;", code)
+        self.assertIn("while (i > 0)", code)
+        self.assertIn("i += -2;", code)
+        self.assertIn("i = 1;", code)
+        cases = (
+            ("for i in range(2):\\n    i = 1\\n", "loop bodies may contain only print"),
+            ("for i in range(2):\\n    print(i)\\nelse:\\n    print(0)\\n", "for/else"),
+            ("for i in range(3, 1, 0):\\n    print(i)\\n", "step cannot be zero"),
+            ("for i in range(10001):\\n    print(i)\\n", "limited to 10000"),
+            ("for i in range(0):\\n    print(i)\\nprint(i)\\n", "used before assignment"),
+            ("range = 3\\nfor i in range(2):\\n    print(i)\\n", "conflicts with a supported C builtin"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
+    @unittest.skipUnless(shutil.which("gcc"), "GCC is required for C runtime equivalence")
+    def test_compiled_c_range_loops_match_python_fixture(self):
+        source = (
+            "for i in range(3):\\n    print(i)\\n"
+            "print(i)\\n"
+            "for j in range(5, 0, -2):\\n    print(j)\\n"
+        )
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "main.c"
+            executable = root / "program"
+            source_path.write_text(code, encoding="utf-8")
+            compile_result = subprocess.run(
+                [shutil.which("gcc"), "-std=c11", "-Wall", "-Wextra", "-Werror",
+                 str(source_path), "-o", str(executable)],
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(compile_result.returncode, 0, compile_result.stdout + compile_result.stderr)
+            run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "0\\n1\\n2\\n2\\n5\\n3\\n1\\n")
+
     @unittest.skipUnless(shutil.which("gcc"), "GCC is required for C runtime equivalence")
     def test_compiled_c_output_matches_python_fixture(self):
         source = (
