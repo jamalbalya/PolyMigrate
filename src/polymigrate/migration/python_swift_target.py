@@ -570,11 +570,32 @@ class PythonToSwiftTargetAdapter:
                         self._bool_values.pop(name, None)
             elif isinstance(node, ast.For):
                 loop_name = node.target.id if isinstance(node.target, ast.Name) else None
-                if loop_name and any(
-                    isinstance(child, ast.Name) and child.id == loop_name and isinstance(child.ctx, ast.Load)
-                    for following in tree.body[node_index + 1:] for child in ast.walk(following)
-                ):
-                    raise UnsupportedPythonSyntax("Use of a Swift range-loop variable after its loop is not supported")
+                if loop_name:
+                    for following in tree.body[node_index + 1:]:
+                        if (isinstance(following, ast.For) and isinstance(following.target, ast.Name)
+                                and following.target.id == loop_name):
+                            used_in_iterator = any(
+                                isinstance(child, ast.Name) and child.id == loop_name and isinstance(child.ctx, ast.Load)
+                                for child in ast.walk(following.iter)
+                            )
+                            if used_in_iterator:
+                                raise UnsupportedPythonSyntax("Use of a Swift range-loop variable after its loop is not supported")
+                            break
+                        if isinstance(following, ast.Assign) and any(
+                            isinstance(target, ast.Name) and target.id == loop_name for target in following.targets
+                        ):
+                            used_in_value = any(
+                                isinstance(child, ast.Name) and child.id == loop_name and isinstance(child.ctx, ast.Load)
+                                for child in ast.walk(following.value)
+                            )
+                            if used_in_value:
+                                raise UnsupportedPythonSyntax("Use of a Swift range-loop variable after its loop is not supported")
+                            break
+                        if any(
+                            isinstance(child, ast.Name) and child.id == loop_name and isinstance(child.ctx, ast.Load)
+                            for child in ast.walk(following)
+                        ):
+                            raise UnsupportedPythonSyntax("Use of a Swift range-loop variable after its loop is not supported")
                 statements.extend(self._for_statement(node, assigned))
             elif isinstance(node, ast.If):
                 statements.extend(self._if_statement(node, assigned))
