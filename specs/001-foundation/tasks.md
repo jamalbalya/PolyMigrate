@@ -192,3 +192,9 @@
 - [x] T141 Extend JavaScript-to-Python translation to flat `if`/`else if`/`else` chains with print-only branch bodies; preserve branch ordering, reject nested control flow and unsupported expressions, and verify generated Python syntax and runtime output.
 
 - [x] T142 Support JavaScript `&&`, `||`, and unary `!` in scalar conditions with JavaScript-compatible short-circuit precedence and scalar truthiness; validate both true and false branch outcomes against generated Python runtime output.
+
+- [x] T143 Add a constrained deterministic Go-to-Python translator for a single root `main.go`, with CLI integration, scalar type checks, signed-64-bit arithmetic guards, and syntax/runtime regression tests.
+
+- [x] T144 Extend Go-to-Python translation with boolean `if`/`else` and statically bounded C-style `for` loops; reject unsupported/nested control flow, unsafe bounds, arithmetic on dynamic loop variables, and scope leaks.
+
+- [x] T145 Add constrained TypeScript-to-Python deterministic migration for a single root `main.ts`, validate `number`/`string`/`boolean` annotations, reject unsupported module/type syntax, and add CLI plus runtime regression tests.
