@@ -92,7 +92,7 @@ func main() {
     def test_rejects_unsafe_go_control_flow_and_loop_shapes(self):
         from polymigrate.migration.go_python_target import _Parser
         unsupported = (
-            'package main\nfunc main() { count := 1; if count { fmt.Println("bad") } }\n',
+            'package main\nfunc main() {\n    count := 1\n    if count { fmt.Println("bad") }\n}\n',
             'package main\nimport "fmt"\nfunc main() { for i := 0; i < 10001; i++ { fmt.Println(i) } }\n',
             'package main\nimport "fmt"\nfunc main() { for i := 0; i < 3; i-- { fmt.Println(i) } }\n',
             'package main\nimport "fmt"\nfunc main() { for i := 0; i < 3; i++ { fmt.Println(i + 1) } }\n',
