@@ -24,7 +24,7 @@ class DeterministicPythonCSharpCLITests(unittest.TestCase):
                  redirect_stdout(stdout), redirect_stderr(stderr):
                 code = main([
                     "migrate", "--source", str(source), "--from", "python",
-                    "--to", "csharp", "--output", str(output), "--strategy", "deterministic",
+                    "--to", "javascript", "--output", str(output), "--strategy", "deterministic",
                 ])
             provider_setup.assert_not_called()
             self.assertEqual(code, 3, stderr.getvalue())
@@ -43,12 +43,12 @@ class DeterministicPythonCSharpCLITests(unittest.TestCase):
             root = Path(tmp)
             source = root / "source"
             source.mkdir()
-            (source / "main.go").write_text("package main\n", encoding="utf-8")
+            (source / "main.cs").write_text("public class Program {}\n", encoding="utf-8")
             output = root / "out"
             stderr = StringIO()
             with redirect_stderr(stderr):
                 code = main([
-                    "migrate", "--source", str(source), "--from", "go",
+                    "migrate", "--source", str(source), "--from", "csharp",
                     "--to", "csharp", "--output", str(output), "--strategy", "deterministic",
                 ])
             self.assertEqual(code, 2)
