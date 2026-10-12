@@ -322,8 +322,13 @@ class PythonToSwiftTargetAdapter:
             self._bool_values = base_bools
 
         assert rendered_body is not None
+        loop_variable_used = any(
+            isinstance(child, ast.Name) and child.id == name and isinstance(child.ctx, ast.Load)
+            for statement in node.body for child in ast.walk(statement)
+        )
+        swift_loop_name = name if loop_variable_used else "_"
         return [
-            f"for {name} in stride(from: Int32({start_expression}), to: Int32({stop_expression}), by: Int({step_expression})) {{",
+            f"for {swift_loop_name} in stride(from: Int32({start_expression}), to: Int32({stop_expression}), by: Int({step_expression})) {{",
             *rendered_body,
             "}",
         ]

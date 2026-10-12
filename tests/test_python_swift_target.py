@@ -86,6 +86,7 @@ class PythonToSwiftTargetAdapterTests(unittest.TestCase):
         )
         self.assertIn("var counter: Int32 = 0", code)
         self.assertIn("counter = (counter + 1)", code)
+        self.assertIn("for _ in stride(from: Int32(0), to: Int32(3), by: Int(1)) {", code)
 
         cases = (
             ("x = 2147483646\nfor i in range(2):\n    x = x + 1\n", "signed Int32 range"),
