@@ -27,6 +27,7 @@ from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
 from polymigrate.migration.python_go_target import PythonToGoTargetAdapter
 from polymigrate.migration.python_javascript_target import PythonToJavaScriptTargetAdapter
 from polymigrate.migration.javascript_python_target import JavaScriptToPythonTargetAdapter
+from polymigrate.migration.go_python_target import GoToPythonTargetAdapter
 from polymigrate.migration.python_typescript_target import PythonToTypeScriptTargetAdapter
 from polymigrate.migration.python_java_target import PythonToJavaTargetAdapter
 from polymigrate.migration.python_kotlin_target import PythonToKotlinTargetAdapter
@@ -442,10 +443,10 @@ def _derive_final_status(
 def _run_deterministic_migration(args, source_language, target_language) -> int:
     """Run an offline deterministic Python-to-target subset and local checks."""
     pair = (source_language.id, target_language.id)
-    if pair not in {("javascript", "python"), ("python", "go"), ("python", "javascript"), ("python", "typescript"), ("python", "kotlin"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp"), ("python", "c"), ("python", "swift")}:
+    if pair not in {("go", "python"), ("javascript", "python"), ("python", "go"), ("python", "javascript"), ("python", "typescript"), ("python", "kotlin"), ("python", "rust"), ("python", "java"), ("python", "php"), ("python", "ruby"), ("python", "cpp"), ("python", "csharp"), ("python", "c"), ("python", "swift")}:
         raise ValueError(
             "The deterministic strategy currently supports --from python --to go, javascript, typescript, kotlin, rust, java, php, ruby, cpp, csharp, c, or swift, "
-            "and --from javascript --to python"
+            "--from javascript --to python, and --from go --to python"
         )
 
     context = {}
@@ -468,6 +469,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
     adapters.register_source(source_adapter)
     if pair == ("javascript", "python"):
         adapters.register_target(JavaScriptToPythonTargetAdapter())
+    elif pair == ("go", "python"):
+        adapters.register_target(GoToPythonTargetAdapter())
     elif target_language.id == "go":
         adapters.register_target(PythonToGoTargetAdapter())
     elif target_language.id == "javascript":
