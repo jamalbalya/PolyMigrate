@@ -112,7 +112,7 @@ if (count > 3) { console.log("large"); } else if (count === 2) { console.log("tw
                 [sys.executable, str(target)], capture_output=True, text=True, check=False,
             )
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(completed.stdout, "two\\n")
+        self.assertEqual(completed.stdout, "two\n")
         self.assertIn("elif ", generated)
 
     def test_rejects_assignment_nested_control_flow_and_string_ordering_in_branches(self):
