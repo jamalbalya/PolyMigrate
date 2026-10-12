@@ -151,7 +151,7 @@ class ManifestReconstructionTests(unittest.TestCase):
             'tasks.register("exfiltrate") { doLast { println("run") } }',
             'apply(from = "untrusted.gradle.kts")',
             'buildscript { repositories { mavenCentral() } }',
-            'dependencies { implementation("$\\{project.property(\"payload\")}") }',
+            'dependencies { implementation("$payload") }',
         )
         for body in malicious:
             provider = ManifestFixtureProvider({
@@ -169,13 +169,15 @@ class ManifestReconstructionTests(unittest.TestCase):
                 self.assertTrue(any("non-declarative Gradle manifest" in warning for warning in warnings), warnings)
 
     def test_accepts_only_restricted_static_gradle_dsl(self):
+        settings = "\\n".join(['rootProject.name = "demo"', ""])
+        build = "\\n".join([
+            "repositories {", "    mavenCentral()", "}",
+            "dependencies {", '    implementation("org.example:lib:1.0")', "}", "",
+        ])
         provider = ManifestFixtureProvider({
             "files": [
-                {"path": "settings.gradle.kts", "content": 'rootProject.name = "demo"\\n'},
-                {"path": "build.gradle.kts", "content": (
-                    'repositories {\\n    mavenCentral()\\n}\\n'
-                    'dependencies {\\n    implementation("org.example:lib:1.0")\\n}\\n'
-                )},
+                {"path": "settings.gradle.kts", "content": settings},
+                {"path": "build.gradle.kts", "content": build},
             ],
             "warnings": [],
         })
