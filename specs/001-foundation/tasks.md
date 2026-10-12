@@ -188,3 +188,5 @@
 - [x] T139 Add a fail-closed deterministic JavaScript-to-Python scalar subset with CLI integration, Python syntax/runtime smoke validation, and regression tests; full T023 parser/generator coverage remains open.
 
 - [x] T140 Extend the constrained JavaScript-to-Python subset with print-only `if`/`else` branches and bounded integer `for` loops; reject unsupported control flow, unsafe bounds, nested branch/loop bodies, and loop-variable scope leaks, with Python syntax/runtime equivalence fixtures and dedicated CI validation.
+
+- [x] T141 Extend JavaScript-to-Python translation to flat `if`/`else if`/`else` chains with print-only branch bodies; preserve branch ordering, reject nested control flow and unsupported expressions, and verify generated Python syntax and runtime output.
