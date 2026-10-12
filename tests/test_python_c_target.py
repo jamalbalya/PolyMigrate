@@ -92,6 +92,47 @@ class PythonToCTargetAdapterTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(run.stdout, "positive 3\nmatch\nempty\nenabled\n")
 
+    def test_bounded_while_loop_generation_and_fail_closed_cases(self):
+        code = self._translate(
+            "count = 3\\nwhile count > 0:\\n    count -= 1\\n    print(count)\\nprint(count)\\n"
+        )
+        self.assertIn("while ((count > 0))", code)
+        self.assertIn("count -= 1;", code)
+        cases = (
+            ("count = 1\\nwhile count > 0:\\n    print(count)\\n", "does not update its condition variables"),
+            ("count = 1\\nwhile count > 0:\\n    count = count\\n", "made no progress"),
+            ("count = 2147483647\\nwhile count > 0:\\n    count += 1\\n", "signed 32-bit C range"),
+            ("while True:\\n    print(1)\\n", "one integer comparison"),
+            ("count = 1\\nwhile count > 0:\\n    other = count - 1\\n", "existing integer variables"),
+            ("count = 1\\nwhile count > 0:\\n    count = 'bad'\\n", "existing integer variables"),
+            ("count = 1\\nwhile count > 0:\\n    count -= 1\\nelse:\\n    print(count)\\n", "while/else"),
+        )
+        for source, message in cases:
+            with self.subTest(source=source), self.assertRaisesRegex(UnsupportedPythonSyntax, message):
+                self._translate(source)
+
+    @unittest.skipUnless(shutil.which("gcc"), "GCC is required for C runtime equivalence")
+    def test_compiled_c_while_loop_matches_python_fixture(self):
+        source = (
+            "count = 3\\nwhile count > 0:\\n    count -= 1\\n    print(count)\\n"
+            "print(count)\\n"
+        )
+        code = self._translate(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "main.c"
+            executable = root / "program"
+            source_path.write_text(code, encoding="utf-8")
+            compile_result = subprocess.run(
+                [shutil.which("gcc"), "-std=c11", "-Wall", "-Wextra", "-Werror",
+                 str(source_path), "-o", str(executable)],
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(compile_result.returncode, 0, compile_result.stdout + compile_result.stderr)
+            run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "2\\n1\\n0\\n0\\n")
+
     def test_bounded_range_loop_generation_and_fail_closed_cases(self):
         code = self._translate("for i in range(5, 0, -2):\n    print(i)\n")
         self.assertIn("int32_t i = 5;", code)
