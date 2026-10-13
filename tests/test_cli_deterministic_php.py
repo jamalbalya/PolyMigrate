@@ -44,7 +44,12 @@ class DeterministicPythonPHPCLITests(unittest.TestCase):
             root = Path(tmp)
             source = root / "source"
             source.mkdir()
-            (source / "main.go").write_text("package main\n", encoding="utf-8")
+            (source / "main.go").write_text("""package main
+import "fmt"
+func main() {
+    fmt.Println(7)
+}
+""", encoding="utf-8")
             output = root / "out"
             stderr = StringIO()
             with redirect_stderr(stderr):
