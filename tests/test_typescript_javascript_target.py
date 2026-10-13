@@ -47,8 +47,21 @@ class TypeScriptToJavaScriptTargetTests(unittest.TestCase):
     def test_arithmetic_stdout_matches(self):
         self._compare_stdout("const count: number = 6;\nconsole.log(count * 7);\n")
 
-    def test_multi_argument_and_boolean_output_matches(self):
-        self._compare_stdout('const enabled: boolean = true;\nconsole.log("enabled=", enabled, false);\n')
+    def test_boolean_literals_are_rejected_to_prevent_output_drift(self):
+        from polymigrate.migration.javascript_python_target import UnsupportedJavaScriptSyntax
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.ts").write_text('const enabled: boolean = true;\nconsole.log("enabled=", enabled, false);\n', encoding="utf-8")
+            adapters = AdapterRegistry()
+            adapters.register_source(InventorySourceAdapter("typescript", (".ts",)))
+            adapters.register_target(TypeScriptToJavaScriptTargetAdapter())
+            with self.assertRaisesRegex(UnsupportedJavaScriptSyntax, "Boolean literals are excluded"):
+                MigrationEngine(adapters).execute(source, "typescript", "javascript", root / "generated")
+
+    def test_multi_argument_output_matches(self):
+        self._compare_stdout('console.log("enabled=", "yes", 42);\n')
 
     def test_if_else_and_bounded_loop_output_matches(self):
         self._compare_stdout(
