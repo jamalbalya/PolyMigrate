@@ -30,6 +30,7 @@ Passing level 1 must never be described as passing levels 2 or 3. Live provider 
 - JavaScript → Python
 - Python → TypeScript
 - TypeScript → Python
+- TypeScript → JavaScript (composed bounded TypeScript → Python → JavaScript subset)
 - Python → Java
 - Python → Kotlin
 - Python → C
