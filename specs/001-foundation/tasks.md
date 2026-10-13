@@ -217,4 +217,6 @@
 
 - [x] T154 Add a fail-closed deterministic TypeScript-to-JavaScript adapter by composing the validated TypeScript-to-Python and Python-to-JavaScript subsets, normalize only generated multi-argument print expansion, add CLI integration and runtime comparison against compiled TypeScript for arithmetic, booleans, multi-argument output, branches, and bounded loops; document the root-main.ts single-file boundary. T023 remains open.
 
-- [ ] T156 Add a fail-closed deterministic Go-to-PHP adapter by composing Go-to-Python and Python-to-PHP, normalize only the generated print expansion, reject booleans when output casing would drift, and add Go/PHP runtime-equivalence plus CLI tests in CI. This is a single-file subset and does not establish full project migration.
+- [x] T156 Add a fail-closed deterministic Go-to-PHP adapter by composing Go-to-Python and Python-to-PHP, normalize only the generated print expansion, reject booleans when output casing would drift, and add Go/PHP runtime-equivalence plus CLI tests in CI. This is a single-file subset and does not establish full project migration.
+
+- [ ] T155 Add a fail-closed deterministic TypeScript-to-Go adapter composed from the checked TypeScript-to-Python and Python-to-Go subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add strict TypeScript/Node/Go runtime-equivalence and CLI tests. This is a single-file subset; full project migration remains open.
