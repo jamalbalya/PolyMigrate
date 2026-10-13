@@ -205,7 +205,7 @@ jobs:
       - name: Install package
         run: python -m pip install --editable .
       - name: Run strict TypeScript compile and runtime fixtures
-        run: python -m unittest tests.test_python_typescript_target tests.test_cli_deterministic_typescript tests.test_go_typescript_target tests.test_cli_deterministic_go_typescript tests.test_javascript_typescript_target tests.test_cli_deterministic_javascript_typescript -v
+        run: python -m unittest tests.test_python_typescript_target tests.test_cli_deterministic_typescript tests.test_go_typescript_target tests.test_cli_deterministic_go_typescript tests.test_javascript_typescript_target tests.test_cli_deterministic_javascript_typescript tests.test_typescript_javascript_target tests.test_cli_deterministic_typescript_javascript -v
 
   swift-deterministic-e2e:
     needs: test
