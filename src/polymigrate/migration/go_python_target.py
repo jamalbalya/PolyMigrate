@@ -82,8 +82,11 @@ class _Parser:
         return name
 
     def _statement_end(self) -> None:
+        # An explicit semicolon is itself a complete Go statement boundary;
+        # the next statement may legally begin on the same physical line.
         if self._peek(";"):
             self.index += 1
+            return
         if self.tokens[self.index][0] not in {"NEWLINE", "EOF"} and not self._peek("}"):
             raise UnsupportedGoSyntax(
                 f"Expected a statement boundary, found {self.tokens[self.index][1]!r}"
