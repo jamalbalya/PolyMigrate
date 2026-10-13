@@ -1,0 +1,78 @@
+"""Runtime-equivalence tests for the bounded TypeScript-to-JavaScript adapter."""
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+from polymigrate.migration.adapters import InventorySourceAdapter
+from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine
+from polymigrate.migration.typescript_javascript_target import TypeScriptToJavaScriptTargetAdapter
+
+
+class TypeScriptToJavaScriptTargetTests(unittest.TestCase):
+    def _compare_stdout(self, source_text: str):
+        tsc, node = shutil.which("tsc"), shutil.which("node")
+        if not tsc or not node:
+            self.skipTest("TypeScript compiler and Node.js are required")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.ts").write_text(source_text, encoding="utf-8")
+            original_build = root / "original-build"
+            compile_original = subprocess.run(
+                [tsc, "--strict", "--target", "ES2020", "--module", "commonjs",
+                 "--outDir", str(original_build), str(source / "main.ts")],
+                capture_output=True, text=True, timeout=120,
+            )
+            self.assertEqual(compile_original.returncode, 0, compile_original.stdout + compile_original.stderr)
+            original = subprocess.run(
+                [node, str(original_build / "main.js")], capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(original.returncode, 0, original.stderr)
+
+            adapters = AdapterRegistry()
+            adapters.register_source(InventorySourceAdapter("typescript", (".ts",)))
+            adapters.register_target(TypeScriptToJavaScriptTargetAdapter())
+            output = root / "generated"
+            result = MigrationEngine(adapters).execute(source, "typescript", "javascript", output)
+            self.assertEqual(result.status, "GENERATED_UNVERIFIED")
+            generated = output / "main.js"
+            self.assertTrue(generated.is_file())
+            target = subprocess.run([node, str(generated)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(target.returncode, 0, target.stderr)
+        self.assertEqual(original.stdout, target.stdout)
+
+    def test_arithmetic_stdout_matches(self):
+        self._compare_stdout("const count: number = 6;\nconsole.log(count * 7);\n")
+
+    def test_multi_argument_and_boolean_output_matches(self):
+        self._compare_stdout('const enabled: boolean = true;\nconsole.log("enabled=", enabled, false);\n')
+
+    def test_if_else_and_bounded_loop_output_matches(self):
+        self._compare_stdout(
+            "const count: number = 2;\n"
+            'if (count > 1) { console.log("many"); } else { console.log("few"); }\n'
+            "for (let i = 0; i < 3; i++) { console.log(i); }\n"
+        )
+
+    def test_rejects_multiple_files(self):
+        from polymigrate.migration.pipeline import SourceProject, SourceUnit
+        from polymigrate.migration.javascript_python_target import UnsupportedJavaScriptSyntax
+        import hashlib
+        text = "console.log(1);\n"
+        project = SourceProject(
+            Path("."),
+            "typescript",
+            (
+                SourceUnit("main.ts", text, hashlib.sha256(text.encode()).hexdigest()),
+                SourceUnit("extra.ts", text, hashlib.sha256(text.encode()).hexdigest()),
+            ),
+        )
+        with self.assertRaisesRegex(UnsupportedJavaScriptSyntax, "root main.ts"):
+            TypeScriptToJavaScriptTargetAdapter().generate(project, {})
+
+
+if __name__ == "__main__":
+    unittest.main()
