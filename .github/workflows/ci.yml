@@ -322,3 +322,23 @@ jobs:
         run: python -m pip install --editable .
       - name: Run Go-to-Rust compiler/runtime fixtures
         run: python -m unittest tests.test_go_rust_target tests.test_cli_deterministic_go_rust -v
+
+  javascript-rust-deterministic-e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install package
+        run: python -m pip install --editable .
+      - name: Run JavaScript-to-Rust compiler/runtime fixtures
+        run: python -m unittest tests.test_javascript_rust_target tests.test_cli_deterministic_javascript_rust -v
