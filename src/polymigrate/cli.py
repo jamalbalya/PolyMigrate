@@ -34,6 +34,7 @@ from polymigrate.migration.go_python_target import GoToPythonTargetAdapter
 from polymigrate.migration.go_javascript_target import GoToJavaScriptTargetAdapter
 from polymigrate.migration.go_typescript_target import GoToTypeScriptTargetAdapter
 from polymigrate.migration.go_csharp_target import GoToCSharpTargetAdapter
+from polymigrate.migration.go_php_target import GoToPHPTargetAdapter
 from polymigrate.migration.typescript_python_target import TypeScriptToPythonTargetAdapter
 from polymigrate.migration.typescript_javascript_target import TypeScriptToJavaScriptTargetAdapter
 from polymigrate.migration.python_typescript_target import PythonToTypeScriptTargetAdapter
@@ -493,6 +494,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         adapters.register_target(GoToTypeScriptTargetAdapter())
     elif pair == ("go", "csharp"):
         adapters.register_target(GoToCSharpTargetAdapter())
+    elif pair == ("go", "php"):
+        adapters.register_target(GoToPHPTargetAdapter())
     elif pair == ("typescript", "javascript"):
         adapters.register_target(TypeScriptToJavaScriptTargetAdapter())
     elif pair == ("typescript", "python"):
