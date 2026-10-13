@@ -45,6 +45,23 @@ func main() {
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(completed.stdout, "total 42\ntrue\n")
 
+    def test_explicit_semicolon_separates_same_line_statements(self):
+        from polymigrate.migration.go_python_target import _Parser
+        source = """package main
+import "fmt"
+func main() { count := 6; fmt.Println(count * 7) }
+"""
+        generated = _Parser(source).parse()
+        ast.parse(generated)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "main.py"
+            target.write_text(generated, encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(target)], capture_output=True, text=True, check=False,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "42\n")
+
     def test_rejects_unsupported_syntax_and_invalid_go_shapes(self):
         from polymigrate.migration.go_python_target import _Parser
         unsupported = (
