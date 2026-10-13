@@ -47,7 +47,10 @@ func main() {
 
     def test_explicit_semicolon_separates_same_line_statements(self):
         from polymigrate.migration.go_python_target import _Parser
-        source = 'package main\\nimport "fmt"\\nfunc main() { count := 6; fmt.Println(count * 7) }\\n'
+        source = """package main
+import "fmt"
+func main() { count := 6; fmt.Println(count * 7) }
+"""
         generated = _Parser(source).parse()
         ast.parse(generated)
         with tempfile.TemporaryDirectory() as tmp:
