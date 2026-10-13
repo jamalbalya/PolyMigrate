@@ -57,6 +57,7 @@ The offline deterministic strategy currently supports these deliberately narrow 
 - Go → Python (a constrained single-file `main.go` subset)
 - Go → JavaScript (a composed single-file subset; requires syntax accepted by both Go → Python and Python → JavaScript translators)
 - Go → TypeScript (a composed single-file subset; requires syntax accepted by both Go → Python and Python → TypeScript translators)
+- Go → C# (a composed single-file subset; requires syntax accepted by both Go → Python and Python → C# translators)
 - JavaScript → Go (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → Go translators)
 - JavaScript → C# (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → C# translators)
 - JavaScript → Python
@@ -85,6 +86,8 @@ The Go → Python subset requires a single root `main.go` containing `package ma
 The Go → JavaScript subset composes the bounded Go → Python and Python → JavaScript translators for one source file. It supports the safe intersection of scalar declarations, integer/string expressions, `fmt.Println()` output, supported `if`/`else` comparisons, and bounded print-only loops. Boolean literals are rejected because Go and JavaScript print them with different casing; unsupported syntax and multi-file projects are rejected rather than guessed. Node.js and Go runtime fixtures compare stdout; this does not establish general Go/JavaScript project migration.
 
 The Go → TypeScript subset composes the bounded Go → Python and Python → TypeScript translators for one source file. It supports the same narrow intersection of scalar declarations, integer/string expressions, `fmt.Println()` output, supported `if`/`else` comparisons, and bounded print-only loops. Boolean literals are intentionally excluded from this composition; unsupported syntax and multi-file projects are rejected rather than guessed. Dedicated CI compiles the generated `.ts` with strict TypeScript settings and compares runtime output with the original Go program; this does not establish general Go/TypeScript project migration.
+
+The Go → C# subset composes the bounded Go → Python and Python → C# translators for one source file. It supports the safe intersection of scalar declarations, integer/string expressions, `fmt.Println()` output, supported `if`/`else` comparisons, and bounded print-only loops. Boolean literals are intentionally excluded; unsupported syntax and multi-file projects are rejected rather than guessed. Dedicated CI compiles the generated .NET project and compares runtime output with the original Go program; this does not establish general Go/C# project migration.
 
 The JavaScript → Go subset composes the bounded JavaScript → Python and Python → Go translators for one source file. It supports the safe intersection of scalar declarations, integer/string expressions, and `console.log()` output, including multiple scalar output arguments. Boolean literals are rejected because JavaScript and Go print them with different casing; unsupported syntax and multi-file projects are rejected rather than guessed. The deterministic runtime fixtures compare Node.js output with `go run`; this does not establish general JavaScript/Go project migration.
 
