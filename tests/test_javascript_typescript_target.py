@@ -52,8 +52,17 @@ class JavaScriptToTypeScriptTargetTests(unittest.TestCase):
     def test_multiple_arguments_stdout_matches(self):
         self._compare_stdout('console.log("value=", 42);\n')
 
-    def test_boolean_stdout_matches(self):
-        self._compare_stdout("console.log(true, false);\n")
+    def test_boolean_literals_are_rejected_to_prevent_output_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.js").write_text("console.log(true, false);\n", encoding="utf-8")
+            adapters = AdapterRegistry()
+            adapters.register_source(InventorySourceAdapter("javascript", (".js",)))
+            adapters.register_target(JavaScriptToTypeScriptTargetAdapter())
+            with self.assertRaisesRegex(ValueError, "Boolean literals are excluded"):
+                MigrationEngine(adapters).execute(source, "javascript", "typescript", root / "generated")
 
     def test_if_else_and_bounded_loop_stdout_matches(self):
         self._compare_stdout(
