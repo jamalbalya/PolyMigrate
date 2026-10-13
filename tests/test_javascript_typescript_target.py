@@ -23,8 +23,9 @@ class JavaScriptToTypeScriptTargetTests(unittest.TestCase):
         result = MigrationEngine(adapters).execute(source, "javascript", "typescript", output)
         return result, source / "main.js", output / "main.ts"
 
-    @unittest.skipUnless(shutil.which("node") and shutil.which("tsc"), "Node.js and TypeScript compiler are required")
     def _compare_stdout(self, source_text: str):
+        if not shutil.which("node") or not shutil.which("tsc"):
+            self.skipTest("Node.js and TypeScript compiler are required")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             result, source, generated = self._migrate(source_text, root)
