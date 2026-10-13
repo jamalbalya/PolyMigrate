@@ -219,4 +219,6 @@
 
 - [x] T156 Add a fail-closed deterministic Go-to-PHP adapter by composing Go-to-Python and Python-to-PHP, normalize only the generated print expansion, reject booleans when output casing would drift, and add Go/PHP runtime-equivalence plus CLI tests in CI. This is a single-file subset and does not establish full project migration.
 
-- [ ] T155 Add a fail-closed deterministic TypeScript-to-Go adapter composed from the checked TypeScript-to-Python and Python-to-Go subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add strict TypeScript/Node/Go runtime-equivalence and CLI tests. This is a single-file subset; full project migration remains open.
+- [x] T155 Add a fail-closed deterministic TypeScript-to-Go adapter composed from the checked TypeScript-to-Python and Python-to-Go subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add strict TypeScript/Node/Go runtime-equivalence and CLI tests. This is a single-file subset; full project migration remains open.
+
+- [ ] T157 Add a fail-closed deterministic Go-to-Rust adapter composed from the checked Go-to-Python and Python-to-Rust subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add offline Go/Cargo runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
