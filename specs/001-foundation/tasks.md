@@ -226,3 +226,5 @@
 - [x] T158 Add a fail-closed deterministic JavaScript-to-Rust adapter composed from the checked JavaScript-to-Python and Python-to-Rust subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add Node/Rust runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
 
 - [ ] T159 Add a fail-closed deterministic TypeScript-to-Rust adapter composed from the checked TypeScript-to-Python and Python-to-Rust subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add strict TypeScript/Node/Rust runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
+
+- [ ] T160 Add a fail-closed deterministic TypeScript-to-C# adapter composed from the checked TypeScript-to-Python and Python-to-C# subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add strict TypeScript/Node/.NET runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
