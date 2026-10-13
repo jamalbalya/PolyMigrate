@@ -216,3 +216,6 @@
 - [ ] T153 Add a fail-closed deterministic JavaScript-to-TypeScript adapter by composing the checked JavaScript-to-Python and Python-to-TypeScript subsets, normalize only generated print expansion, add CLI integration and strict TypeScript/Node runtime-equivalence fixtures for arithmetic, multi-argument output, booleans, branches, and bounded loops; keep single-file and subset limitations explicit. T023 remains open.
 
 - [ ] T154 Add a fail-closed deterministic TypeScript-to-JavaScript adapter by composing the validated TypeScript-to-Python and Python-to-JavaScript subsets, normalize only generated multi-argument print expansion, add CLI integration and runtime comparison against compiled TypeScript for arithmetic, booleans, multi-argument output, branches, and bounded loops; document the root-main.ts single-file boundary. T023 remains open.
+
+
+- [ ] T155 Add a fail-closed deterministic TypeScript-to-Go adapter composed from the checked TypeScript-to-Python and Python-to-Go subsets; reject boolean literals to prevent observable formatting drift; add CLI coverage and strict TypeScript/Node versus Go runtime comparisons for arithmetic, multi-argument output, branches, and bounded loops. Keep the single-root-main.ts constraint explicit; T023 remains open.
