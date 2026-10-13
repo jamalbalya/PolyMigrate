@@ -43,6 +43,22 @@ class TypeScriptToGoTargetAdapter:
                 "The TypeScript-to-Python intermediate artifact is not valid Python"
             ) from None
 
+        # The TypeScript-to-Python adapter encodes console.log(a, b) as
+        # print(*[a, b]). Python-to-Go accepts positional print arguments, so
+        # normalize only that exact generated AST shape before composing.
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or node.func.id != "print":
+                continue
+            if len(node.args) != 1 or not isinstance(node.args[0], ast.Starred):
+                continue
+            expansion = node.args[0].value
+            if not isinstance(expansion, ast.ListComp) or len(expansion.generators) != 1:
+                raise UnsupportedJavaScriptSyntax("Unsupported generated print argument expansion")
+            iterable = expansion.generators[0].iter
+            if not isinstance(iterable, ast.List):
+                raise UnsupportedJavaScriptSyntax("Unsupported generated print argument expansion")
+            node.args = list(iterable.elts)
+
         # Python's bool text (True/False) differs from JavaScript's (true/false)
         # in console output. Do not allow observable drift through composition.
         if any(isinstance(node, ast.Constant) and isinstance(node.value, bool) for node in ast.walk(tree)):
