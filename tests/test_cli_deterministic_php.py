@@ -39,7 +39,7 @@ class DeterministicPythonPHPCLITests(unittest.TestCase):
             self.assertEqual(report["validation_gates"]["target_build"], "BLOCKED")
             self.assertIn("No source code is sent", report["note"])
 
-    def test_deterministic_strategy_still_rejects_unsupported_php_source_pairs(self):
+    def test_go_to_php_pair_is_supported_by_deterministic_strategy(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "source"
@@ -52,9 +52,12 @@ class DeterministicPythonPHPCLITests(unittest.TestCase):
                     "migrate", "--source", str(source), "--from", "go",
                     "--to", "php", "--output", str(output), "--strategy", "deterministic",
                 ])
-            self.assertEqual(code, 2)
-            self.assertIn("deterministic strategy currently supports", stderr.getvalue())
-            self.assertFalse(output.exists())
+            self.assertEqual(code, 3, stderr.getvalue())
+            self.assertTrue((output / "main.php").is_file())
+            report = json.loads((output / "migration-review.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["source_language"], "go")
+            self.assertEqual(report["target_language"], "php")
+            self.assertIn("Go-to-PHP", " ".join(report["warnings"]))
 
 
 if __name__ == "__main__":
