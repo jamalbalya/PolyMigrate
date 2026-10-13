@@ -42,6 +42,13 @@ class TypeScriptToJavaScriptTargetAdapter:
                 "The TypeScript-to-Python intermediate artifact is not valid Python"
             ) from None
 
+        # Python and JavaScript stringify booleans differently. Reject boolean
+        # literals rather than emitting code whose observable output differs.
+        if any(isinstance(node, ast.Constant) and isinstance(node.value, bool) for node in ast.walk(tree)):
+            raise UnsupportedJavaScriptSyntax(
+                "Boolean literals are excluded from the deterministic TypeScript-to-JavaScript subset because output formatting would differ"
+            )
+
         # Normalize only the generated print(*[...]) representation used for
         # console.log with multiple arguments.
         for node in ast.walk(tree):
