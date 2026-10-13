@@ -493,6 +493,8 @@ def _run_deterministic_migration(args, source_language, target_language) -> int:
         adapters.register_target(GoToTypeScriptTargetAdapter())
     elif pair == ("go", "csharp"):
         adapters.register_target(GoToCSharpTargetAdapter())
+    elif pair == ("typescript", "javascript"):
+        adapters.register_target(TypeScriptToJavaScriptTargetAdapter())
     elif pair == ("typescript", "python"):
         adapters.register_target(TypeScriptToPythonTargetAdapter())
     elif target_language.id == "go":
