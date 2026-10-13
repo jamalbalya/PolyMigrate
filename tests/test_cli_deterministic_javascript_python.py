@@ -51,7 +51,7 @@ class DeterministicJavaScriptPythonCLITests(unittest.TestCase):
             with redirect_stderr(stderr):
                 code = main([
                     "migrate", "--source", str(source), "--from", "javascript",
-                    "--to", "rust", "--output", str(output), "--strategy", "deterministic",
+                    "--to", "php", "--output", str(output), "--strategy", "deterministic",
                 ])
             self.assertEqual(code, 2)
             self.assertIn("deterministic strategy currently supports", stderr.getvalue())
