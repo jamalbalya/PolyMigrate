@@ -221,4 +221,6 @@
 
 - [x] T155 Add a fail-closed deterministic TypeScript-to-Go adapter composed from the checked TypeScript-to-Python and Python-to-Go subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add strict TypeScript/Node/Go runtime-equivalence and CLI tests. This is a single-file subset; full project migration remains open.
 
-- [ ] T157 Add a fail-closed deterministic Go-to-Rust adapter composed from the checked Go-to-Python and Python-to-Rust subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add offline Go/Cargo runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
+- [x] T157 Add a fail-closed deterministic Go-to-Rust adapter composed from the checked Go-to-Python and Python-to-Rust subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add offline Go/Cargo runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
+
+- [ ] T158 Add a fail-closed deterministic JavaScript-to-Rust adapter composed from the checked JavaScript-to-Python and Python-to-Rust subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add Node/Rust runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
