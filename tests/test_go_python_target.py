@@ -60,7 +60,7 @@ func main() { count := 6; fmt.Println(count * 7) }
                 [sys.executable, str(target)], capture_output=True, text=True, check=False,
             )
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(completed.stdout, "42\\n")
+        self.assertEqual(completed.stdout, "42\n")
 
     def test_rejects_unsupported_syntax_and_invalid_go_shapes(self):
         from polymigrate.migration.go_python_target import _Parser
