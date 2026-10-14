@@ -62,6 +62,8 @@ The offline deterministic strategy currently supports these deliberately narrow 
 - Go → Ruby (a composed single-file subset; requires syntax accepted by both Go → Python and Python → Ruby translators)
 - Go → C++ (a composed single-file subset; requires syntax accepted by both Go → Python and Python → C++ translators)
 - Go → C (a composed single-file subset; requires syntax accepted by both Go → Python and Python → C translators)
+- Go → Java (a composed single-file subset; requires syntax accepted by both Go → Python and Python → Java translators)
+- Go → Kotlin (a composed single-file subset; requires syntax accepted by both Go → Python and Python → Kotlin translators)
 - JavaScript → Go (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → Go translators)
 - JavaScript → C# (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → C# translators)
 - JavaScript → C (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → C translators)
@@ -120,6 +122,11 @@ The Go → Ruby subset composes the bounded Go → Python and Python → Ruby tr
 The Go → C++ subset composes the bounded Go → Python and Python → C++ translators for one root `main.go` file. It accepts only their checked intersection of scalar declarations, signed integer/string expressions, `fmt.Println()` output, supported `if`/`else` comparisons, and bounded print-only loops. Boolean literals and boolean-valued output are rejected where output casing could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI compiles generated C++17 with warnings treated as errors and compares its output with the original Go program. This does not establish general Go/C++ project migration.
 
 The Go → C subset composes the bounded Go → Python and Python → C translators for one root `main.go` file. It accepts only their checked intersection of scalar declarations, supported integer expressions and output, `if`/`else` comparisons, and bounded loops. Boolean literals and boolean-valued output are rejected where output casing could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI compiles generated C11 with warnings treated as errors and compares its output with the original Go program. This does not establish general Go/C project migration.
+
+The Go → Java subset composes the bounded Go → Python and Python → Java translators for one root `main.go` file. It accepts only their checked intersection of scalar declarations, integer/string expressions, `fmt.Println()` output, supported `if`/`else` comparisons, and bounded print-only loops. Boolean literals and boolean-valued output are rejected where Go/Java output formatting could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI compiles generated Java and compares runtime output with Go. This is not general Go/Java project migration.
+
+The Go → Kotlin subset composes the bounded Go → Python and Python → Kotlin translators for one root `main.go` file. It accepts only their checked intersection of scalar declarations, integer/string expressions, `fmt.Println()` output, supported `if`/`else` comparisons, and bounded print-only loops. Boolean literals and boolean-valued output are rejected where Go/Kotlin output formatting could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI compiles generated Kotlin and compares runtime output with Go. This is not general Go/Kotlin project migration.
+
 
 
 
