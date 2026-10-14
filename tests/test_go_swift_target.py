@@ -50,7 +50,7 @@ class GoToSwiftTargetTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("go") and shutil.which("swift"), "Go and Swift toolchains are required")
     def test_if_else_and_bounded_loop_output_matches(self):
         self._compare_stdout(
-            'package main\nimport "fmt"\nfunc main() {\ncount := 2\n'
+            'package main\nimport "fmt"\nfunc main() {\ncount := 2\ncount = count + 1\n'
             'if count > 1 {\nfmt.Println("many")\n} else {\nfmt.Println("few")\n}\n'
             'for i := 0; i < 3; i++ {\nfmt.Println(i)\n}\n}\n'
         )
