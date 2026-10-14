@@ -4,10 +4,8 @@ from __future__ import annotations
 import ast
 import hashlib
 
-from polymigrate.migration.javascript_python_target import (
-    TypeScriptToPythonTargetAdapter,
-    UnsupportedJavaScriptSyntax,
-)
+from polymigrate.migration.javascript_python_target import UnsupportedJavaScriptSyntax
+from polymigrate.migration.typescript_python_target import TypeScriptToPythonTargetAdapter
 from polymigrate.migration.pipeline import GeneratedArtifact, SourceProject, SourceUnit
 from polymigrate.migration.python_php_target import (
     PythonToPHPTargetAdapter,
@@ -16,7 +14,7 @@ from polymigrate.migration.python_php_target import (
 
 
 class TypeScriptToPHPTargetAdapter:
-    """Translate the checked intersection of the JavaScript/Python/PHP subsets."""
+    """Translate the checked intersection of the TypeScript/Python/PHP subsets."""
 
     language_id = "php"
 
@@ -43,7 +41,7 @@ class TypeScriptToPHPTargetAdapter:
                 "The TypeScript-to-Python intermediate artifact is not valid Python"
             ) from None
 
-        # JavaScript and PHP stringification of booleans differs from the
+        # TypeScript/JavaScript and PHP stringification of booleans differs from the
         # intermediate Python representation. Reject bool literals to avoid drift.
         if any(isinstance(node, ast.Constant) and type(node.value) is bool for node in ast.walk(tree)):
             raise UnsupportedJavaScriptSyntax(
@@ -83,7 +81,7 @@ class TypeScriptToPHPTargetAdapter:
             artifacts = target.generate(python_project, context)
         except UnsupportedPythonSyntax as exc:
             raise UnsupportedJavaScriptSyntax(
-                f"JavaScript syntax is outside the composable TypeScript-to-PHP subset: {exc}"
+                f"TypeScript syntax is outside the composable TypeScript-to-PHP subset: {exc}"
             ) from None
 
         self.warnings = [
