@@ -64,6 +64,7 @@ The offline deterministic strategy currently supports these deliberately narrow 
 - Go → C (a composed single-file subset; requires syntax accepted by both Go → Python and Python → C translators)
 - JavaScript → Go (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → Go translators)
 - JavaScript → C# (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → C# translators)
+- JavaScript → C (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → C translators)
 - JavaScript → Python
 - TypeScript → Python (a constrained single-file `main.ts` subset)
 - Python → Go
@@ -84,6 +85,9 @@ For example:
     polymigrate migrate --source ./small-python-project --from python --to javascript --output ./migration-output --strategy deterministic
 
 The JavaScript → Python subset accepts scalar `const`/`let`/`var` declarations, same-type reassignment of existing mutable bindings, safe-integer arithmetic, string concatenation, booleans, and `console.log()` for scalar values. It also supports flat scalar-comparison `if`/`else if`/`else` chains with short-circuit `&&`/`||` and `!` over supported scalar values whose bodies contain only `console.log()` calls, plus bounded integer `for` loops of the form `for (let i = START; i < BOUND; i++)` (or the corresponding descending `>`/`i--` form); loop bodies are print-only and the static iteration limit is 10,000. Nested control flow, loop-variable use in arithmetic, escaped string literals, functions, imports, objects/arrays, dynamic coercion, and other unsupported syntax are rejected rather than guessed. Generated `.py` files are syntax-checked and `main.py` receives a runtime smoke check when Python is available. This is a constrained reverse-direction pair, not general JavaScript/Node.js project migration.
+
+The JavaScript → C subset composes the bounded JavaScript → Python and Python → C translators for one root `main.js` file. It accepts only their checked intersection of scalar declarations, safe integer expressions, `console.log()` output, supported `if`/`else` comparisons, and bounded loops. Boolean literals and boolean-valued output are rejected where JavaScript/C output formatting could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI compiles generated C11 with warnings treated as errors and compares output with Node.js. This is not general JavaScript/C project migration.
+
 
 The Go → Python subset requires a single root `main.go` containing `package main` and one `func main()`. It supports optional `import "fmt"`, scalar `:=` declarations, typed `var` declarations for `int`/`string`/`bool`, same-type assignments, signed 64-bit integer arithmetic, string concatenation, booleans, and `fmt.Println()`. It also supports boolean `if`/`else` with same-type scalar comparisons and bounded C-style `for` loops with statically known integer bounds, `i++`/`i--`, at most 10,000 iterations, and print-only bodies; loop counters may be logged directly but not used in arithmetic or after their scope. Nested control flow, extra Go files, imports other than `fmt`, other functions, collections, structs, methods, concurrency, escaped strings, unused locals, and unsupported syntax are rejected. This is not general Go project migration.
 
