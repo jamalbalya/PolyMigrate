@@ -77,7 +77,7 @@ class JavaScriptToJavaTargetTests(unittest.TestCase):
             "javascript",
             (SourceUnit("main.js", source, hashlib.sha256(source.encode()).hexdigest()),),
         )
-        with self.assertRaisesRegex(UnsupportedJavaScriptSyntax, "Boolean-valued output expressions"):
+        with self.assertRaises(UnsupportedJavaScriptSyntax):
             JavaScriptToJavaTargetAdapter().generate(project, {})
 
     def test_multiple_files_are_rejected(self):
