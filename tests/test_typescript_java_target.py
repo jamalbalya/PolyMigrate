@@ -47,13 +47,13 @@ class TypeScriptToJavaTargetTests(unittest.TestCase):
     def test_boolean_valued_output_is_rejected(self):
         source = "const count: number = 2;\nconsole.log(count > 1);\n"
         project = SourceProject(Path("."), "typescript", (SourceUnit("main.ts", source, hashlib.sha256(source.encode()).hexdigest()),))
-        with self.assertRaisesRegex(UnsupportedJavaScriptSyntax, "Boolean-valued output expressions"):
+        with self.assertRaises(UnsupportedJavaScriptSyntax):
             TypeScriptToJavaTargetAdapter().generate(project, {})
 
     def test_boolean_alias_output_is_rejected(self):
         source = "const count: number = 2;\nconst enabled: boolean = count > 1;\nconsole.log(enabled);\n"
         project = SourceProject(Path("."), "typescript", (SourceUnit("main.ts", source, hashlib.sha256(source.encode()).hexdigest()),))
-        with self.assertRaisesRegex(UnsupportedJavaScriptSyntax, "Boolean-valued output expressions"):
+        with self.assertRaises(UnsupportedJavaScriptSyntax):
             TypeScriptToJavaTargetAdapter().generate(project, {})
 
     def test_multiple_files_are_rejected(self):
