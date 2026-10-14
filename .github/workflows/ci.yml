@@ -369,3 +369,26 @@ jobs:
         run: python -m pip install --editable .
       - name: Run TypeScript-to-Rust compiler/runtime fixtures
         run: python -m unittest tests.test_typescript_rust_target tests.test_cli_deterministic_typescript_rust -v
+
+  javascript-java-deterministic-e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install package
+        run: python -m pip install --editable .
+      - name: Run JavaScript-to-Java compiler/runtime fixtures
+        run: python -m unittest tests.test_javascript_java_target tests.test_cli_deterministic_javascript_java -v
