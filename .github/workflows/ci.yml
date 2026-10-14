@@ -183,7 +183,7 @@ jobs:
       - name: Install package
         run: python -m pip install --editable .
       - name: Run C# translator and CLI build/runtime tests
-        run: python -m unittest tests.test_python_csharp_target tests.test_cli_deterministic_csharp tests.test_javascript_csharp_target tests.test_cli_deterministic_javascript_csharp tests.test_go_csharp_target tests.test_cli_deterministic_go_csharp -v
+        run: python -m unittest tests.test_python_csharp_target tests.test_cli_deterministic_csharp tests.test_javascript_csharp_target tests.test_cli_deterministic_javascript_csharp tests.test_go_csharp_target tests.test_cli_deterministic_go_csharp tests.test_typescript_csharp_target tests.test_cli_deterministic_typescript_csharp -v
 
   typescript-deterministic-e2e:
     needs: test
