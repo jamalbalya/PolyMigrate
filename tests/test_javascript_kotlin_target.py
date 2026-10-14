@@ -72,6 +72,16 @@ class JavaScriptToKotlinTargetTests(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedJavaScriptSyntax, "Boolean literals are excluded"):
             JavaScriptToKotlinTargetAdapter().generate(project, {})
 
+    def test_boolean_valued_output_is_rejected(self):
+        source = "const count = 2;\\nconsole.log(count > 1);\\n"
+        project = SourceProject(
+            Path("."),
+            "javascript",
+            (SourceUnit("main.js", source, hashlib.sha256(source.encode()).hexdigest()),),
+        )
+        with self.assertRaisesRegex(UnsupportedJavaScriptSyntax, "Boolean-valued output expressions"):
+            JavaScriptToKotlinTargetAdapter().generate(project, {})
+
     def test_multiple_files_are_rejected(self):
         source = "console.log(1);\n"
         project = SourceProject(
