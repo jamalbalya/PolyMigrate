@@ -49,7 +49,7 @@ class DeterministicPythonCppCLITests(unittest.TestCase):
             with redirect_stderr(stderr):
                 code = main([
                     "migrate", "--source", str(source), "--from", "go",
-                    "--to", "cpp", "--output", str(output), "--strategy", "deterministic",
+                    "--to", "java", "--output", str(output), "--strategy", "deterministic",
                 ])
             self.assertEqual(code, 2)
             self.assertIn("deterministic strategy currently supports", stderr.getvalue())
