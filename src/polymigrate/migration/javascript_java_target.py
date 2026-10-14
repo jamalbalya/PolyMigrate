@@ -13,6 +13,7 @@ from polymigrate.migration.python_java_target import (
     PythonToJavaTargetAdapter,
     UnsupportedPythonSyntax,
 )
+from polymigrate.migration.boolean_output import has_boolean_print_expression
 
 
 class JavaScriptToJavaTargetAdapter:
@@ -64,6 +65,11 @@ class JavaScriptToJavaTargetAdapter:
             if not isinstance(iterable, ast.List):
                 raise UnsupportedJavaScriptSyntax("Unsupported generated print argument expansion")
             node.args = list(iterable.elts)
+
+        if has_boolean_print_expression(tree):
+            raise UnsupportedJavaScriptSyntax(
+                "Boolean-valued output expressions are excluded from deterministic JavaScript-to-Java migration because output formatting would differ"
+            )
 
         normalized_python = ast.unparse(ast.fix_missing_locations(tree)) + "\n"
         python_project = SourceProject(
