@@ -257,3 +257,5 @@
 - [ ] T175 Add a fail-closed deterministic JavaScript-to-Ruby adapter composed from the checked JavaScript-to-Python and Python-to-Ruby subsets, normalize only generated multi-argument console output, reject boolean output drift and multi-file inputs, and add strict Node/Ruby runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
 
 - [ ] T176 Add a fail-closed deterministic JavaScript-to-Swift adapter composed from the checked JavaScript-to-Python and Python-to-Swift subsets, normalize only generated multi-argument console output, reject boolean output drift and multi-file inputs, and add strict Node/Swift runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
+
+- [ ] T177 Add a fail-closed deterministic TypeScript-to-C adapter composed from the checked TypeScript-to-Python and Python-to-C subsets, normalize only generated multi-argument console output, reject boolean output drift and multi-file inputs, and add strict TypeScript/Node/C runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
