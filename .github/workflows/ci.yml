@@ -249,6 +249,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
       - name: Install pinned Kotlin compiler
         run: |
           curl -fsSL https://github.com/JetBrains/kotlin/releases/download/v2.4.21/kotlin-compiler-2.4.21.zip -o "$RUNNER_TEMP/kotlin-compiler.zip"
@@ -259,7 +262,7 @@ jobs:
       - name: Install package
         run: python -m pip install --editable .
       - name: Run Kotlin compiler and runtime fixtures
-        run: python -m unittest tests.test_python_kotlin_target tests.test_cli_deterministic_kotlin -v
+        run: python -m unittest tests.test_python_kotlin_target tests.test_cli_deterministic_kotlin tests.test_javascript_kotlin_target tests.test_cli_deterministic_javascript_kotlin -v
 
   cross-family-route-e2e:
     runs-on: ubuntu-latest
