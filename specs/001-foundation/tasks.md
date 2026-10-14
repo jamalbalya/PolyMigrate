@@ -247,3 +247,5 @@
 - [ ] T170 Add a fail-closed deterministic Go-to-Ruby adapter composed from the checked Go-to-Python and Python-to-Ruby subsets, normalize only generated multi-argument print expansion, reject boolean output drift and multi-file inputs, and add strict Go/Ruby runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
 
 - [ ] T171 Add a fail-closed deterministic Go-to-C++ adapter composed from the checked Go-to-Python and Python-to-C++ subsets, normalize only generated multi-argument print expansion, reject boolean output drift and multi-file inputs, and add strict Go/C++ runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
+
+- [ ] T172 Add a fail-closed deterministic Go-to-C adapter composed from the checked Go-to-Python and Python-to-C subsets, normalize only generated multi-argument print expansion, reject boolean output drift and multi-file inputs, and add strict Go/C runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
