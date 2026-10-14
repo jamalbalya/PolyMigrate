@@ -66,6 +66,7 @@ The offline deterministic strategy currently supports these deliberately narrow 
 - JavaScript → C# (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → C# translators)
 - JavaScript → C (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → C translators)
 - JavaScript → C++ (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → C++ translators)
+- JavaScript → Ruby (a composed single-file subset; requires syntax accepted by both JavaScript → Python and Python → Ruby translators)
 - JavaScript → Python
 - TypeScript → Python (a constrained single-file `main.ts` subset)
 - Python → Go
@@ -90,6 +91,9 @@ The JavaScript → Python subset accepts scalar `const`/`let`/`var` declarations
 The JavaScript → C subset composes the bounded JavaScript → Python and Python → C translators for one root `main.js` file. It accepts only their checked intersection of scalar declarations, safe integer expressions, `console.log()` output, supported `if`/`else` comparisons, and bounded loops. Boolean literals and boolean-valued output are rejected where JavaScript/C output formatting could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI compiles generated C11 with warnings treated as errors and compares output with Node.js. This is not general JavaScript/C project migration.
 
 The JavaScript → C++ subset composes the bounded JavaScript → Python and Python → C++ translators for one root `main.js` file. It accepts only their checked intersection of scalar declarations, safe integer expressions, `console.log()` output, supported `if`/`else` comparisons, and bounded loops. Boolean literals and boolean-valued output are rejected where JavaScript/C++ output formatting could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI compiles generated C++17 with warnings treated as errors and compares output with Node.js. This is not general JavaScript/C++ project migration.
+
+The JavaScript → Ruby subset composes the bounded JavaScript → Python and Python → Ruby translators for one root `main.js` file. It accepts only their checked intersection of scalar declarations, safe integer expressions, `console.log()` output, supported `if`/`else` comparisons, and bounded loops. Boolean literals and boolean-valued output are rejected where JavaScript/Ruby output casing could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI runs `ruby -c` and compares output with Node.js. This is not general JavaScript/Ruby project migration.
+
 
 
 
