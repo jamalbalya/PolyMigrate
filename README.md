@@ -73,6 +73,7 @@ The offline deterministic strategy currently supports these deliberately narrow 
 - TypeScript → C (a composed single-file subset; requires syntax accepted by both TypeScript → Python and Python → C translators)
 - TypeScript → C++ (a composed single-file subset; requires syntax accepted by both TypeScript → Python and Python → C++ translators)
 - TypeScript → Ruby (a composed single-file subset; requires syntax accepted by both TypeScript → Python and Python → Ruby translators)
+- TypeScript → Swift (a composed single-file subset; requires syntax accepted by both TypeScript → Python and Python → Swift translators)
 - Python → Go
 - Python → C
 - Python → C++
@@ -137,6 +138,9 @@ The TypeScript → C subset composes the bounded TypeScript → Python and Pytho
 The TypeScript → C++ subset composes the bounded TypeScript → Python and Python → C++ translators for one root `main.ts` file. It accepts only their checked intersection of typed scalar declarations, safe integer expressions, `console.log()` output, supported `if`/`else` comparisons, and bounded loops. Boolean literals and boolean-valued output are rejected where TypeScript/C++ output formatting could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI compiles original TypeScript with `tsc`, compiles generated C++17 with warnings treated as errors, and compares runtime output. This is not general TypeScript/C++ project migration.
 
 The TypeScript → Ruby subset composes the bounded TypeScript → Python and Python → Ruby translators for one root `main.ts` file. It accepts only their checked intersection of typed scalar declarations, safe integer expressions, `console.log()` output, supported `if`/`else` comparisons, and bounded loops. Boolean literals and boolean-valued output are rejected where TypeScript/Ruby output casing could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI compiles original TypeScript with `tsc`, runs `ruby -c`, and compares runtime output. This is not general TypeScript/Ruby project migration.
+
+The TypeScript → Swift subset composes the bounded TypeScript → Python and Python → Swift translators for one root `main.ts` file. It accepts only their checked intersection of typed scalar declarations, safe integer expressions, `console.log()` output, supported `if`/`else` comparisons, and bounded loops. Boolean literals and boolean-valued output are rejected where TypeScript/Swift output casing could differ; unsupported syntax and multi-file projects fail closed. Dedicated CI compiles original TypeScript with `tsc`, compiles generated Swift, and compares runtime output; compiler warnings are retained but not treated as build failures. This is not general TypeScript/Swift project migration.
+
 
 
 
