@@ -59,7 +59,7 @@ class TypeScriptToSwiftTargetTests(unittest.TestCase):
         self._compare_stdout(
             'let count: number = 2;\ncount = count + 1;\n'
             'if (count > 1) {\n console.log("many");\n} else {\n console.log("few");\n}\n'
-            'for (let i: number = 0; i < 3; i++) {\n console.log(i);\n}\n'
+            'for (let i = 0; i < 3; i++) {\n console.log(i);\n}\n'
         )
 
     def test_boolean_literals_are_rejected_to_avoid_output_drift(self):
