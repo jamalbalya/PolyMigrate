@@ -243,3 +243,5 @@
 - [ ] T166 Add a fail-closed deterministic TypeScript-to-Kotlin adapter composed from the checked TypeScript-to-Python and Python-to-Kotlin subsets, normalize only generated multi-argument print expansion, reject boolean output drift and multi-file inputs, and add strict TypeScript/Node/Kotlin runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
 
 - [ ] T169 Add a fail-closed deterministic Go-to-Swift adapter composed from the checked Go-to-Python and Python-to-Swift subsets, normalize only generated multi-argument print expansion, reject boolean output drift and multi-file inputs, and add strict Go/Swift runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
+
+- [ ] T170 Add a fail-closed deterministic Go-to-Ruby adapter composed from the checked Go-to-Python and Python-to-Ruby subsets, normalize only generated multi-argument print expansion, reject boolean output drift and multi-file inputs, and add strict Go/Ruby runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
