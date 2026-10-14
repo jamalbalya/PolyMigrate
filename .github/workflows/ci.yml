@@ -266,7 +266,7 @@ jobs:
       - name: Install package
         run: python -m pip install --editable .
       - name: Run Kotlin compiler and runtime fixtures
-        run: python -m unittest tests.test_python_kotlin_target tests.test_cli_deterministic_kotlin tests.test_javascript_kotlin_target tests.test_cli_deterministic_javascript_kotlin -v
+        run: python -m unittest tests.test_python_kotlin_target tests.test_cli_deterministic_kotlin tests.test_javascript_kotlin_target tests.test_cli_deterministic_javascript_kotlin tests.test_typescript_kotlin_target tests.test_cli_deterministic_typescript_kotlin -v
 
   cross-family-route-e2e:
     runs-on: ubuntu-latest
