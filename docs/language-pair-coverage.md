@@ -24,6 +24,7 @@ Passing level 1 must never be described as passing levels 2 or 3. Live provider 
 - JavaScript → TypeScript (composed bounded JavaScript → Python → TypeScript subset)
 - JavaScript → Rust (composed bounded JavaScript → Python → Rust subset)
 - JavaScript → PHP (composed bounded JavaScript → Python → PHP subset)
+- JavaScript → Java (composed bounded JavaScript → Python → Java subset)
 - Go → Python
 - Go → JavaScript (composed bounded Go → Python → JavaScript subset)
 - Go → TypeScript (composed bounded Go → Python → TypeScript subset)
@@ -49,7 +50,7 @@ Passing level 1 must never be described as passing levels 2 or 3. Live provider 
 - Python → Ruby
 - Python → Swift
 
-Each implementation remains bounded by its own documented syntax and project-shape constraints. In the current registry, 30 of the 156 directions have a deterministic subset listed above; the remaining 126 directions have only the experimental LLM orchestration route and must not be presented as deterministic support or proven migrations. Every direction still needs pair-specific behavioral and project-level evidence.
+Each implementation remains bounded by its own documented syntax and project-shape constraints. In the current registry, 31 of the 156 directions have a deterministic subset listed above; the remaining 125 directions have only the experimental LLM orchestration route and must not be presented as deterministic support or proven migrations. Every direction still needs pair-specific behavioral and project-level evidence.
 
 ## Required next validation
 
