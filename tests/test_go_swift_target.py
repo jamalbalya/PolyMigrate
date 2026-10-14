@@ -14,8 +14,8 @@ from polymigrate.migration.pipeline import AdapterRegistry, MigrationEngine, Sou
 
 class GoToSwiftTargetTests(unittest.TestCase):
     def _compare_stdout(self, source_text: str) -> None:
-        go, swift = shutil.which("go"), shutil.which("swift")
-        if not go or not swift:
+        go, swiftc = shutil.which("go"), shutil.which("swiftc")
+        if not go or not swiftc:
             self.skipTest("Go and Swift toolchains are required")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -34,14 +34,14 @@ class GoToSwiftTargetTests(unittest.TestCase):
             env = dict(os.environ, GOTOOLCHAIN="local", GOPROXY="off", GO111MODULE="off")
             original = subprocess.run([go, "run", str(go_file)], capture_output=True, text=True, env=env, timeout=60)
             self.assertEqual(original.returncode, 0, original.stderr)
-            compiled = subprocess.run([swift, "c", "-warnings-as-errors", str(swift_file), "-o", str(output / "app")],
+            compiled = subprocess.run([swiftc, "-warnings-as-errors", str(swift_file), "-o", str(output / "app")],
                                       cwd=output, capture_output=True, text=True, timeout=90)
             self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
             generated = subprocess.run([str(output / "app")], cwd=output, capture_output=True, text=True, timeout=30)
         self.assertEqual(generated.returncode, 0, generated.stderr)
         self.assertEqual(original.stdout, generated.stdout)
 
-    @unittest.skipUnless(shutil.which("go") and shutil.which("swift"), "Go and Swift toolchains are required")
+    @unittest.skipUnless(shutil.which("go") and shutil.which("swiftc"), "Go and Swift toolchains are required")
     def test_arithmetic_and_multiple_print_arguments_match(self):
         self._compare_stdout(
             'package main\nimport "fmt"\nfunc main() {\ncount := 6\nfmt.Println("value=", count * 7)\n}\n'
