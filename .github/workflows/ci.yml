@@ -99,10 +99,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y php-cli
+      - name: Install TypeScript compiler
+        run: npm install --global typescript@5
       - name: Install package
         run: python -m pip install --editable .
       - name: Run PHP translator and CLI runtime tests
-        run: python -m unittest tests.test_python_php_target tests.test_cli_deterministic_php tests.test_go_php_target tests.test_cli_deterministic_go_php tests.test_javascript_php_target tests.test_cli_deterministic_javascript_php -v
+        run: python -m unittest tests.test_python_php_target tests.test_cli_deterministic_php tests.test_go_php_target tests.test_cli_deterministic_go_php tests.test_javascript_php_target tests.test_cli_deterministic_javascript_php tests.test_typescript_php_target tests.test_cli_deterministic_typescript_php -v
   ruby-deterministic-e2e:
     needs: test
     runs-on: ubuntu-latest
