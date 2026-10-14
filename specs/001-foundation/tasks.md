@@ -261,3 +261,5 @@
 - [ ] T177 Add a fail-closed deterministic TypeScript-to-C adapter composed from the checked TypeScript-to-Python and Python-to-C subsets, normalize only generated multi-argument console output, reject boolean output drift and multi-file inputs, and add strict TypeScript/Node/C runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
 
 - [ ] T178 Add a fail-closed deterministic TypeScript-to-C++ adapter composed from the checked TypeScript-to-Python and Python-to-C++ subsets, normalize only generated multi-argument console output, reject boolean output drift and multi-file inputs, and add strict TypeScript/Node/C++ runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
+
+- [ ] T179 Add a fail-closed deterministic TypeScript-to-Ruby adapter composed from the checked TypeScript-to-Python and Python-to-Ruby subsets, normalize only generated multi-argument console output, reject boolean output drift and multi-file inputs, and add strict TypeScript/Node/Ruby runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
