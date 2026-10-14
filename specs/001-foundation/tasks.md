@@ -236,4 +236,6 @@
 
 - [x] T163 Add a fail-closed deterministic JavaScript-to-Java adapter composed from the checked JavaScript-to-Python and Python-to-Java subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add Node/JDK runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
 
-- [ ] T164 Add a fail-closed deterministic JavaScript-to-Kotlin adapter composed from the checked JavaScript-to-Python and Python-to-Kotlin subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add Node/Kotlin runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
+- [x] T164 Add a fail-closed deterministic JavaScript-to-Kotlin adapter composed from the checked JavaScript-to-Python and Python-to-Kotlin subsets, normalize only generated multi-argument print expansion, reject boolean output drift, and add Node/Kotlin runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
+
+- [ ] T165 Add a fail-closed deterministic TypeScript-to-Java adapter composed from the checked TypeScript-to-Python and Python-to-Java subsets, normalize only generated multi-argument print expansion, reject boolean literals and boolean-valued output expressions, and add strict TypeScript/Node/JDK runtime-equivalence plus CLI tests. This is a single-file subset; full project migration remains open.
