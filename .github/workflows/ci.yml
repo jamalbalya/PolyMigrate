@@ -527,3 +527,25 @@ jobs:
         run: python -m pip install --editable .
       - name: Run JavaScript-to-C++ compiler/runtime fixtures
         run: python -m unittest tests.test_javascript_cpp_target tests.test_cli_deterministic_javascript_cpp -v
+
+  javascript-ruby-deterministic-e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - name: Install package
+        run: python -m pip install --editable .
+      - name: Run JavaScript-to-Ruby compiler/runtime fixtures
+        run: python -m unittest tests.test_javascript_ruby_target tests.test_cli_deterministic_javascript_ruby -v
