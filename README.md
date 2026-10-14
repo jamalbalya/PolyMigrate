@@ -53,7 +53,7 @@ This can incur a small provider charge and verifies connectivity/response shape 
 
 ### Deterministic translation subset
 
-The offline deterministic strategy currently supports these deliberately narrow pairs:
+The offline deterministic strategy currently supports 48 of the 156 possible directed language pairs through deliberately narrow, fail-closed subsets. The remaining 108 directions can be attempted through the experimental AI orchestration route, but they are not deterministic support and are not proven migrations. Supported pairs:
 - Go → Python (a constrained single-file `main.go` subset)
 - Go → JavaScript (a composed single-file subset; requires syntax accepted by both Go → Python and Python → JavaScript translators)
 - Go → TypeScript (a composed single-file subset; requires syntax accepted by both Go → Python and Python → TypeScript translators)
